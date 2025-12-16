@@ -1,0 +1,119 @@
+title,content,is_vip,difficulty,collection_id,vip_level_required,sort
+"什么是闭包?","闭包是指函数可以访问其词法作用域外的变量。在JavaScript中，当一个函数返回另一个函数时，返回的函数可以访问外部函数的变量，即使外部函数已经执行完毕。
+
+示例代码：
+```javascript
+function outer() {
+  let count = 0;
+  return function inner() {
+    count++;
+    console.log(count);
+  }
+}
+const counter = outer();
+counter(); // 1
+counter(); // 2
+```
+
+**关键点**：
+- 闭包可以访问外部函数的变量
+- 即使外部函数执行完毕，变量仍然保留在内存中
+- 常用于实现数据私有化和模块化",false,简单,,,1
+"解释一下JavaScript的事件循环机制","JavaScript事件循环是一个单线程的异步执行机制，负责协调代码执行、事件处理和渲染。
+
+**执行流程**：
+1. 同步代码在调用栈中执行
+2. 遇到异步任务（setTimeout、Promise等），将其放入相应的任务队列
+3. 调用栈清空后，从任务队列中取出任务执行
+4. 微任务（Promise）优先于宏任务（setTimeout）执行
+
+**示例**：
+```javascript
+console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => console.log('3'));
+console.log('4');
+// 输出顺序: 1, 4, 3, 2
+```
+
+**关键点**：
+- 单线程执行
+- 微任务优先级高于宏任务
+- 理解执行顺序对于处理异步代码很重要",true,中等,d5796ef5-23d0-4f51-bbc5-e17e88167da7,1,2
+"如何实现一个深拷贝函数?","深拷贝需要递归复制对象的所有嵌套属性，确保新对象与原对象完全独立。
+
+**实现方案**：
+
+1. **使用JSON方法**（简单但有局限）：
+```javascript
+const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+```
+
+2. **递归实现**（完整方案）：
+```javascript
+function deepClone(obj, hash = new WeakMap()) {
+  // 处理null和非对象类型
+  if (obj === null || typeof obj !== 'object') return obj;
+  
+  // 处理Date
+  if (obj instanceof Date) return new Date(obj);
+  
+  // 处理RegExp
+  if (obj instanceof RegExp) return new RegExp(obj);
+  
+  // 处理循环引用
+  if (hash.has(obj)) return hash.get(obj);
+  
+  // 创建新对象，保持原型链
+  const cloneObj = new obj.constructor();
+  hash.set(obj, cloneObj);
+  
+  // 递归复制属性
+  for (let key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      cloneObj[key] = deepClone(obj[key], hash);
+    }
+  }
+  
+  return cloneObj;
+}
+```
+
+**关键点**：
+- 处理循环引用
+- 保持原型链
+- 处理特殊对象类型（Date、RegExp等）
+- JSON方法无法处理函数、undefined、Symbol等",true,困难,d5796ef5-23d0-4f51-bbc5-e17e88167da7,2,3
+"什么是React Hooks?为什么要使用它?","React Hooks 是 React 16.8 引入的新特性，允许在函数组件中使用状态和其他 React 特性。
+
+**常用Hooks**：
+- `useState`: 状态管理
+- `useEffect`: 副作用处理
+- `useContext`: 上下文访问
+- `useCallback`: 函数缓存
+- `useMemo`: 值缓存
+- `useRef`: 引用对象
+
+**使用原因**：
+1. **代码复用更简单**：通过自定义Hooks封装逻辑
+2. **代码组织更清晰**：相关逻辑放在一起，而不是分散在生命周期方法中
+3. **避免类组件的复杂性**：不需要理解this、bind等概念
+4. **更好的TypeScript支持**
+
+**示例**：
+```javascript
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  useEffect(() => {
+    document.title = `Count: ${count}`;
+  }, [count]);
+  
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Count: {count}
+    </button>
+  );
+}
+```",false,简单,,,4
+
