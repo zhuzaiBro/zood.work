@@ -1,0 +1,38 @@
+# Robots.txt for 水煮油条(Zood) - zood的小破站
+# Web3面试 | 前端技术分享 | MetaNode社区
+
+User-agent: *
+Allow: /
+
+# 允许所有主要搜索引擎爬取
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: Sogou Spider
+Allow: /
+
+User-agent: 360Spider
+Allow: /
+
+# 阻止爬取的管理后台
+Disallow: /admin/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /debug/
+
+# 阻止爬取用户相关的私有页面
+Disallow: /profile
+Disallow: /login
+Disallow: /posts/create
+
+# Sitemap
+Sitemap: https://zood.work/sitemap.xml
+
+# 爬取延迟
+Crawl-delay: 1
