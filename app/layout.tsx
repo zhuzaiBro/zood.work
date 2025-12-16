@@ -76,6 +76,9 @@ export default function RootLayout({
             })
           }}
         />
+        <meta name="baidu-site-verification" content="codeva-No72IXIm4Y" />
+
+
       </head>
       <body className={inter.className}>
         <AuthProvider>

@@ -5,7 +5,10 @@ export default function Footer() {
         <div className="text-center text-gray-600 dark:text-gray-400">
           <p>&copy; {new Date().getFullYear()} zood的小破站. All rights reserved.</p>
           <p className="mt-2 text-sm">
-            Powered by Next.js & Supabase
+            <img src="/beian.png" alt="浙ICP备2025216285号-1" className="w-4 h-4 inline-block mr-1" />
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+            浙ICP备2025216285号-1
+            </a>
           </p>
         </div>
       </div>
