@@ -17,7 +17,7 @@
     "@wangeditor/editor": "^5.1.23",
     "@wangeditor/editor-for-react": "^1.0.6",
     "ethers": "^6.15.0",
-    "next": "15.0.3",
+    "next": "^16.0.0",
     "qiniu": "^7.14.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
