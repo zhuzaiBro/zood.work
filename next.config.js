@@ -8,6 +8,12 @@ const nextConfig = {
   },
   // 启用 standalone 输出模式以支持 Docker
   output: "standalone",
+  // 增加 body 大小限制（用于文件上传）
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
+  },
   images: {
     remotePatterns: [
       {

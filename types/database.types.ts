@@ -397,6 +397,136 @@ export type Database = {
         }
         Relationships: []
       }
+      courses: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          cover_image_url: string | null
+          price: number
+          is_free: boolean
+          status: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          cover_image_url?: string | null
+          price?: number
+          is_free?: boolean
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          cover_image_url?: string | null
+          price?: number
+          is_free?: boolean
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chapters: {
+        Row: {
+          id: string
+          course_id: string
+          title: string
+          description: string | null
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          course_id: string
+          title: string
+          description?: string | null
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          course_id?: string
+          title?: string
+          description?: string | null
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapters_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          id: string
+          chapter_id: string
+          title: string
+          description: string | null
+          video_id: string | null
+          video_url: string | null
+          duration: number | null
+          is_free: boolean
+          is_locked: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          title: string
+          description?: string | null
+          video_id?: string | null
+          video_url?: string | null
+          duration?: number | null
+          is_free?: boolean
+          is_locked?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          title?: string
+          description?: string | null
+          video_id?: string | null
+          video_url?: string | null
+          duration?: number | null
+          is_free?: boolean
+          is_locked?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
