@@ -4,13 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-// 动态导入 HLS.js（避免 SSR 问题）
-let Hls: any = null;
-if (typeof window !== "undefined") {
-  import("hls.js").then((module) => {
-    Hls = module.default;
-  });
-}
+// 动态导入 Cloudflare Stream 组件（避免 SSR 问题）
+const Stream = dynamic(
+  () => import("@cloudflare/stream-react").then((mod) => mod.Stream),
+  { ssr: false }
+);
 
 interface Lesson {
   id: string;
@@ -266,95 +264,82 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
     };
   }, []);
 
-  // 初始化 HLS 播放器
+  // 获取 Stream 组件内部的 video 元素引用并监听事件
   useEffect(() => {
-    if (!currentLesson || !currentLesson.videoId) return;
+    if (!currentLesson || !currentLesson.videoId) {
+      // 如果没有 videoId，清理 ref
+      videoRef.current = null;
+      return;
+    }
+    
+    // Stream 组件会在容器内创建 video 元素
+    // 我们需要找到这个 video 元素并设置 ref
+    const container = streamContainerRef.current;
+    if (!container) return;
 
-    const video = videoRef.current;
-    if (!video) return;
+    let cleanup: (() => void) | null = null;
 
-    let hls: any = null;
-
-    // 使用 videoUrl（如果存在），否则构建默认 HLS URL
-    const hlsUrl = currentLesson.videoUrl || 
-      `https://customer-${process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || 'YOUR_ACCOUNT_ID'}.cloudflarestream.com/${currentLesson.videoId}/manifest/video.m3u8`;
-
-    const initHls = async () => {
-      // 检查浏览器是否原生支持 HLS
-      if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        // Safari 原生支持 HLS
-        video.src = hlsUrl;
-      } else {
-        // 动态加载 HLS.js
-        try {
-          const HlsModule = await import("hls.js");
-          const Hls = HlsModule.default;
-          
-          if (Hls.isSupported()) {
-            hls = new Hls({
-              enableWorker: true,
-              lowLatencyMode: false,
-            });
-            
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
-
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              console.log("HLS 视频加载成功");
-            });
-
-            hls.on(Hls.Events.ERROR, (event: any, data: any) => {
-              console.error("HLS 错误:", data);
-            });
-          } else {
-            console.error("浏览器不支持 HLS.js");
-          }
-        } catch (error) {
-          console.error("加载 HLS.js 失败:", error);
+    const findVideoElement = () => {
+      const video = container.querySelector('video') as HTMLVideoElement;
+      if (video && video !== videoRef.current) {
+        // 清理旧的事件监听器
+        if (cleanup) {
+          cleanup();
         }
+
+        // 将找到的 video 元素赋值给 ref
+        videoRef.current = video;
+        
+        // 设置事件监听器
+        const updateTime = () => setCurrentTime(video.currentTime);
+        const updateDuration = () => {
+          if (video.duration && !isNaN(video.duration)) {
+            setDuration(video.duration);
+          }
+        };
+        const handlePlay = () => setIsPlaying(true);
+        const handlePause = () => setIsPlaying(false);
+
+        video.addEventListener("timeupdate", updateTime);
+        video.addEventListener("loadedmetadata", updateDuration);
+        video.addEventListener("durationchange", updateDuration);
+        video.addEventListener("play", handlePlay);
+        video.addEventListener("pause", handlePause);
+        video.addEventListener("loadeddata", updateDuration);
+
+        // 保存清理函数
+        cleanup = () => {
+          video.removeEventListener("timeupdate", updateTime);
+          video.removeEventListener("loadedmetadata", updateDuration);
+          video.removeEventListener("durationchange", updateDuration);
+          video.removeEventListener("play", handlePlay);
+          video.removeEventListener("pause", handlePause);
+          video.removeEventListener("loadeddata", updateDuration);
+        };
       }
     };
 
-    initHls();
+    // 延迟查找，等待 Stream 组件渲染
+    const timeoutId = setTimeout(() => {
+      findVideoElement();
+    }, 100);
+
+    // 使用 MutationObserver 监听 DOM 变化
+    const observer = new MutationObserver(() => {
+      findVideoElement();
+    });
+
+    observer.observe(container, { childList: true, subtree: true });
 
     return () => {
-      if (hls) {
-        hls.destroy();
+      clearTimeout(timeoutId);
+      observer.disconnect();
+      if (cleanup) {
+        cleanup();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLesson?.videoId]);
-
-  // 监听视频元素事件
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const updateTime = () => setCurrentTime(video.currentTime);
-    const updateDuration = () => {
-      if (video.duration && !isNaN(video.duration)) {
-        setDuration(video.duration);
-      }
-    };
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-
-    video.addEventListener("timeupdate", updateTime);
-    video.addEventListener("loadedmetadata", updateDuration);
-    video.addEventListener("durationchange", updateDuration);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
-    video.addEventListener("loadeddata", updateDuration);
-
-    return () => {
-      video.removeEventListener("timeupdate", updateTime);
-      video.removeEventListener("loadedmetadata", updateDuration);
-      video.removeEventListener("durationchange", updateDuration);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
-      video.removeEventListener("loadeddata", updateDuration);
-    };
-  }, [currentLesson]);
 
   // 快进/快退
   const skipTime = (seconds: number) => {
@@ -650,159 +635,15 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
                   >
                     {currentLesson.videoId ? (
                       <div className="w-full h-full relative">
-                        <video
-                          ref={videoRef}
-                          className="w-full h-full object-contain"
-                          playsInline
-                        >
-                          您的浏览器不支持视频播放。
-                        </video>
-                        {/* 点击视频区域播放/暂停 */}
-                        <div 
-                          className="absolute inset-0 z-0 cursor-pointer"
-                          onClick={(e) => {
-                            // 如果点击的是控制栏，不处理
-                            if ((e.target as HTMLElement).closest('.video-controls')) {
-                              return;
-                            }
-                            const video = videoRef.current;
-                            if (video) {
-                              if (video.paused) {
-                                video.play().catch(console.error);
-                              } else {
-                                video.pause();
-                              }
-                            }
-                          }}
-                        />
-                        {/* 自定义控制栏覆盖层 */}
-                        <div 
-                          className={`video-controls absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 z-10 ${
-                            showControls ? "opacity-100" : "opacity-0"
-                          }`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* 进度条 */}
-                          <div className="px-4 pt-2 pb-1">
-                            <input
-                              type="range"
-                              min="0"
-                              max={duration || 100}
-                              value={currentTime}
-                              onChange={(e) => seekTo(Number(e.target.value))}
-                              className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                              style={{
-                                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
-                              }}
-                            />
-                          </div>
-                          
-                          {/* 控制按钮栏 */}
-                          <div className="px-4 pb-4 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              {/* 播放/暂停 */}
-                              <button
-                                onClick={async () => {
-                                  const video = videoRef.current;
-                                  if (video) {
-                                    try {
-                                      if (isPlaying) {
-                                        video.pause();
-                                      } else {
-                                        await video.play();
-                                      }
-                                    } catch (error) {
-                                      console.error("播放控制错误:", error);
-                                    }
-                                  }
-                                }}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title={isPlaying ? "暂停" : "播放"}
-                              >
-                                {isPlaying ? (
-                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                )}
-                              </button>
-                              
-                              {/* 快退10秒 */}
-                              <button
-                                onClick={() => skipTime(-10)}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title="快退10秒"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 4v16" />
-                                </svg>
-                              </button>
-                              
-                              {/* 快进10秒 */}
-                              <button
-                                onClick={() => skipTime(10)}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title="快进10秒"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4v16" />
-                                </svg>
-                              </button>
-                              
-                              {/* 时间显示 */}
-                              <span className="text-white text-sm font-mono min-w-[100px]">
-                                {formatTime(currentTime)} / {formatTime(duration)}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              {/* 播放速度 */}
-                              <div className="relative group/speed">
-                                <button
-                                  className="px-3 py-1 text-white hover:bg-white/20 rounded transition-colors text-sm"
-                                  title="播放速度"
-                                >
-                                  {playbackRate}x
-                                </button>
-                                <div className="absolute bottom-full mb-2 left-0 bg-black/90 rounded-lg p-1 opacity-0 group-hover/speed:opacity-100 transition-opacity pointer-events-none group-hover/speed:pointer-events-auto">
-                                  {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                                    <button
-                                      key={rate}
-                                      onClick={() => changePlaybackRate(rate)}
-                                      className={`block w-full text-left px-3 py-1 text-sm text-white hover:bg-white/20 rounded ${
-                                        playbackRate === rate ? "bg-blue-600" : ""
-                                      }`}
-                                    >
-                                      {rate}x
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              {/* 全屏 */}
-                              <button
-                                onClick={toggleFullscreen}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title="全屏"
-                              >
-                                {isFullscreen ? (
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                          </div>
+                        <div className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full">
+                          <Stream
+                            src={currentLesson.videoId}
+                            controls={true}
+                            autoplay={true}
+                            muted={false}
+                          />
                         </div>
+                        
                       </div>
                     ) : currentLesson.videoUrl ? (
                       // 如果没有 videoId，回退到使用 video 标签播放 HLS
