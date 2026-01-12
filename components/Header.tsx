@@ -62,11 +62,14 @@ export default function Header() {
             {/* <Link href="/" className={linkClass}>
               首页
             </Link> */}
+            <Link href="/courses" className={linkClass}>
+              学web3
+            </Link>
             <Link href="/interview" className={linkClass}>
               面试题库
             </Link>
             <Link href="/faucet" className={linkClass}>
-              领SepoliaETH
+              领测试币
             </Link>
 
             {/* 用户信息或登录按钮 */}
@@ -119,6 +122,13 @@ export default function Header() {
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
             <Link
+              href="/courses"
+              className={mobileLinkClass}
+              onClick={closeMobileMenu}
+            >
+              学web3
+            </Link>
+            <Link
               href="/interview"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
@@ -130,7 +140,7 @@ export default function Header() {
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              领SepoliaETH
+              领测试币
             </Link>
             {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
               分类

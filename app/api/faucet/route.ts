@@ -4,16 +4,45 @@ import { ethers } from 'ethers';
 
 // 使用公共 RPC 节点，生产环境建议使用 Alchemy 或 Infura 的私有节点以保证稳定性
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
+const BSC_TESTNET_RPC_URL = process.env.BSC_TESTNET_RPC_URL || 'https://data-seed-prebsc-1-s1.binance.org:8545/';
 const FAUCET_AMOUNT = "0.1"; // 每次领取数量
 const DAILY_LIMIT = 2.0; // 每天最大累计领取量
 const RATE_LIMIT_SECONDS = 60; // 请求频率限制：60秒内同一IP/地址只能请求一次
+const CLAIM_COOLDOWN_DAYS = 7; // 领取冷却期：7天
+
+type Network = 'sepolia' | 'bsc-testnet';
+
+interface NetworkConfig {
+  rpcUrl: string;
+  privateKeyEnv: string;
+  chainId?: number;
+}
+
+const networkConfigs: Record<Network, NetworkConfig> = {
+  'sepolia': {
+    rpcUrl: SEPOLIA_RPC_URL,
+    privateKeyEnv: 'SEPOLIA_CALIM_PK',
+  },
+  'bsc-testnet': {
+    rpcUrl: BSC_TESTNET_RPC_URL,
+    privateKeyEnv: 'BSC_TESTNET_CLAIM_PK',
+    chainId: 97,
+  },
+};
 
 export async function POST(request: Request) {
   let pendingRecordId: string | null = null;
   
   try {
     // 1. 获取参数和 IP
-    const { walletAddress } = await request.json();
+    const { walletAddress, network = 'sepolia' } = await request.json();
+    
+    // 验证网络参数
+    if (network !== 'sepolia' && network !== 'bsc-testnet') {
+      return NextResponse.json({ error: '不支持的区块链网络' }, { status: 400 });
+    }
+    
+    const networkConfig = networkConfigs[network as Network];
     
     // 获取真实 IP (根据部署环境可能需要调整，如 x-real-ip)
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
@@ -27,40 +56,33 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
 
-    // 3. 快速检查：钱包是否已领取
-    const { data: walletClaim, error: walletCheckError } = await supabase
+    // 3. 检查：钱包地址在过去7天内是否已领取（按网络区分）
+    const sevenDaysAgo = new Date(Date.now() - CLAIM_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentWalletClaims, error: walletCheckError } = await supabase
       .from('faucet_claims')
-      .select('id, created_at')
+      .select('id, created_at, tx_hash')
       .eq('wallet_address', walletAddress)
-      .maybeSingle();
+      .gte('created_at', sevenDaysAgo)
+      .order('created_at', { ascending: false });
 
     if (walletCheckError) {
       console.error('Database error (wallet check):', walletCheckError);
       return NextResponse.json({ error: '数据库查询错误' }, { status: 500 });
     }
 
-    if (walletClaim) {
-      return NextResponse.json({ error: '该钱包地址已领取过测试币' }, { status: 400 });
+    if (recentWalletClaims && recentWalletClaims.length > 0) {
+      const lastClaim = recentWalletClaims[0];
+      const lastClaimDate = new Date(lastClaim.created_at);
+      const daysSinceLastClaim = Math.floor((Date.now() - lastClaimDate.getTime()) / (1000 * 60 * 60 * 24));
+      const remainingDays = CLAIM_COOLDOWN_DAYS - daysSinceLastClaim;
+      
+      return NextResponse.json({ 
+        error: `该钱包地址在 ${daysSinceLastClaim} 天前已领取过测试币，还需等待 ${remainingDays} 天才能再次领取` 
+      }, { status: 400 });
     }
 
-    // 4. 快速检查：IP 是否已领取
+    // 4. 请求频率限制：检查同一IP在最近N秒内是否有请求（防止滥用）
     if (ip !== 'unknown') {
-      const { data: ipClaim, error: ipCheckError } = await supabase
-        .from('faucet_claims')
-        .select('id, created_at')
-        .eq('ip_address', ip)
-        .maybeSingle();
-
-      if (ipCheckError) {
-        console.error('Database error (ip check):', ipCheckError);
-        return NextResponse.json({ error: '数据库查询错误' }, { status: 500 });
-      }
-
-      if (ipClaim) {
-        return NextResponse.json({ error: '该 IP 地址已领取过测试币' }, { status: 400 });
-      }
-
-      // 5. 请求频率限制：检查同一IP在最近N秒内是否有请求
       const rateLimitTime = new Date(Date.now() - RATE_LIMIT_SECONDS * 1000).toISOString();
       const { data: recentIpRequests, error: rateLimitError } = await supabase
         .from('faucet_claims')
@@ -120,7 +142,8 @@ export async function POST(request: Request) {
 
     // 8. 关键防护：先插入待处理记录（利用数据库唯一约束防止并发）
     // 使用临时tx_hash标记为pending状态，如果插入失败说明已存在（唯一约束冲突）
-    const tempTxHash = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    // 注意：在 tx_hash 中包含网络信息以便区分
+    const tempTxHash = `pending_${network}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const { data: insertedRecord, error: insertError } = await supabase
       .from('faucet_claims')
       // @ts-ignore
@@ -149,25 +172,32 @@ export async function POST(request: Request) {
     pendingRecordId = insertedRecord?.id || null;
 
     // 9. 发送交易
-    const privateKey = process.env.SEPOLIA_CALIM_PK;
+    const privateKey = process.env[networkConfig.privateKeyEnv];
     if (!privateKey) {
       // 如果配置错误，删除pending记录
       if (pendingRecordId) {
         // @ts-ignore
         await supabase.from('faucet_claims').delete().eq('id', pendingRecordId);
       }
-      console.error('Missing SEPOLIA_CALIM_PK environment variable');
-      return NextResponse.json({ error: '服务器配置错误' }, { status: 500 });
+      console.error(`Missing ${networkConfig.privateKeyEnv} environment variable`);
+      return NextResponse.json({ error: '服务器配置错误：缺少网络私钥配置' }, { status: 500 });
     }
 
-    const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+    const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
     const wallet = new ethers.Wallet(privateKey, provider);
 
     // 构建交易
-    const tx = await wallet.sendTransaction({
+    const txOptions: any = {
       to: walletAddress,
       value: ethers.parseEther(FAUCET_AMOUNT),
-    });
+    };
+    
+    // BSC 测试网需要指定 chainId
+    if (networkConfig.chainId) {
+      txOptions.chainId = networkConfig.chainId;
+    }
+    
+    const tx = await wallet.sendTransaction(txOptions);
 
     // 10. 更新记录为真实交易哈希
     if (pendingRecordId) {

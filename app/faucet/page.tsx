@@ -4,7 +4,7 @@ import Footer from '@/components/Footer'
 
 export default function FaucetPage() {
   return (
-    <div className="min-h-screen flex flex-col mt-[-5rem] bg-gray-50 pt-40 pb-12 bg-gradient-to-b from-blue-50 to-gray-50 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col mt-[-5rem] pt-40 pb-12 bg-gradient-to-b from-blue-50 to-gray-50 transition-colors duration-300">
       {/* <Header /> */}
       
       <main className="flex-grow pt-24 pb-12 px-4 sm:px-6 lg:px-8">

@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 
+type Network = 'sepolia' | 'bsc-testnet'
+
 export default function Faucet() {
+  const [network, setNetwork] = useState<Network>('sepolia')
   const [walletAddress, setWalletAddress] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -16,7 +19,7 @@ export default function Faucet() {
       const res = await fetch('/api/faucet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress }),
+        body: JSON.stringify({ walletAddress, network }),
       })
 
       const data = await res.json()
@@ -25,9 +28,10 @@ export default function Faucet() {
         throw new Error(data.error || '领取失败')
       }
 
+      const networkName = network === 'sepolia' ? 'Sepolia ETH' : 'BSC Testnet BNB'
       setMessage({
         type: 'success',
-        text: `领取成功！交易哈希: ${data.tx_hash}`,
+        text: `领取成功！交易哈希: ${data.tx_hash}，已领取 ${data.amount} ${networkName}`,
       })
     } catch (err: any) {
       setMessage({
@@ -39,14 +43,38 @@ export default function Faucet() {
     }
   }
 
+  const networkOptions = [
+    { value: 'sepolia', label: 'Sepolia Testnet (ETH)' },
+    { value: 'bsc-testnet', label: 'BSC Testnet (BNB)' },
+  ]
+
   return (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100">
-      <h2 className="text-xl font-bold mb-4 text-gray-900">Sepolia 测试币水龙头</h2>
+      <h2 className="text-xl font-bold mb-4 text-gray-900">测试币水龙头</h2>
       <p className="text-sm text-gray-500 mb-6">
-        输入您的以太坊钱包地址，领取 0.1 Sepolia ETH。每个钱包/IP 仅限领取一次。
+        输入您的钱包地址，领取测试币。每个地址在过去7天内只能领取一次。
       </p>
 
       <form onSubmit={handleClaim} className="space-y-4">
+        <div>
+          <label htmlFor="network" className="block text-sm font-medium mb-2 text-gray-700">
+            区块链网络
+          </label>
+          <select
+            id="network"
+            value={network}
+            onChange={(e) => setNetwork(e.target.value as Network)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            disabled={isLoading}
+          >
+            {networkOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label htmlFor="wallet" className="block text-sm font-medium mb-2 text-gray-700">
             钱包地址

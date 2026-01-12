@@ -31,17 +31,21 @@ interface CoursePlayerProps {
   courseTitle?: string;
 }
 
-
-export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProps) {
+export default function CoursePlayer({
+  courseId,
+  courseTitle,
+}: CoursePlayerProps) {
   const [activeTab, setActiveTab] = useState("catalog");
   const [selectedChapter, setSelectedChapter] = useState<string>("all");
-  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    new Set()
+  );
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // 视频播放器相关状态
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamContainerRef = useRef<HTMLDivElement>(null);
@@ -89,7 +93,9 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
     if (h > 0) {
-      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+      return `${h}:${m.toString().padStart(2, "0")}:${s
+        .toString()
+        .padStart(2, "0")}`;
     }
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
@@ -97,56 +103,58 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
   // 从 API 获取课程数据
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
-    
+
     const fetchCourseData = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        console.log('开始获取课程数据, courseId:', courseId);
+        console.log("开始获取课程数据, courseId:", courseId);
 
         // 添加超时保护
         timeoutId = setTimeout(() => {
-          console.error('获取课程数据超时');
-          setError('请求超时，请检查网络连接或稍后重试');
+          console.error("获取课程数据超时");
+          setError("请求超时，请检查网络连接或稍后重试");
           setIsLoading(false);
         }, 10000); // 10秒超时
 
         if (!courseId) {
           // 如果没有 courseId，尝试获取第一个课程（先尝试已发布的，如果没有则获取所有）
-          console.log('没有 courseId，获取课程列表...');
-          let listResponse = await fetch('/api/courses/list?status=published');
-          
+          console.log("没有 courseId，获取课程列表...");
+          let listResponse = await fetch("/api/courses/list?status=published");
+
           if (!listResponse.ok) {
-            console.warn('获取已发布课程失败，尝试获取所有课程...');
-            listResponse = await fetch('/api/courses/list');
+            console.warn("获取已发布课程失败，尝试获取所有课程...");
+            listResponse = await fetch("/api/courses/list");
           }
-          
+
           if (!listResponse.ok) {
             const errorData = await listResponse.json();
-            console.error('获取课程列表失败:', errorData);
-            throw new Error(errorData.error || '获取课程列表失败');
+            console.error("获取课程列表失败:", errorData);
+            throw new Error(errorData.error || "获取课程列表失败");
           }
 
           const { courses } = await listResponse.json();
-          console.log('课程列表:', courses);
+          console.log("课程列表:", courses);
 
           if (courses && courses.length > 0) {
             // 使用第一个课程
             const firstCourse = courses[0];
-            console.log('使用第一个课程:', firstCourse.id);
-            const detailResponse = await fetch(`/api/courses/${firstCourse.id}`);
-            
+            console.log("使用第一个课程:", firstCourse.id);
+            const detailResponse = await fetch(
+              `/api/courses/${firstCourse.id}`
+            );
+
             if (!detailResponse.ok) {
               const errorData = await detailResponse.json();
-              console.error('获取课程详情失败:', errorData);
-              throw new Error(errorData.error || '获取课程详情失败');
+              console.error("获取课程详情失败:", errorData);
+              throw new Error(errorData.error || "获取课程详情失败");
             }
 
             const data = await detailResponse.json();
-            console.log('课程数据获取成功:', data);
+            console.log("课程数据获取成功:", data);
             setCourse(data.course);
             setChapters(data.chapters || []);
-            
+
             if (data.chapters && data.chapters.length > 0) {
               setExpandedChapters(new Set([data.chapters[0].id]));
             }
@@ -154,7 +162,7 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
             return;
           } else {
             // 如果没有课程，显示空状态
-            console.log('没有找到课程');
+            console.log("没有找到课程");
             setChapters([]);
             setIsLoading(false);
             return;
@@ -162,29 +170,29 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
         }
 
         // 有 courseId，直接获取课程详情
-        console.log('获取课程详情:', courseId);
+        console.log("获取课程详情:", courseId);
         const response = await fetch(`/api/courses/${courseId}`);
-        
-        console.log('课程详情响应状态:', response.status);
-        
+
+        console.log("课程详情响应状态:", response.status);
+
         if (!response.ok) {
-          let errorMessage = '获取课程失败';
+          let errorMessage = "获取课程失败";
           try {
             const errorData = await response.json();
             errorMessage = errorData.error || errorMessage;
-            console.error('获取课程失败:', errorData);
+            console.error("获取课程失败:", errorData);
           } catch (e) {
-            console.error('解析错误响应失败:', e);
+            console.error("解析错误响应失败:", e);
             errorMessage = `HTTP ${response.status}: ${response.statusText}`;
           }
           throw new Error(errorMessage);
         }
 
         const data = await response.json();
-        console.log('课程数据获取成功:', data);
+        console.log("课程数据获取成功:", data);
         setCourse(data.course);
         setChapters(data.chapters || []);
-        
+
         // 默认展开第一个章节
         if (data.chapters && data.chapters.length > 0) {
           setExpandedChapters(new Set([data.chapters[0].id]));
@@ -193,11 +201,11 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
         // 清除超时
         clearTimeout(timeoutId);
       } catch (err: any) {
-        console.error('获取课程数据失败:', err);
-        const errorMessage = err.message || '加载课程失败';
+        console.error("获取课程数据失败:", err);
+        const errorMessage = err.message || "加载课程失败";
         setError(errorMessage);
         // 失败时显示空状态
-        console.log('数据获取失败，显示空状态');
+        console.log("数据获取失败，显示空状态");
         setChapters([]);
       } finally {
         if (timeoutId) {
@@ -217,52 +225,52 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
     };
   }, [courseId]);
 
-  // 全屏切换
-  const toggleFullscreen = () => {
-    const container = streamContainerRef.current;
-    if (!container) return;
+  // // 全屏切换
+  // const toggleFullscreen = () => {
+  //   const container = streamContainerRef.current;
+  //   if (!container) return;
 
-    if (!isFullscreen) {
-      if (container.requestFullscreen) {
-        container.requestFullscreen();
-      } else if ((container as any).webkitRequestFullscreen) {
-        (container as any).webkitRequestFullscreen();
-      } else if ((container as any).mozRequestFullScreen) {
-        (container as any).mozRequestFullScreen();
-      } else if ((container as any).msRequestFullscreen) {
-        (container as any).msRequestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen) {
-        (document as any).mozCancelFullScreen();
-      } else if ((document as any).msExitFullscreen) {
-        (document as any).msExitFullscreen();
-      }
-    }
-  };
+  //   if (!isFullscreen) {
+  //     if (container.requestFullscreen) {
+  //       container.requestFullscreen();
+  //     } else if ((container as any).webkitRequestFullscreen) {
+  //       (container as any).webkitRequestFullscreen();
+  //     } else if ((container as any).mozRequestFullScreen) {
+  //       (container as any).mozRequestFullScreen();
+  //     } else if ((container as any).msRequestFullscreen) {
+  //       (container as any).msRequestFullscreen();
+  //     }
+  //   } else {
+  //     if (document.exitFullscreen) {
+  //       document.exitFullscreen();
+  //     } else if ((document as any).webkitExitFullscreen) {
+  //       (document as any).webkitExitFullscreen();
+  //     } else if ((document as any).mozCancelFullScreen) {
+  //       (document as any).mozCancelFullScreen();
+  //     } else if ((document as any).msExitFullscreen) {
+  //       (document as any).msExitFullscreen();
+  //     }
+  //   }
+  // };
 
-  // 监听全屏状态变化
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+  // // 监听全屏状态变化
+  // useEffect(() => {
+  //   const handleFullscreenChange = () => {
+  //     setIsFullscreen(!!document.fullscreenElement);
+  //   };
 
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
-    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
-    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+  //   document.addEventListener("fullscreenchange", handleFullscreenChange);
+  //   document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+  //   document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+  //   document.addEventListener("MSFullscreenChange", handleFullscreenChange);
 
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
-      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
-      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
-    };
-  }, []);
+  //   return () => {
+  //     document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  //     document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+  //     document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+  //     document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+  //   };
+  // }, []);
 
   // 获取 Stream 组件内部的 video 元素引用并监听事件
   useEffect(() => {
@@ -271,7 +279,7 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
       videoRef.current = null;
       return;
     }
-    
+
     // Stream 组件会在容器内创建 video 元素
     // 我们需要找到这个 video 元素并设置 ref
     const container = streamContainerRef.current;
@@ -280,7 +288,7 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
     let cleanup: (() => void) | null = null;
 
     const findVideoElement = () => {
-      const video = container.querySelector('video') as HTMLVideoElement;
+      const video = container.querySelector("video") as HTMLVideoElement;
       if (video && video !== videoRef.current) {
         // 清理旧的事件监听器
         if (cleanup) {
@@ -289,7 +297,7 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
 
         // 将找到的 video 元素赋值给 ref
         videoRef.current = video;
-        
+
         // 设置事件监听器
         const updateTime = () => setCurrentTime(video.currentTime);
         const updateDuration = () => {
@@ -345,7 +353,10 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
   const skipTime = (seconds: number) => {
     const video = videoRef.current;
     if (video) {
-      video.currentTime = Math.max(0, Math.min(video.currentTime + seconds, video.duration));
+      video.currentTime = Math.max(
+        0,
+        Math.min(video.currentTime + seconds, video.duration)
+      );
     }
   };
 
@@ -424,7 +435,7 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link
-              href="/learn"
+              href="/courses"
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <svg
@@ -445,11 +456,11 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
 
             <div className="flex items-center gap-4">
               {course && (
-                <h1 className="text-lg font-semibold text-gray-900">{course.title}</h1>
+                <h1 className="text-lg font-semibold text-gray-900">
+                  {course.title}
+                </h1>
               )}
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                登录后购买
-              </button>
+            
             </div>
           </div>
         </div>
@@ -499,7 +510,10 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
               {activeTab === "catalog" && (
                 <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
                   {filteredChapters.map((chapter) => (
-                    <div key={chapter.id} className="border-b border-gray-100 last:border-b-0">
+                    <div
+                      key={chapter.id}
+                      className="border-b border-gray-100 last:border-b-0"
+                    >
                       <button
                         onClick={() => toggleChapter(chapter.id)}
                         className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors group"
@@ -598,7 +612,9 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
                   {activeTab === "mirror" && (
                     <div>
                       <h3 className="font-medium mb-2">课程镜像</h3>
-                      <p className="text-gray-500">这里显示课程镜像相关信息。</p>
+                      <p className="text-gray-500">
+                        这里显示课程镜像相关信息。
+                      </p>
                     </div>
                   )}
                   {activeTab === "homework" && (
@@ -623,7 +639,7 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               {currentLesson ? (
                 <div>
-                  <div 
+                  <div
                     ref={streamContainerRef}
                     className="aspect-video bg-black relative overflow-hidden group"
                     onMouseMove={() => setShowControls(true)}
@@ -633,175 +649,18 @@ export default function CoursePlayer({ courseId, courseTitle }: CoursePlayerProp
                       }
                     }}
                   >
-                    {currentLesson.videoId ? (
+                    {
                       <div className="w-full h-full relative">
                         <div className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full">
                           <Stream
-                            src={currentLesson.videoId}
+                            src={currentLesson.videoId || ""}
                             controls={true}
                             autoplay={true}
                             muted={false}
                           />
                         </div>
-                        
                       </div>
-                    ) : currentLesson.videoUrl ? (
-                      // 如果没有 videoId，回退到使用 video 标签播放 HLS
-                      <div className="w-full h-full relative">
-                        <video
-                          ref={videoRef}
-                          className="w-full h-full object-contain"
-                          playsInline
-                        >
-                          <source src={currentLesson.videoUrl} type="application/x-mpegURL" />
-                          您的浏览器不支持视频播放。
-                        </video>
-                        
-                        {/* 自定义控制栏 */}
-                        <div 
-                          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 ${
-                            showControls ? "opacity-100" : "opacity-0"
-                          }`}
-                        >
-                          {/* 进度条 */}
-                          <div className="px-4 pt-2 pb-1">
-                            <input
-                              type="range"
-                              min="0"
-                              max={duration || 100}
-                              value={currentTime}
-                              onChange={(e) => seekTo(Number(e.target.value))}
-                              className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                              style={{
-                                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
-                              }}
-                            />
-                          </div>
-                          
-                          {/* 控制按钮栏 */}
-                          <div className="px-4 pb-4 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              {/* 播放/暂停 */}
-                              <button
-                                onClick={() => {
-                                  const video = videoRef.current;
-                                  if (video) {
-                                    if (isPlaying) {
-                                      video.pause();
-                                    } else {
-                                      video.play();
-                                    }
-                                  }
-                                }}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                              >
-                                {isPlaying ? (
-                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                )}
-                              </button>
-                              
-                              {/* 快退10秒 */}
-                              <button
-                                onClick={() => skipTime(-10)}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title="快退10秒"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 4v16" />
-                                </svg>
-                              </button>
-                              
-                              {/* 快进10秒 */}
-                              <button
-                                onClick={() => skipTime(10)}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title="快进10秒"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4v16" />
-                                </svg>
-                              </button>
-                              
-                              {/* 时间显示 */}
-                              <span className="text-white text-sm font-mono min-w-[100px]">
-                                {formatTime(currentTime)} / {formatTime(duration)}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              {/* 播放速度 */}
-                              <div className="relative group/speed">
-                                <button
-                                  className="px-3 py-1 text-white hover:bg-white/20 rounded transition-colors text-sm"
-                                  title="播放速度"
-                                >
-                                  {playbackRate}x
-                                </button>
-                                <div className="absolute bottom-full mb-2 left-0 bg-black/90 rounded-lg p-1 opacity-0 group-hover/speed:opacity-100 transition-opacity pointer-events-none group-hover/speed:pointer-events-auto">
-                                  {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                                    <button
-                                      key={rate}
-                                      onClick={() => changePlaybackRate(rate)}
-                                      className={`block w-full text-left px-3 py-1 text-sm text-white hover:bg-white/20 rounded ${
-                                        playbackRate === rate ? "bg-blue-600" : ""
-                                      }`}
-                                    >
-                                      {rate}x
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              {/* 全屏 */}
-                              <button
-                                onClick={toggleFullscreen}
-                                className="p-2 text-white hover:bg-white/20 rounded transition-colors"
-                                title="全屏"
-                              >
-                                {isFullscreen ? (
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      // 占位符
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
-                        <div className="text-center text-white z-10">
-                          <button className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors mb-4 group">
-                            <svg
-                              className="w-10 h-10 ml-1 text-white group-hover:scale-110 transition-transform"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          </button>
-                          <p className="text-lg font-medium">{currentLesson.title}</p>
-                          {currentLesson.duration && (
-                            <p className="text-sm text-gray-300 mt-2">
-                              时长: {currentLesson.duration}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    }
                   </div>
                   <div className="p-6 border-t border-gray-200">
                     <div className="flex items-center justify-between mb-4">
