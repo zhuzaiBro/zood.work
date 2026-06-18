@@ -42,6 +42,48 @@ body {
   .animate-slide-up {
     animation: slide-up 0.3s ease-out;
   }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgb(229 231 235 / 0.4) 0%,
+      rgb(243 244 246 / 0.9) 50%,
+      rgb(229 231 235 / 0.4) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .animate-shimmer {
+      background: linear-gradient(
+        90deg,
+        rgb(55 65 81 / 0.35) 0%,
+        rgb(75 85 99 / 0.65) 50%,
+        rgb(55 65 81 / 0.35) 100%
+      );
+      background-size: 200% 100%;
+    }
+  }
+
+  @keyframes spin-slow {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-spin-slow {
+    animation: spin-slow 1.2s linear infinite;
+  }
 }
 
 /* 文章富文本样式优化 */
