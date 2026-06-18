@@ -189,7 +189,8 @@ export default function QiniuUploader({
       const uploadedChunks: string[] = [];
 
       abortControllerRef.current = new AbortController();
-
+      // 主动取消http请求
+      // abortControllerRef.current.abort()
       // 上传每个分片
       for (let i = 0; i < chunks; i++) {
         if (abortControllerRef.current.signal.aborted) {

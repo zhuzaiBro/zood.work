@@ -33,7 +33,7 @@ export default function CodeBlock({ inline, className, children, node, ...props 
     }
   }
 
-  // 检测是否为行内代码
+  // 检测是否为行内代码 `xxx` ``` xxx ```
   // 方法1: 使用 inline 属性（react-markdown 传递）
   // 方法2: 没有 className 并且没有换行符，通常是行内代码
   // 方法3: 检查 node.position 或其他特征

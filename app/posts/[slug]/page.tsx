@@ -20,8 +20,10 @@ export async function generateMetadata({ params }: PageProps) {
 
   const { data: post } = await supabase
     .from('posts')
-    .select('title, excerpt')
-    .eq('slug', slug)
+    .select('title, excerpt, banner')
+    .or(`slug.eq.${slug},id.eq.${slug}`)
+    .eq('published', true)
+    .eq('is_public', true)
     .single()
 
   const postMeta = post as any
@@ -29,6 +31,9 @@ export async function generateMetadata({ params }: PageProps) {
   return {
     title: postMeta?.title || '文章详情',
     description: postMeta?.excerpt || '',
+    openGraph: postMeta?.banner
+      ? { images: [{ url: postMeta.banner }] }
+      : undefined,
   }
 }
 
@@ -48,7 +53,8 @@ export default async function PostPage({ params }: PageProps) {
         bio
       )
     `)
-    .eq('slug', slug)
+    // .eq('slug', slug)
+    .or(`slug.eq.${slug},id.eq.${slug}`)
     .eq('published', true)
     .eq('is_public', true)
     .single()
@@ -80,6 +86,15 @@ export default async function PostPage({ params }: PageProps) {
       <article className="max-w-4xl mx-auto">
         {/* 文章头部 */}
         <header className="mb-8">
+          {postData.banner ? (
+            <div className="mb-6 overflow-hidden rounded-lg">
+              <img
+                src={postData.banner}
+                alt={`${postData.title} 封面`}
+                className="max-h-[400px] w-full object-cover"
+              />
+            </div>
+          ) : null}
           <h1 className="text-4xl font-bold mb-4">{postData.title}</h1>
 
           <div className="flex items-center justify-between flex-wrap gap-4 text-gray-600 dark:text-gray-400">

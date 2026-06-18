@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -44,6 +46,42 @@ body {
 
 /* 文章富文本样式优化 */
 @layer components {
+  /* 站点标题：拉丁文用 Micro 5 像素体，中文自动回退到 Noto Sans SC */
+  .site-logo {
+    @apply inline-flex items-baseline gap-0.5;
+    line-height: 1.1;
+    -webkit-font-smoothing: antialiased;
+    text-shadow:
+      1px 0 0 rgb(30 64 175 / 0.25),
+      0 1px 0 rgb(30 64 175 / 0.2),
+      1px 1px 0 rgb(37 99 235 / 0.15);
+    transition:
+      color 0.2s ease,
+      text-shadow 0.2s ease;
+  }
+
+  .site-logo-latin {
+    font-family: var(--font-site-logo-latin), ui-monospace, monospace;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+  }
+
+  .site-logo-cjk {
+    font-family: 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    /* 与 Micro 5 大写视觉高度略对齐 */
+    font-size: 0.88em;
+    transform: translateY(0.04em);
+  }
+
+  .site-logo:hover {
+    text-shadow:
+      1px 0 0 rgb(56 189 248 / 0.35),
+      0 1px 0 rgb(125 211 252 / 0.3),
+      1px 1px 0 rgb(96 165 250 / 0.25);
+  }
+
   /* 标题样式 */
   .prose h1 {
     @apply text-4xl font-extrabold mt-8 mb-6 text-gray-900 dark:text-gray-100;

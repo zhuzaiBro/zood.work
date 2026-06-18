@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import UserAvatar from "./UserAvatar";
 import {
   useIsLoading,
@@ -8,14 +9,17 @@ import {
   useProfile,
 } from "@/store/userStore";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export default function Header() {
   const isLoading = useIsLoading();
   const isAuthenticated = useIsAuthenticated();
   const profile = useProfile();
+  const pathname = usePathname();
   const [isHero, setIsHero] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
+  const isImmersiveHero = pathname === "/" && isHero;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,23 +42,36 @@ export default function Header() {
     setIsMobileUserMenuOpen(false);
   };
 
-  const linkClass = "text-blue-500 hover:text-blue-600 transition-colors";
+  const linkClass = "text-sky-300 hover:text-white transition-colors";
 
   const mobileLinkClass =
-    "block py-2 text-blue-500 hover:text-blue-600 transition-colors text-lg font-medium";
+    "block py-2 text-sky-300 hover:text-white transition-colors text-lg font-medium";
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 bg-black/0 backdrop-blur-md border-b border-white/10 text-blue-500`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-sky-300 ${
+        isImmersiveHero
+          ? "bg-transparent border-transparent"
+          : "bg-black/85 backdrop-blur-md border-b border-[#172846]"
+      }`}
     >
       <nav className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="text-2xl font-bold text-blue-500"
+            className="flex items-center text-sky-300 transition-colors hover:text-white"
             onClick={closeMobileMenu}
+            aria-label="水煮油条君首页"
           >
-            zood的小破站
+            <Image
+              src="/logo.png"
+              alt="水煮油条君"
+              width={1519}
+              height={348}
+              className="h-9 w-auto sm:h-10"
+              priority
+              unoptimized
+            />
           </Link>
 
           {/* 桌面端菜单 */}
@@ -63,20 +80,20 @@ export default function Header() {
               首页
             </Link> */}
             <Link href="/courses" className={linkClass}>
-              学web3
+              学 Web3 / AI
             </Link>
             <Link href="/interview" className={linkClass}>
               面试题库
             </Link>
             <Link href="/faucet" className={linkClass}>
-              领测试币
+              测试币
             </Link>
 
             {/* 用户信息或登录按钮 */}
             {isLoading ? (
               <div className="w-20 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
             ) : (
-              <UserAvatar isHero={isHero} />
+              <UserAvatar isHero={isImmersiveHero} />
             )}
           </div>
 
@@ -120,27 +137,27 @@ export default function Header() {
 
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
+          <div className="md:hidden absolute top-full left-0 right-0 bg-[#02050b] border-b border-[#172846] shadow-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
             <Link
               href="/courses"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              学web3
+              学 Web3 / AI
             </Link>
             <Link
               href="/interview"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              面试提升
+              面试题库
             </Link>
             <Link
               href="/faucet"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              领测试币
+              测试币
             </Link>
             {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
               分类

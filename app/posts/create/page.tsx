@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
+import { uploadPostBanner } from '@/lib/uploadPostBanner'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
+// window.localStorage.setItem('wangeditor-content', '')
+// can not read property 'localStorage' of undefined
 // 动态导入 Editor 组件，禁用 SSR
 const Editor = dynamic(() => import('@/components/Editor'), {
   ssr: false,
@@ -30,6 +33,9 @@ export default function CreatePostPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [excerpt, setExcerpt] = useState('')
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
   const [content, setContent] = useState('')
   const [markdown, setMarkdown] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -64,6 +70,23 @@ export default function CreatePostPage() {
       fetchCategories()
     }
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (!bannerFile) {
+      setBannerPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(bannerFile)
+    setBannerPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [bannerFile])
+
+  const clearBannerSelection = () => {
+    setBannerFile(null)
+    if (bannerInputRef.current) {
+      bannerInputRef.current.value = ''
+    }
+  }
 
   // 自动生成 slug
   const generateSlug = (text: string) => {
@@ -140,18 +163,30 @@ export default function CreatePostPage() {
         return
       }
 
+      let bannerPublicUrl: string | null = null
+      if (bannerFile) {
+        const up = await uploadPostBanner(supabase, user.id, bannerFile)
+        if ('error' in up) {
+          setError(up.error)
+          setIsSubmitting(false)
+          return
+        }
+        bannerPublicUrl = up.publicUrl
+      }
+
       // 创建文章
       const { data: postData, error: postError } = await supabase
         .from('posts')
-        .insert({
+        .insert([{
           title: title.trim(),
           slug: slug.trim(),
           content: markdown, // 存储 Markdown
           excerpt: excerpt.trim() || null,
+          banner: bannerPublicUrl,
           author_id: user.id,
           published: willPublish,
           is_public: isPublic,
-        } as any)
+        }]as any)
         .select()
         .single()
 
@@ -247,6 +282,47 @@ export default function CreatePostPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               将作为文章的 URL 路径，例如：/posts/{slug || 'article-slug'}
             </p>
+          </div>
+
+          {/* 卡片封面：Supabase Storage */}
+          <div>
+            <label htmlFor="banner" className="block text-sm font-medium mb-2">
+              卡片封面
+            </label>
+            <input
+              ref={bannerInputRef}
+              id="banner"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null
+                setBannerFile(f)
+              }}
+              className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+              disabled={isSubmitting}
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              可选；JPEG / PNG / WebP / GIF，最大 5MB。发布时将上传至 Supabase Storage。
+            </p>
+            {bannerPreviewUrl ? (
+              <div className="mt-3 space-y-2">
+                <div className="aspect-[2/1] max-h-48 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
+                  <img
+                    src={bannerPreviewUrl}
+                    alt="封面预览"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={clearBannerSelection}
+                  disabled={isSubmitting}
+                  className="text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                >
+                  移除封面
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* 摘要 */}

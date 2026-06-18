@@ -1,10 +1,12 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Editor as WangEditor, Toolbar } from '@wangeditor/editor-for-react'
 import { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor/editor'
 import '@wangeditor/editor/dist/css/style.css'
 import TurndownService from 'turndown'
+
+// window.localStorage.setItem('wangeditor-content', '')
 
 interface EditorProps {
   value?: string
@@ -87,6 +89,7 @@ export default function Editor({ value = '', onChange, placeholder = '请输入�
   }, [editor])
 
   // HTML 转 Markdown
+  // [图片1](https://example.com/image.jpg)
   const htmlToMarkdown = (html: string): string => {
     if (!html) return ''
     try {

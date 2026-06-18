@@ -6,6 +6,7 @@ interface Post {
   title: string;
   slug: string;
   excerpt: string | null;
+  banner?: string | null;
   created_at: string | null;
   author: {
     username: string;
@@ -17,7 +18,16 @@ interface Post {
 export default function PostCard({ post }: { post: Post }) {
   return (
     <Link href={`/posts/${post.slug}`}>
-      <article className="bg-black/30 backdrop-blur-sm border-white/10 border rounded-xl shadow-md p-6 mb-6">
+      <article className="bg-black/30 backdrop-blur-sm border-white/10 border rounded-xl shadow-md overflow-hidden mb-6">
+        {post.banner ? (
+          <div className="aspect-[2/1] w-full overflow-hidden bg-black/40">
+            <img
+              src={post.banner}
+              alt={`${post.title} 封面`}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : null}
         <div className="p-6">
           <h2 className="text-2xl font-bold mb-2 text-white hover:text-blue-400">
             {post.title}

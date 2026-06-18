@@ -41,7 +41,7 @@ export default function UserAvatar({ isHero = false }: { isHero?: boolean }) {
     return (
       <Link
         href="/login"
-        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        className="rounded-full border border-sky-300/30 bg-sky-300/10 px-5 py-2.5 text-sm font-semibold text-sky-100 shadow-[0_0_28px_rgba(125,211,252,0.18)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-sky-200/60 hover:bg-sky-200/18 hover:text-white"
       >
         登录
       </Link>

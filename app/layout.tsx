@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Micro_5 } from 'next/font/google'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
@@ -8,6 +8,13 @@ import FloatingContact from '@/components/FloatingContact'
 import CozeChat from '@/components/CozeChat'
 
 const inter = Inter({ subsets: ['latin'] })
+
+const siteLogoLatin = Micro_5({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-site-logo-latin',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: {
@@ -77,10 +84,11 @@ export default function RootLayout({
           }}
         />
         <meta name="baidu-site-verification" content="codeva-No72IXIm4Y" />
-
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${siteLogoLatin.variable}`}>
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
             <Header />
@@ -96,4 +104,3 @@ export default function RootLayout({
     </html>
   )
 }
-
