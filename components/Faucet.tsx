@@ -1,298 +1,409 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { formatEther } from 'viem'
+import { useEffect, useState } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { formatEther } from "viem";
+import { useAccount, useBalance, useReadContracts, useSwitchChain } from "wagmi";
+import { FAUCET_ABI } from "@/lib/faucet/contract";
 import {
-  useAccount,
-  useReadContracts,
-  useWaitForTransactionReceipt,
-  useWriteContract,
-} from 'wagmi'
-import { FAUCET_ABI, FAUCET_ADDRESS, SEPOLIA_CHAIN_ID } from '@/lib/faucet/contract'
-import Skeleton from '@/components/ui/Skeleton'
-import Spinner from '@/components/ui/Spinner'
+  FAUCET_NETWORK_LIST,
+  getFaucetNetwork,
+  type FaucetNetworkId,
+} from "@/lib/faucet/networks";
+import Skeleton from "@/components/ui/Skeleton";
+import Spinner from "@/components/ui/Spinner";
 
-function formatEth(value?: bigint) {
-  if (value === undefined) return '-'
-  return formatEther(value)
+type Message = {
+  type: "success" | "error";
+  text: string;
+};
+
+function formatAmount(value?: bigint) {
+  if (value === undefined) return "-";
+  const formatted = Number(formatEther(value));
+  if (!Number.isFinite(formatted)) return formatEther(value);
+  return formatted.toLocaleString("zh-CN", {
+    maximumFractionDigits: 4,
+  });
 }
 
-function ValueSkeleton() {
-  return <Skeleton className="h-4 w-24 ml-auto" />
+function shortAddress(value: string) {
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
-function ClaimProgress({ step }: { step: 'sign' | 'confirm' }) {
-  const steps = [
-    { id: 'sign' as const, label: '钱包签名' },
-    { id: 'confirm' as const, label: '链上确认' },
-  ]
-
+function MetricCard({
+  label,
+  value,
+  loading,
+}: {
+  label: string;
+  value: string;
+  loading?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-sky-100 dark:border-sky-900/50 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/20 p-4">
-      <div className="flex items-start gap-3">
-        <Spinner size="sm" className="mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-sky-900 dark:text-sky-100">
-            {step === 'sign' ? '等待钱包签名…' : '交易已提交，等待链上确认…'}
-          </p>
-          <p className="text-xs text-sky-700/70 dark:text-sky-300/70 mt-1">请勿关闭页面</p>
-          <div className="mt-4 flex items-center gap-2">
-            {steps.map((item, index) => {
-              const isActive = item.id === step
-              const isDone = step === 'confirm' && item.id === 'sign'
-
-              return (
-                <div key={item.id} className="flex items-center gap-2 flex-1 min-w-0">
-                  <div
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                      isDone
-                        ? 'bg-emerald-500 text-white'
-                        : isActive
-                          ? 'bg-sky-500 text-white'
-                          : 'bg-white/80 text-gray-400 dark:bg-gray-800'
-                    }`}
-                  >
-                    {isDone ? '✓' : index + 1}
-                  </div>
-                  <span
-                    className={`text-xs truncate ${
-                      isActive || isDone
-                        ? 'text-gray-800 dark:text-gray-100 font-medium'
-                        : 'text-gray-400'
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                  {index < steps.length - 1 && (
-                    <div
-                      className={`h-px flex-1 min-w-4 ${
-                        isDone ? 'bg-emerald-300' : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
-                    />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
+    <div className="rounded-2xl border border-sky-300/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-200/50">
+        {label}
+      </p>
+      {loading ? (
+        <Skeleton className="mt-3 h-7 w-28 bg-sky-200/10" />
+      ) : (
+        <p className="mt-2 text-2xl font-black tracking-tight text-white">
+          {value}
+        </p>
+      )}
     </div>
-  )
+  );
 }
 
 export default function Faucet() {
-  const { address, isConnected, chain } = useAccount()
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const { address, isConnected, chain } = useAccount();
+  const { switchChainAsync, isPending: isSwitchingChain } = useSwitchChain();
+  const [selectedNetworkId, setSelectedNetworkId] =
+    useState<FaucetNetworkId>("sepolia");
+  const [message, setMessage] = useState<Message | null>(null);
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
+
+  const selectedNetwork =
+    FAUCET_NETWORK_LIST.find((network) => network.id === selectedNetworkId) ??
+    FAUCET_NETWORK_LIST[0];
+
+  const contractAddress = selectedNetwork.address;
+  const isNetworkDeployed = Boolean(contractAddress);
+
+  const { data: nativeBalance } = useBalance({
+    address,
+    chainId: selectedNetwork.chainId,
+    query: { enabled: Boolean(address && isNetworkDeployed) },
+  });
+
+  useEffect(() => {
+    if (!chain?.id) return;
+    const matched = getFaucetNetwork(chain.id);
+    if (matched) {
+      setSelectedNetworkId(matched.id);
+    }
+  }, [chain?.id]);
+
+  const faucetReadContracts = contractAddress
+    ? [
+        {
+          address: contractAddress,
+          abi: FAUCET_ABI,
+          functionName: "claimAmount",
+          chainId: selectedNetwork.chainId,
+        },
+        {
+          address: contractAddress,
+          abi: FAUCET_ABI,
+          functionName: "weeklyLimit",
+          chainId: selectedNetwork.chainId,
+        },
+        {
+          address: contractAddress,
+          abi: FAUCET_ABI,
+          functionName: "getContractBalance",
+          chainId: selectedNetwork.chainId,
+        },
+        ...(address
+          ? [
+              {
+                address: contractAddress,
+                abi: FAUCET_ABI,
+                functionName: "remainingWeeklyAllowance",
+                args: [address],
+                chainId: selectedNetwork.chainId,
+              },
+            ]
+          : []),
+      ]
+    : [];
 
   const { data, isLoading, refetch } = useReadContracts({
-    contracts: [
-      {
-        address: FAUCET_ADDRESS,
-        abi: FAUCET_ABI,
-        functionName: 'claimAmount',
-      },
-      {
-        address: FAUCET_ADDRESS,
-        abi: FAUCET_ABI,
-        functionName: 'weeklyLimit',
-      },
-      {
-        address: FAUCET_ADDRESS,
-        abi: FAUCET_ABI,
-        functionName: 'getContractBalance',
-      },
-      ...(address
-        ? [
-            {
-              address: FAUCET_ADDRESS,
-              abi: FAUCET_ABI,
-              functionName: 'remainingWeeklyAllowance' as const,
-              args: [address] as const,
-            },
-          ]
-        : []),
-    ],
+    contracts: faucetReadContracts as any,
     query: {
+      enabled: isNetworkDeployed,
       refetchInterval: 30_000,
     },
-  })
+  });
 
-  const claimAmount = data?.[0]?.result
-  const weeklyLimit = data?.[1]?.result
-  const contractBalance = data?.[2]?.result
-  const remaining = address ? data?.[3]?.result : undefined
+  const claimAmount = data?.[0]?.result as bigint | undefined;
+  const weeklyLimit = data?.[1]?.result as bigint | undefined;
+  const contractBalance = data?.[2]?.result as bigint | undefined;
+  const remaining = address ? (data?.[3]?.result as bigint | undefined) : undefined;
 
-  const {
-    writeContract,
-    data: txHash,
-    isPending: isSubmitting,
-    error: submitError,
-    reset: resetWrite,
-  } = useWriteContract()
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-  })
-
-  const isWrongChain = isConnected && chain?.id !== SEPOLIA_CHAIN_ID
+  const isWrongChain = isConnected && chain?.id !== selectedNetwork.chainId;
   const canClaim =
+    isNetworkDeployed &&
     isConnected &&
     !isWrongChain &&
     remaining !== undefined &&
-    remaining > 0n &&
+    remaining > BigInt(0) &&
     contractBalance !== undefined &&
-    contractBalance > 0n
+    contractBalance > BigInt(0);
 
-  const handleClaim = () => {
-    setMessage(null)
-    resetWrite()
+  const handleNetworkChange = async (networkId: FaucetNetworkId) => {
+    setSelectedNetworkId(networkId);
+    setMessage(null);
+    setLastTxHash(null);
 
-    writeContract({
-      address: FAUCET_ADDRESS,
-      abi: FAUCET_ABI,
-      functionName: 'claim',
-    })
-  }
-
-  useEffect(() => {
-    if (!txHash || !isSuccess) return
-
-    void refetch()
-    setMessage({
-      type: 'success',
-      text: `领取成功！交易哈希: ${txHash}，已领取 ${formatEth(claimAmount)} Sepolia ETH`,
-    })
-  }, [txHash, isSuccess, refetch, claimAmount])
-
-  useEffect(() => {
-    if (!submitError) return
-
-    let text = submitError.message || '领取失败'
-    if (text.includes('User rejected') || text.includes('User denied')) {
-      text = '已取消交易'
-    } else if (text.includes('WeeklyLimitExceeded')) {
-      text = '本周领取额度已用完，请 7 天后再试'
-    } else if (text.includes('InsufficientBalance')) {
-      text = '水龙头余额不足，请稍后再试'
+    const nextNetwork = FAUCET_NETWORK_LIST.find(
+      (network) => network.id === networkId
+    );
+    if (!nextNetwork || !isConnected || chain?.id === nextNetwork.chainId) {
+      return;
     }
 
-    setMessage({ type: 'error', text })
-  }, [submitError])
+    try {
+      await switchChainAsync({ chainId: nextNetwork.chainId });
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setMessage({
+        type: "error",
+        text: error.message || `请切换到 ${nextNetwork.name}`,
+      });
+    }
+  };
 
-  const isClaiming = isSubmitting || isConfirming
-  const claimStep = isSubmitting ? 'sign' : 'confirm'
+  const handleClaim = async () => {
+    if (!address) return;
+
+    setIsClaiming(true);
+    setMessage(null);
+    setLastTxHash(null);
+
+    try {
+      const res = await fetch("/api/faucet/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: address,
+          network: selectedNetworkId,
+        }),
+      });
+
+      const responseData = await res.json();
+
+      if (!res.ok) {
+        throw new Error(responseData.error || "领取失败");
+      }
+
+      await refetch();
+
+      setLastTxHash(responseData.tx_hash);
+      setMessage({
+        type: "success",
+        text: `${responseData.amount} ${selectedNetwork.symbol} 已发送到你的钱包。`,
+      });
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setMessage({ type: "error", text: error.message || "领取失败" });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handlePrimaryAction = async () => {
+    if (!isConnected) return;
+    if (isWrongChain) {
+      await handleNetworkChange(selectedNetworkId);
+      return;
+    }
+    await handleClaim();
+  };
+
+  const primaryLabel = !isNetworkDeployed
+    ? "该网络暂未开放"
+    : !isConnected
+      ? "先连接钱包"
+      : isSwitchingChain
+        ? "切换网络中..."
+        : isClaiming
+          ? "领取中..."
+          : isWrongChain
+            ? `切换到 ${selectedNetwork.name}`
+            : canClaim
+              ? `领取 ${selectedNetwork.symbol} 测试币`
+              : "暂不可领取";
+
+  const primaryDisabled =
+    !isNetworkDeployed ||
+    !isConnected ||
+    isClaiming ||
+    isSwitchingChain ||
+    (!isWrongChain && !canClaim);
+
+  const explorerTxUrl =
+    lastTxHash && !lastTxHash.startsWith("pending_")
+      ? `${selectedNetwork.explorer}/tx/${lastTxHash}`
+      : null;
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Sepolia 测试币水龙头</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            连接钱包后直接调用链上合约领取。每个地址每 7 天最多领取{' '}
-            {weeklyLimit !== undefined ? formatEth(weeklyLimit) : '0.1'} ETH。
-          </p>
-        </div>
-        <ConnectButton />
-      </div>
+    <section className="relative overflow-hidden rounded-[2rem] border border-sky-300/15 bg-[#07101f]/80 p-5 text-slate-100 shadow-[0_30px_100px_rgba(14,165,233,0.16)] backdrop-blur-xl sm:p-7">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-sky-400/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 left-8 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
 
-      <div className="space-y-4">
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4 text-sm space-y-3">
-          <div className="flex justify-between gap-4 items-center">
-            <span className="text-gray-500 dark:text-gray-400">合约地址</span>
-            <a
-              href={`https://sepolia.etherscan.io/address/${FAUCET_ADDRESS}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline break-all text-right"
-            >
-              {FAUCET_ADDRESS.slice(0, 6)}…{FAUCET_ADDRESS.slice(-4)}
-            </a>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500 dark:text-gray-400">网络</span>
-            <span className="text-gray-900 dark:text-gray-100">Sepolia ({SEPOLIA_CHAIN_ID})</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500 dark:text-gray-400">单次领取</span>
-            {isLoading ? (
-              <ValueSkeleton />
-            ) : (
-              <span className="text-gray-900 dark:text-gray-100">{formatEth(claimAmount)} ETH</span>
-            )}
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500 dark:text-gray-400">本周剩余额度</span>
-            {isConnected && isLoading ? (
-              <ValueSkeleton />
-            ) : (
-              <span className="text-gray-900 dark:text-gray-100">
-                {isConnected ? `${formatEth(remaining)} ETH` : '连接钱包后显示'}
+      <div className="relative space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs font-bold text-sky-200">
+              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.9)]" />
+              Gas 由平台代付
+            </div>
+            <h2 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
+              测试币水龙头
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+              连接钱包，选择测试网，一键领取开发调试用测试币。每个地址每周最多领取{" "}
+              <span className="font-semibold text-sky-100">
+                {weeklyLimit !== undefined
+                  ? `${formatAmount(weeklyLimit)} ${selectedNetwork.symbol}`
+                  : "固定额度"}
               </span>
-            )}
+              。
+            </p>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500 dark:text-gray-400">水龙头余额</span>
-            {isLoading ? (
-              <ValueSkeleton />
-            ) : (
-              <span className="text-gray-900 dark:text-gray-100">{formatEth(contractBalance)} ETH</span>
-            )}
+          <div className="shrink-0">
+            <ConnectButton />
           </div>
-          {address && (
-            <div className="flex justify-between gap-4 pt-2 border-t border-gray-200 dark:border-gray-700 items-center">
-              <span className="text-gray-500 dark:text-gray-400">已连接钱包</span>
-              <span className="text-gray-900 dark:text-gray-100 break-all text-right font-mono text-xs sm:text-sm">
-                {address.slice(0, 6)}…{address.slice(-4)}
+        </div>
+
+        <div>
+          <p className="mb-3 text-sm font-semibold text-slate-200">选择网络</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {FAUCET_NETWORK_LIST.map((network) => {
+              const isSelected = network.id === selectedNetworkId;
+              return (
+                <button
+                  key={network.id}
+                  type="button"
+                  onClick={() => void handleNetworkChange(network.id)}
+                  disabled={isSwitchingChain || isClaiming}
+                  className={`group rounded-2xl border px-4 py-3 text-left transition-all ${
+                    isSelected
+                      ? "border-sky-300/70 bg-sky-300/15 shadow-[0_0_34px_rgba(125,211,252,0.18)]"
+                      : "border-white/10 bg-white/[0.03] hover:border-sky-300/40 hover:bg-sky-300/10"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  <span className="block text-sm font-bold text-white">
+                    {network.name}
+                  </span>
+                  <span className="mt-1 block text-xs text-slate-400 group-hover:text-sky-200">
+                    {network.symbol} · Chain {network.chainId}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MetricCard
+            label="单次发放"
+            loading={isLoading}
+            value={`${formatAmount(claimAmount)} ${selectedNetwork.symbol}`}
+          />
+          <MetricCard
+            label="本周剩余"
+            loading={isConnected && isLoading}
+            value={
+              isConnected
+                ? `${formatAmount(remaining)} ${selectedNetwork.symbol}`
+                : "连接后显示"
+            }
+          />
+          <MetricCard
+            label="水龙头余额"
+            loading={isLoading}
+            value={`${formatAmount(contractBalance)} ${selectedNetwork.symbol}`}
+          />
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+          <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-500">领取地址</span>
+              <span className="font-mono text-slate-100">
+                {address ? shortAddress(address) : "未连接"}
               </span>
             </div>
-          )}
-        </div>
-
-        {isWrongChain && (
-          <div className="p-3 rounded-lg text-sm bg-amber-50 text-amber-700 border border-amber-200">
-            当前网络不正确，请点击右上角连接按钮切换到 Sepolia 测试网。
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-500">钱包余额</span>
+              <span className="font-mono text-slate-100">
+                {address && nativeBalance !== undefined
+                  ? `${formatAmount(nativeBalance.value)} ${selectedNetwork.symbol}`
+                  : "-"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-500">当前网络</span>
+              <span
+                className={
+                  isWrongChain ? "text-amber-200" : "text-slate-100"
+                }
+              >
+                {isConnected ? chain?.name || "未知网络" : selectedNetwork.name}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-500">合约</span>
+              {contractAddress ? (
+                <a
+                  href={`${selectedNetwork.explorer}/address/${contractAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-sky-200 transition-colors hover:text-white"
+                >
+                  {shortAddress(contractAddress)}
+                </a>
+              ) : (
+                <span className="text-slate-500">未部署</span>
+              )}
+            </div>
           </div>
-        )}
-
-        {isClaiming && <ClaimProgress step={claimStep} />}
+        </div>
 
         {message && (
           <div
-            className={`p-3 rounded-lg text-sm break-all ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-600 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
-                : 'bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+            className={`rounded-2xl border px-4 py-3 text-sm ${
+              message.type === "success"
+                ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+                : "border-rose-300/25 bg-rose-300/10 text-rose-100"
             }`}
           >
-            {message.text}
-          </div>
-        )}
-
-        {txHash && isConfirming && (
-          <div className="p-3 rounded-lg text-xs bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 break-all font-mono">
-            Tx: {txHash}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span>{message.text}</span>
+              {explorerTxUrl && (
+                <a
+                  href={explorerTxUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-white underline decoration-sky-300/50 underline-offset-4"
+                >
+                  查看交易
+                </a>
+              )}
+            </div>
           </div>
         )}
 
         <button
           type="button"
-          onClick={handleClaim}
-          disabled={!canClaim || isClaiming}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center justify-center gap-2"
+          onClick={() => void handlePrimaryAction()}
+          disabled={primaryDisabled}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-300 to-blue-500 px-5 py-4 text-base font-black text-[#03111f] shadow-[0_18px_50px_rgba(56,189,248,0.24)] transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(56,189,248,0.34)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
         >
-          {isClaiming && <Spinner size="sm" className="border-white/30 border-t-white" />}
-          {!isConnected
-            ? '请先连接钱包'
-            : isClaiming
-              ? isSubmitting
-                ? '等待签名…'
-                : '确认中…'
-              : canClaim
-                ? '领取测试 ETH'
-                : '暂不可领取'}
+          {(isClaiming || isSwitchingChain) && (
+            <Spinner size="sm" className="border-black/20 border-t-black" />
+          )}
+          {primaryLabel}
         </button>
+
+        <p className="text-center text-xs leading-5 text-slate-500">
+          适合合约调试、钱包登录、链上交互练习。测试币没有真实价值，请按需领取。
+        </p>
       </div>
-    </div>
-  )
+    </section>
+  );
 }

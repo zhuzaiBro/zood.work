@@ -77,12 +77,14 @@ contract Faucet {
         emit Deposited(msg.sender, msg.value);
     }
 
-    /// @notice 领取测试 ETH，调用者须为 msg.sender
-    function claim() external {
-        uint256 amount = _claimAmountFor(msg.sender);
-        uint256 limit = _weeklyLimitFor(msg.sender);
+    /// @notice 为 recipient 领取测试币；任意地址可代为调用，领取记录与额度均计入 recipient
+    function claim(address recipient) external {
+        if (recipient == address(0)) revert ZeroAddress();
 
-        ClaimRecord storage record = claimRecords[msg.sender];
+        uint256 amount = _claimAmountFor(recipient);
+        uint256 limit = _weeklyLimitFor(recipient);
+
+        ClaimRecord storage record = claimRecords[recipient];
         _resetPeriodIfExpired(record);
 
         if (record.claimedAmount + amount > limit) revert WeeklyLimitExceeded();
@@ -90,10 +92,10 @@ contract Faucet {
 
         record.claimedAmount += amount;
 
-        (bool ok,) = msg.sender.call{value: amount}("");
+        (bool ok,) = recipient.call{value: amount}("");
         if (!ok) revert TransferFailed();
 
-        emit Claimed(msg.sender, amount, record.claimedAmount);
+        emit Claimed(recipient, amount, record.claimedAmount);
     }
 
     /// @notice 设置全局单次领取额度

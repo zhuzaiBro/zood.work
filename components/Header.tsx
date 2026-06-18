@@ -19,7 +19,7 @@ export default function Header() {
   const [isHero, setIsHero] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
-  const isImmersiveHero = pathname === "/" && isHero;
+  const isImmersiveHero = pathname === "/" || pathname === "/faucet" || pathname === "/interview" || pathname === "/faucet" && isHero;
 
   useEffect(() => {
     const handleScroll = () => {

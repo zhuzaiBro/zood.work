@@ -8,6 +8,7 @@ contract FaucetTest is Test {
     Faucet faucet;
     address owner = makeAddr("owner");
     address user = makeAddr("user");
+    address relayer = makeAddr("relayer");
 
     function setUp() public {
         vm.deal(owner, 10 ether);
@@ -18,15 +19,22 @@ contract FaucetTest is Test {
 
     function test_claim_success() public {
         vm.prank(user);
-        faucet.claim();
+        faucet.claim(user);
         assertEq(user.balance, 0.1 ether);
     }
 
+    function test_relayer_can_claim_for_recipient() public {
+        vm.prank(relayer);
+        faucet.claim(user);
+        assertEq(user.balance, 0.1 ether);
+        assertEq(faucet.remainingWeeklyAllowance(user), 0);
+    }
+
     function test_claim_reverts_when_weekly_limit_exceeded() public {
-        vm.startPrank(user);
-        faucet.claim();
+        vm.startPrank(relayer);
+        faucet.claim(user);
         vm.expectRevert(Faucet.WeeklyLimitExceeded.selector);
-        faucet.claim();
+        faucet.claim(user);
         vm.stopPrank();
     }
 

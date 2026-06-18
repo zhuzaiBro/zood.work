@@ -95,11 +95,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: '数据库查询错误' }, { status: 500 });
       }
 
-      if (recentIpRequests && recentIpRequests.length > 0) {
-        return NextResponse.json({ 
-          error: `请求过于频繁，请等待 ${RATE_LIMIT_SECONDS} 秒后再试` 
-        }, { status: 429 });
-      }
+      // if (recentIpRequests && recentIpRequests.length > 0) {
+      //   return NextResponse.json({ 
+      //     error: `请求过于频繁，请等待 ${RATE_LIMIT_SECONDS} 秒后再试` 
+      //   }, { status: 429 });
+      // }
     }
 
     // 6. 请求频率限制：检查同一钱包地址在最近N秒内是否有请求
@@ -115,11 +115,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '数据库查询错误' }, { status: 500 });
     }
 
-    if (recentWalletRequests && recentWalletRequests.length > 0) {
-      return NextResponse.json({ 
-        error: `请求过于频繁，请等待 ${RATE_LIMIT_SECONDS} 秒后再试` 
-      }, { status: 429 });
-    }
+    // if (recentWalletRequests && recentWalletRequests.length > 0) {
+    //   return NextResponse.json({ 
+    //     error: `请求过于频繁，请等待 ${RATE_LIMIT_SECONDS} 秒后再试` 
+    //   }, { status: 429 });
+    // }
 
     // 7. 检查全网/全局每日限额 (Daily Limit)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

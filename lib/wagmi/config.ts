@@ -1,7 +1,7 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
 import { injectedWallet, metaMaskWallet } from '@rainbow-me/rainbowkit/wallets'
 import { createConfig, http } from 'wagmi'
-import { sepolia } from 'wagmi/chains'
+import { baseSepolia, bscTestnet, sepolia } from 'wagmi/chains'
 
 const connectors = connectorsForWallets(
   [
@@ -16,11 +16,15 @@ const connectors = connectorsForWallets(
   }
 )
 
+export const faucetChains = [sepolia, baseSepolia, bscTestnet] as const
+
 export const wagmiConfig = createConfig({
-  chains: [sepolia],
+  chains: faucetChains,
   connectors,
   transports: {
     [sepolia.id]: http('https://ethereum-sepolia-rpc.publicnode.com'),
+    [baseSepolia.id]: http('https://base-sepolia-rpc.publicnode.com'),
+    [bscTestnet.id]: http('https://data-seed-prebsc-1-s1.binance.org:8545'),
   },
   ssr: true,
 })
