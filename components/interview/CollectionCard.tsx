@@ -12,7 +12,7 @@ export default function CollectionCard({ collection }: CollectionCardProps) {
   return (
     <Link 
       href={`/interview/${collection.id}`}
-      className="block p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100"
+      className="block p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100"
     >
       <div className="flex items-start gap-4">
         <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">

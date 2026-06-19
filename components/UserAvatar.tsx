@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/hooks/useAuth'
 
-export default function UserAvatar({ isHero = false }: { isHero?: boolean }) {
+export default function UserAvatar() {
   const profile = useProfile()
   const isAuthenticated = useIsAuthenticated()
   const isAdmin = useIsAdmin()
@@ -41,7 +41,7 @@ export default function UserAvatar({ isHero = false }: { isHero?: boolean }) {
     return (
       <Link
         href="/login"
-        className="rounded-full border border-sky-300/30 bg-sky-300/10 px-5 py-2.5 text-sm font-semibold text-sky-100 shadow-[0_0_28px_rgba(125,211,252,0.18)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-sky-200/60 hover:bg-sky-200/18 hover:text-white"
+        className="rounded-full border border-header-sky/35 bg-header-sky/10 px-5 py-2.5 text-sm font-semibold text-header-sky shadow-[0_0_28px_rgba(32,146,206,0.15)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-header-sky/55 hover:bg-header-sky/15 hover:text-sky-800"
       >
         登录
       </Link>
@@ -73,7 +73,7 @@ export default function UserAvatar({ isHero = false }: { isHero?: boolean }) {
             {(displayProfile.display_name || displayProfile.username).charAt(0).toUpperCase()}
           </div>
         )}
-        <span className={`text-sm font-medium hidden sm:inline text-blue-500`}>
+        <span className="text-sm font-medium hidden sm:inline text-header-sky">
           {displayProfile.display_name || displayProfile.username}
         </span>
       </Link>

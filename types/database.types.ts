@@ -151,6 +151,69 @@ export type Database = {
           },
         ]
       }
+      interview_question_submissions: {
+        Row: {
+          admin_note: string | null
+          collection_id: string | null
+          contact: string | null
+          content: string
+          created_at: string
+          difficulty: string | null
+          id: string
+          source: string | null
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          collection_id?: string | null
+          contact?: string | null
+          content: string
+          created_at?: string
+          difficulty?: string | null
+          id?: string
+          source?: string | null
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          collection_id?: string | null
+          contact?: string | null
+          content?: string
+          created_at?: string
+          difficulty?: string | null
+          id?: string
+          source?: string | null
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_question_submissions_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "interview_collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interview_question_submissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interview_question_tags: {
         Row: {
           question_id: string

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import TagFilter from '@/components/interview/TagFilter';
 import CollectionCard from '@/components/interview/CollectionCard';
+import QuestionContributionForm from '@/components/interview/QuestionContributionForm';
 import { Database } from '@/types/database.types';
 
 type Collection = Database['public']['Tables']['interview_collections']['Row'];
@@ -67,20 +68,18 @@ export default async function InterviewPage({
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
-      <div className="mt-[-5rem] pt-32 bg-gradient-to-b from-blue-50 to-gray-50 pb-8">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center gap-2 mb-8">
+      <div className="mt-[-5rem] pt-24 bg-gradient-to-b from-blue-50 to-gray-50">
+        <div className="container mx-auto px-4 pb-3">
+          <div className="flex items-center gap-2 mb-3">
             <span className="text-2xl">🔥</span>
             <h1 className="text-2xl font-bold text-gray-900">热门面试题库</h1>
           </div>
-          
-          <div className="bg-white/50 backdrop-blur-sm rounded-xl p-4 mb-6 border border-orange-100/50">
-             <TagFilter tags={tags || []} />
-          </div>
+
+          <TagFilter tags={tags || []} />
         </div>
       </div>
 
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 pt-2">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {collections?.map((collection) => (
             <CollectionCard key={collection.id} collection={collection} />
@@ -91,8 +90,11 @@ export default async function InterviewPage({
             </div>
           )}
         </div>
+
+        <div className="mt-10">
+          <QuestionContributionForm />
+        </div>
       </div>
     </div>
   );
 }
-

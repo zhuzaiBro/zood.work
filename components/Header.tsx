@@ -42,24 +42,24 @@ export default function Header() {
     setIsMobileUserMenuOpen(false);
   };
 
-  const linkClass = "text-sky-300 hover:text-white transition-colors";
+  const linkClass = "text-header-sky hover:text-sky-800 transition-colors";
 
   const mobileLinkClass =
-    "block py-2 text-sky-300 hover:text-white transition-colors text-lg font-medium";
+    "block py-2 text-header-sky hover:text-sky-800 transition-colors text-lg font-medium";
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-sky-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-header-sky backdrop-blur-md ${
         isImmersiveHero
           ? "bg-transparent border-transparent"
-          : "bg-black/85 backdrop-blur-md border-b border-[#172846]"
+          : "border-b border-[#172846]/80"
       }`}
     >
       <nav className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center text-sky-300 transition-colors hover:text-white"
+            className="flex items-center text-header-sky transition-colors hover:text-sky-800"
             onClick={closeMobileMenu}
             aria-label="水煮油条君首页"
           >
@@ -93,7 +93,7 @@ export default function Header() {
             {isLoading ? (
               <div className="w-20 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
             ) : (
-              <UserAvatar isHero={isImmersiveHero} />
+              <UserAvatar />
             )}
           </div>
 
@@ -303,9 +303,8 @@ export default function Header() {
                   )}
                 </div>
               ) : (
-                // 在移动端菜单中，背景是白色的，所以 isHero 传 false 以使用深色文字
                 <div onClick={closeMobileMenu}>
-                  <UserAvatar isHero={false} />
+                  <UserAvatar />
                 </div>
               )}
             </div>

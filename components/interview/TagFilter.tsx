@@ -36,16 +36,16 @@ export default function TagFilter({ tags }: TagFilterProps) {
   };
 
   return (
-    <div className="w-full overflow-x-auto pb-4 scrollbar-hide">
-      <div className="flex flex-wrap gap-3 min-w-max">
+    <div className="w-full overflow-x-auto scrollbar-hide">
+      <div className="flex flex-nowrap items-center gap-5">
         {tags.map((tag) => (
           <button
             key={tag.id}
             onClick={() => handleTagClick(tag.slug)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`whitespace-nowrap text-sm transition-colors ${
               activeTag === tag.slug
-                ? 'bg-orange-100 text-orange-600'
-                : 'bg-white text-gray-600 hover:bg-gray-50 border border-transparent hover:border-gray-200'
+                ? 'font-semibold text-orange-600'
+                : 'text-gray-500 hover:text-gray-900'
             }`}
           >
             {tag.name}
