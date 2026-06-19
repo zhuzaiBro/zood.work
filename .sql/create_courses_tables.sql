@@ -23,14 +23,33 @@ CREATE TABLE IF NOT EXISTS chapters (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 创建视频资源表
+CREATE TABLE IF NOT EXISTS videos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  source_file TEXT NOT NULL,
+  cos_prefix TEXT,
+  m3u8_path TEXT,
+  duration INTEGER,
+  width INTEGER,
+  height INTEGER,
+  fps NUMERIC(10, 2),
+  segment_count INTEGER,
+  status TEXT NOT NULL DEFAULT 'waiting',
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 创建课程视频表
 CREATE TABLE IF NOT EXISTS lessons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   chapter_id UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
-  video_id TEXT, -- Cloudflare Stream video ID
-  video_url TEXT, -- Cloudflare Stream HLS URL
+  video_id TEXT, -- 外部 Video Manager API 的 videoId
+  video_url TEXT, -- 兼容旧字段；播放时通过 video_id 向外部视频 API 获取签名 m3u8
   duration INTEGER, -- 视频时长（秒）
   is_free BOOLEAN DEFAULT false,
   is_locked BOOLEAN DEFAULT true,
@@ -42,13 +61,20 @@ CREATE TABLE IF NOT EXISTS lessons (
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_chapters_course_id ON chapters(course_id);
 CREATE INDEX IF NOT EXISTS idx_lessons_chapter_id ON lessons(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_video_id ON lessons(video_id);
 CREATE INDEX IF NOT EXISTS idx_courses_created_by ON courses(created_by);
 CREATE INDEX IF NOT EXISTS idx_courses_status ON courses(status);
+CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
 
 -- 启用 Row Level Security
 ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chapters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lessons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE videos ENABLE ROW LEVEL SECURITY;
+
+-- Data API 权限，实际可见/可写范围继续由 RLS 策略控制
+GRANT SELECT ON videos TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON videos TO authenticated;
 
 -- 创建 RLS 策略（管理员可以管理所有课程，普通用户只能查看已发布的课程）
 -- 管理员策略
@@ -74,6 +100,16 @@ CREATE POLICY "Admins can manage all chapters"
 
 CREATE POLICY "Admins can manage all lessons"
   ON lessons FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.is_admin = true
+    )
+  );
+
+CREATE POLICY "Admins can manage all videos"
+  ON videos FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM user_profiles
@@ -108,6 +144,10 @@ CREATE POLICY "Users can view lessons of published courses"
     )
   );
 
+CREATE POLICY "Users can view ready videos"
+  ON videos FOR SELECT
+  USING (status = 'ready');
+
 -- 创建更新时间触发器
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -129,5 +169,10 @@ CREATE TRIGGER update_chapters_updated_at
 
 CREATE TRIGGER update_lessons_updated_at
   BEFORE UPDATE ON lessons
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_videos_updated_at
+  BEFORE UPDATE ON videos
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();

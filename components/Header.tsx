@@ -10,6 +10,7 @@ import {
 } from "@/store/userStore";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { isLightContentPage } from "@/lib/layout";
 
 export default function Header() {
   const isLoading = useIsLoading();
@@ -19,6 +20,7 @@ export default function Header() {
   const [isHero, setIsHero] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
+  const lightContentPage = isLightContentPage(pathname);
   const isImmersiveHero = pathname === "/" || pathname === "/faucet" || pathname === "/interview" || pathname === "/faucet" && isHero;
 
   useEffect(() => {
@@ -50,7 +52,9 @@ export default function Header() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-header-sky backdrop-blur-md ${
-        isImmersiveHero
+        lightContentPage
+          ? "bg-white border-transparent"
+          : isImmersiveHero
           ? "bg-transparent border-transparent"
           : "border-b border-[#172846]/80"
       }`}

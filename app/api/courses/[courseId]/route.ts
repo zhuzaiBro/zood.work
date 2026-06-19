@@ -5,12 +5,10 @@ import { createAdminClient } from '@/lib/supabase/server';
 // 获取课程详情（包括章节和视频）
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
-    // Next.js 15+ params 是 Promise，需要 await
-    const resolvedParams = params instanceof Promise ? await params : params;
-    const { courseId } = resolvedParams;
+    const { courseId } = await params;
     console.log('获取课程详情, courseId:', courseId);
 
     if (!courseId) {
@@ -37,6 +35,40 @@ export async function GET(
 
     if (courseError || !course) {
       return NextResponse.json({ error: '课程不存在' }, { status: 404 });
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user: viewer },
+    } = await supabase.auth.getUser();
+
+    let isAdminViewer = false;
+    let hasCourseAccess = Boolean(course.is_free);
+
+    if (viewer) {
+      const { data: viewerProfile } = await adminClient
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', viewer.id)
+        .maybeSingle();
+
+      isAdminViewer = Boolean(viewerProfile?.is_admin);
+
+      if (!hasCourseAccess && !isAdminViewer) {
+        const { data: enrollment } = await adminClient
+          .from('course_enrollments')
+          .select('id')
+          .eq('course_id', courseId)
+          .eq('user_id', viewer.id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        hasCourseAccess = Boolean(enrollment);
+      }
+    }
+
+    if (isAdminViewer) {
+      hasCourseAccess = true;
     }
 
     // 2. 获取章节列表
@@ -73,18 +105,23 @@ export async function GET(
     const chaptersWithLessons = (chapters || []).map((chapter: any) => {
       const chapterLessons = lessons
         .filter((lesson: any) => lesson.chapter_id === chapter.id)
-        .map((lesson: any) => ({
-          id: lesson.id,
-          title: lesson.title,
-          description: lesson.description,
-          duration: lesson.duration ? formatDuration(lesson.duration) : undefined,
-          durationSeconds: lesson.duration,
-          isFree: lesson.is_free,
-          isLocked: lesson.is_locked,
-          videoUrl: lesson.video_url,
-          videoId: lesson.video_id,
-          sortOrder: lesson.sort_order,
-        }));
+        .map((lesson: any) => {
+          const isLessonFree = Boolean(lesson.is_free);
+          const canWatchLesson = hasCourseAccess || isLessonFree;
+
+          return {
+            id: lesson.id,
+            title: lesson.title,
+            description: lesson.description,
+            duration: lesson.duration ? formatDuration(lesson.duration) : undefined,
+            durationSeconds: lesson.duration,
+            isFree: isLessonFree,
+            isLocked: canWatchLesson ? false : Boolean(lesson.is_locked),
+            videoUrl: lesson.video_url,
+            videoId: lesson.video_id,
+            sortOrder: lesson.sort_order,
+          };
+        });
 
       return {
         id: chapter.id,
@@ -101,8 +138,9 @@ export async function GET(
         title: course.title,
         description: course.description,
         coverImageUrl: course.cover_image_url,
-        price: course.price,
+        price: Number(course.price) || 0,
         isFree: course.is_free,
+        hasAccess: hasCourseAccess,
         status: course.status,
         createdAt: course.created_at,
       },
@@ -111,6 +149,124 @@ export async function GET(
   } catch (error: any) {
     console.error('获取课程详情异常:', error);
     return NextResponse.json({ error: error.message || '服务器错误' }, { status: 500 });
+  }
+}
+
+const VALID_STATUSES = ['draft', 'published', 'archived'] as const;
+
+async function requireAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: NextResponse.json({ error: '未授权' }, { status: 401 }) };
+  }
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile || !(profile as { is_admin?: boolean }).is_admin) {
+    return { error: NextResponse.json({ error: '权限不足' }, { status: 403 }) };
+  }
+
+  return { user };
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ courseId: string }> },
+) {
+  try {
+    const auth = await requireAdmin();
+    if ('error' in auth && auth.error) return auth.error;
+
+    const { courseId } = await params;
+
+    if (!courseId) {
+      return NextResponse.json({ error: '缺少课程ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { status, price, isFree, title, description } = body;
+
+    const updates: Record<string, unknown> = {};
+
+    if (title !== undefined) {
+      if (!title || !String(title).trim()) {
+        return NextResponse.json({ error: '课程标题不能为空' }, { status: 400 });
+      }
+      updates.title = String(title).trim();
+    }
+
+    if (description !== undefined) {
+      updates.description = description?.trim() || null;
+    }
+
+    if (status !== undefined) {
+      if (!VALID_STATUSES.includes(status)) {
+        return NextResponse.json({ error: '无效的课程状态' }, { status: 400 });
+      }
+      updates.status = status;
+    }
+
+    if (isFree !== undefined) {
+      updates.is_free = Boolean(isFree);
+      if (isFree) {
+        updates.price = 0;
+      }
+    }
+
+    if (price !== undefined && !updates.is_free) {
+      const priceNum = Number(price);
+      if (Number.isNaN(priceNum) || priceNum < 0) {
+        return NextResponse.json({ error: '价格不能为负数' }, { status: 400 });
+      }
+      updates.price = priceNum;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: '没有可更新的字段' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('courses')
+      .update(updates)
+      .eq('id', courseId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('更新课程失败:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: '课程不存在' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      course: {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        coverImageUrl: data.cover_image_url,
+        price: Number(data.price) || 0,
+        isFree: data.is_free,
+        status: data.status,
+        createdAt: data.created_at,
+      },
+    });
+  } catch (error: unknown) {
+    console.error('更新课程异常:', error);
+    const message = error instanceof Error ? error.message : '服务器错误';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

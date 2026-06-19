@@ -2,22 +2,19 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-
-// 动态导入 Cloudflare Stream 组件（避免 SSR 问题）
-const Stream = dynamic(
-  () => import("@cloudflare/stream-react").then((mod) => mod.Stream),
-  { ssr: false }
-);
+import Hls from "hls.js";
+import { createClient } from "@/lib/supabase/client";
+import { videoApiUrl } from "@/lib/videoApi";
 
 interface Lesson {
   id: string;
   title: string;
   duration?: string;
+  durationSeconds?: number;
   isFree: boolean;
   isLocked: boolean;
   videoUrl?: string;
-  videoId?: string; // Cloudflare Stream video ID
+  videoId?: string; // 外部 Video Manager API 的视频 ID
 }
 
 interface Chapter {
@@ -30,6 +27,26 @@ interface CoursePlayerProps {
   courseId?: string;
   courseTitle?: string;
 }
+
+interface LessonProgress {
+  lesson_id: string;
+  video_id: string | null;
+  current_seconds: number;
+  duration_seconds: number | null;
+  last_watched_at: string;
+}
+
+interface LocalLessonProgress {
+  courseId?: string;
+  lessonId: string;
+  videoId?: string;
+  currentSeconds: number;
+  durationSeconds?: number;
+  updatedAt: string;
+}
+
+const progressStorageKey = (courseId?: string) =>
+  `zood.lesson-progress.${courseId || "default"}`;
 
 export default function CoursePlayer({
   courseId,
@@ -45,6 +62,13 @@ export default function CoursePlayer({
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
+  const [purchasePhone, setPurchasePhone] = useState("");
+  const [purchaseWechat, setPurchaseWechat] = useState("");
+  const [purchaseNote, setPurchaseNote] = useState("");
+  const [purchaseError, setPurchaseError] = useState("");
+  const [purchaseSuccess, setPurchaseSuccess] = useState("");
+  const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
 
   // 视频播放器相关状态
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -55,7 +79,12 @@ export default function CoursePlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [playerStatus, setPlayerStatus] = useState("");
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const pendingResumeTimeRef = useRef(0);
+  const resumeAppliedLessonRef = useRef<string | null>(null);
+  const lastProgressSaveAtRef = useRef(0);
 
   const tabs = [
     { id: "catalog", label: "课程目录" },
@@ -65,6 +94,9 @@ export default function CoursePlayer({
     { id: "homework", label: "随堂作业" },
     { id: "faq", label: "常见问题" },
   ];
+
+  const isPaidCourse = Boolean(course && !course.isFree);
+  const coursePrice = Number(course?.price ?? 0);
 
   const toggleChapter = (chapterId: string) => {
     const newExpanded = new Set(expandedChapters);
@@ -76,13 +108,199 @@ export default function CoursePlayer({
     setExpandedChapters(newExpanded);
   };
 
-  const handleLessonClick = (lesson: Lesson) => {
+  const flattenLessons = (chapterList: Chapter[]) =>
+    chapterList.flatMap((chapter) => chapter.lessons);
+
+  const getLocalProgress = (
+    lessonId?: string,
+    targetCourseId = courseId
+  ): LocalLessonProgress | null => {
+    if (typeof window === "undefined") return null;
+
+    try {
+      const raw = window.localStorage.getItem(progressStorageKey(targetCourseId));
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as LocalLessonProgress;
+      if (lessonId && parsed.lessonId !== lessonId) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveLocalProgress = (
+    lesson: Lesson,
+    currentSeconds: number,
+    durationSeconds?: number
+  ) => {
+    if (typeof window === "undefined") return;
+
+    const payload: LocalLessonProgress = {
+      courseId,
+      lessonId: lesson.id,
+      videoId: lesson.videoId,
+      currentSeconds: Math.max(0, Math.floor(currentSeconds)),
+      durationSeconds: durationSeconds ? Math.floor(durationSeconds) : undefined,
+      updatedAt: new Date().toISOString(),
+    };
+
+    window.localStorage.setItem(progressStorageKey(courseId), JSON.stringify(payload));
+  };
+
+  const loadRemoteProgress = async (
+    targetCourseId?: string,
+    lessonId?: string
+  ): Promise<LessonProgress | null> => {
+    const params = new URLSearchParams();
+    if (targetCourseId) params.set("courseId", targetCourseId);
+    if (lessonId) params.set("lessonId", lessonId);
+
+    const response = await fetch(`/api/learning/progress?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const body = await response.json();
+    return (body.progress ?? null) as LessonProgress | null;
+  };
+
+  const restoreInitialLesson = async (
+    targetCourseId: string | undefined,
+    chapterList: Chapter[]
+  ) => {
+    const allLessons = flattenLessons(chapterList).filter(
+      (lesson) => !lesson.isLocked || lesson.isFree
+    );
+    if (allLessons.length === 0) return;
+
+    const localProgress = getLocalProgress(undefined, targetCourseId);
+    let remoteProgress: LessonProgress | null = null;
+
+    try {
+      remoteProgress = await loadRemoteProgress(targetCourseId);
+    } catch (error) {
+      console.warn("读取远端学习进度失败，使用本地缓存兜底:", error);
+    }
+
+    const remoteTime = remoteProgress?.last_watched_at
+      ? new Date(remoteProgress.last_watched_at).getTime()
+      : 0;
+    const localTime = localProgress?.updatedAt
+      ? new Date(localProgress.updatedAt).getTime()
+      : 0;
+    const useRemote = Boolean(remoteProgress?.lesson_id && remoteTime >= localTime);
+    const targetLessonId = useRemote ? remoteProgress?.lesson_id : localProgress?.lessonId;
+    const targetLesson =
+      allLessons.find((lesson) => lesson.id === targetLessonId) ?? allLessons[0];
+
+    pendingResumeTimeRef.current = useRemote
+      ? remoteProgress?.current_seconds ?? 0
+      : localProgress?.currentSeconds ?? 0;
+    resumeAppliedLessonRef.current = null;
+    setCurrentLesson(targetLesson);
+  };
+
+  const handleLessonClick = async (lesson: Lesson) => {
     if (!lesson.isLocked || lesson.isFree) {
+      const localProgress = getLocalProgress(lesson.id);
+
+      try {
+        const remoteProgress = await loadRemoteProgress(courseId, lesson.id);
+        const remoteTime = remoteProgress?.last_watched_at
+          ? new Date(remoteProgress.last_watched_at).getTime()
+          : 0;
+        const localTime = localProgress?.updatedAt
+          ? new Date(localProgress.updatedAt).getTime()
+          : 0;
+
+        pendingResumeTimeRef.current =
+          remoteProgress && remoteTime >= localTime
+            ? remoteProgress.current_seconds
+            : localProgress?.currentSeconds ?? 0;
+      } catch (error) {
+        console.warn("读取课时进度失败，使用本地缓存:", error);
+        pendingResumeTimeRef.current = localProgress?.currentSeconds ?? 0;
+      }
+
+      resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
       // 重置播放状态
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+    }
+  };
+
+  const resetPurchaseForm = () => {
+    setPurchasePhone("");
+    setPurchaseWechat("");
+    setPurchaseNote("");
+    setPurchaseError("");
+    setPurchaseSuccess("");
+  };
+
+  const handleOpenPurchaseModal = () => {
+    setPurchaseModalOpen(true);
+    setPurchaseError("");
+    setPurchaseSuccess("");
+  };
+
+  const handleClosePurchaseModal = () => {
+    if (isSubmittingPurchase) return;
+    setPurchaseModalOpen(false);
+    resetPurchaseForm();
+  };
+
+  const handleSubmitPurchaseRequest = async () => {
+    const phone = purchasePhone.trim();
+    const wechat = purchaseWechat.trim();
+
+    if (!course?.id) {
+      setPurchaseError("课程信息还没有加载完成，请稍后再试");
+      return;
+    }
+
+    if (!phone) {
+      setPurchaseError("请填写手机号");
+      return;
+    }
+
+    if (!wechat) {
+      setPurchaseError("请填写微信号");
+      return;
+    }
+
+    setIsSubmittingPurchase(true);
+    setPurchaseError("");
+    setPurchaseSuccess("");
+
+    try {
+      const response = await fetch("/api/course-purchase-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: course.id,
+          phone,
+          wechat,
+          note: purchaseNote.trim() || null,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error || "提交失败，请稍后再试");
+      }
+
+      setPurchaseSuccess("提交成功，我会尽快通过微信或手机号联系你完成支付。");
+      setPurchasePhone("");
+      setPurchaseWechat("");
+      setPurchaseNote("");
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : "提交失败，请稍后再试");
+    } finally {
+      setIsSubmittingPurchase(false);
     }
   };
 
@@ -157,6 +375,7 @@ export default function CoursePlayer({
 
             if (data.chapters && data.chapters.length > 0) {
               setExpandedChapters(new Set([data.chapters[0].id]));
+              await restoreInitialLesson(firstCourse.id, data.chapters);
             }
             setIsLoading(false);
             return;
@@ -196,6 +415,7 @@ export default function CoursePlayer({
         // 默认展开第一个章节
         if (data.chapters && data.chapters.length > 0) {
           setExpandedChapters(new Set([data.chapters[0].id]));
+          await restoreInitialLesson(courseId, data.chapters);
         }
 
         // 清除超时
@@ -223,6 +443,7 @@ export default function CoursePlayer({
         clearTimeout(timeoutId);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
   // // 全屏切换
@@ -272,82 +493,297 @@ export default function CoursePlayer({
   //   };
   // }, []);
 
-  // 获取 Stream 组件内部的 video 元素引用并监听事件
+  const saveLessonProgress = async (
+    lesson: Lesson,
+    currentSeconds: number,
+    durationSeconds?: number,
+    force = false,
+    watchSeconds = 0,
+    segmentName?: string
+  ) => {
+    if (!lesson.videoId || currentSeconds < 1) return;
+
+    const now = Date.now();
+    if (!force && watchSeconds <= 0 && now - lastProgressSaveAtRef.current < 10000) return;
+    lastProgressSaveAtRef.current = now;
+
+    saveLocalProgress(lesson, currentSeconds, durationSeconds);
+
+    try {
+      await fetch("/api/learning/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId,
+          lessonId: lesson.id,
+          videoId: lesson.videoId,
+          currentSeconds,
+          durationSeconds,
+          watchSeconds,
+          segmentName,
+        }),
+      });
+    } catch (error) {
+      console.warn("保存学习进度失败:", error);
+    }
+  };
+
+  // 通过外部 Video Manager API 获取签名 m3u8，并用 hls.js 播放
   useEffect(() => {
-    if (!currentLesson || !currentLesson.videoId) {
-      // 如果没有 videoId，清理 ref
-      videoRef.current = null;
+    const video = videoRef.current;
+    const videoId = currentLesson?.videoId;
+    const lessonId = currentLesson?.id;
+
+    if (!video || !videoId || !lessonId || !currentLesson) {
+      setPlayerStatus("");
       return;
     }
 
-    // Stream 组件会在容器内创建 video 元素
-    // 我们需要找到这个 video 元素并设置 ref
-    const container = streamContainerRef.current;
-    if (!container) return;
+    let cancelled = false;
+    const reportedSegments = new Set<string>();
+    let watchedSecondsSinceLastLog = 0;
+    let lastWatchTick = 0;
+    let watchLogIntervalId: number | null = null;
 
-    let cleanup: (() => void) | null = null;
+    const destroyHls = () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      video.removeAttribute("src");
+      video.load();
+    };
 
-    const findVideoElement = () => {
-      const video = container.querySelector("video") as HTMLVideoElement;
-      if (video && video !== videoRef.current) {
-        // 清理旧的事件监听器
-        if (cleanup) {
-          cleanup();
+    const applyResumeTime = () => {
+      if (resumeAppliedLessonRef.current === lessonId) return;
+
+      const resumeSeconds = pendingResumeTimeRef.current;
+      const safeDuration = Number.isFinite(video.duration) ? video.duration : 0;
+
+      if (resumeSeconds > 5 && (!safeDuration || resumeSeconds < safeDuration - 5)) {
+        video.currentTime = resumeSeconds;
+        setCurrentTime(resumeSeconds);
+        setPlayerStatus(`已恢复到 ${formatTime(resumeSeconds)}`);
+        window.setTimeout(() => {
+          if (!cancelled) setPlayerStatus("");
+        }, 1800);
+      }
+
+      resumeAppliedLessonRef.current = lessonId;
+    };
+
+    const flushWatchLog = async (token: string, force = false) => {
+      if (!force && watchedSecondsSinceLastLog < 15) return;
+      if (watchedSecondsSinceLastLog <= 0) return;
+
+      const watchSeconds = Math.floor(watchedSecondsSinceLastLog);
+      watchedSecondsSinceLastLog = 0;
+      const segmentName = `lesson:${lessonId}`;
+
+      saveLessonProgress(
+        currentLesson,
+        video.currentTime,
+        video.duration || duration,
+        true,
+        watchSeconds,
+        segmentName
+      );
+
+      try {
+        await fetch(videoApiUrl(`/api/videos/${videoId}/segments`), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ segmentName, watchSeconds }),
+        });
+      } catch (error) {
+        console.warn("上报视频观看时长失败:", error);
+      }
+    };
+
+    const updateTime = () => {
+      const nextTime = video.currentTime;
+      setCurrentTime(nextTime);
+
+      if (!video.paused && !video.ended) {
+        const now = Date.now();
+        if (lastWatchTick > 0) {
+          const deltaSeconds = Math.min(5, Math.max(0, (now - lastWatchTick) / 1000));
+          watchedSecondsSinceLastLog += deltaSeconds;
+        }
+        lastWatchTick = now;
+      }
+
+      saveLessonProgress(currentLesson, nextTime, video.duration || duration);
+    };
+    const updateDuration = () => {
+      if (video.duration && !isNaN(video.duration)) {
+        setDuration(video.duration);
+      }
+      applyResumeTime();
+    };
+    const handlePlay = () => {
+      lastWatchTick = Date.now();
+      setIsPlaying(true);
+    };
+    const handlePause = () => {
+      lastWatchTick = 0;
+      setIsPlaying(false);
+      saveLessonProgress(currentLesson, video.currentTime, video.duration || duration, true);
+    };
+    const handleEnded = () => {
+      lastWatchTick = 0;
+      setIsPlaying(false);
+      saveLessonProgress(currentLesson, video.currentTime, video.duration || duration, true);
+    };
+
+    const reportSegment = async (token: string, segmentName: string) => {
+      if (!segmentName || reportedSegments.has(segmentName)) return;
+      reportedSegments.add(segmentName);
+
+      try {
+        await fetch(videoApiUrl(`/api/videos/${videoId}/segments`), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ segmentName }),
+        });
+      } catch (error) {
+        console.warn("上报视频切片失败:", error);
+      }
+    };
+
+    const setupPlayer = async () => {
+      destroyHls();
+      setPlayerStatus("正在获取播放授权...");
+
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const token = session?.access_token;
+      if (!token) {
+        setPlayerStatus("未登录，仅使用本地进度恢复");
+      }
+
+      try {
+        const response = await fetch(
+          videoApiUrl(`/api/videos/${videoId}/play?token=${encodeURIComponent(token || "")}`),
+          { headers: { Accept: "application/json" } }
+        );
+        const body = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(body.message || body.code || "获取播放地址失败");
         }
 
-        // 将找到的 video 元素赋值给 ref
-        videoRef.current = video;
+        if (cancelled) return;
 
-        // 设置事件监听器
-        const updateTime = () => setCurrentTime(video.currentTime);
-        const updateDuration = () => {
-          if (video.duration && !isNaN(video.duration)) {
-            setDuration(video.duration);
-          }
-        };
-        const handlePlay = () => setIsPlaying(true);
-        const handlePause = () => setIsPlaying(false);
+        const playUrl = body.playUrl as string;
+        if (!playUrl) {
+          throw new Error("视频 API 未返回 playUrl");
+        }
 
         video.addEventListener("timeupdate", updateTime);
         video.addEventListener("loadedmetadata", updateDuration);
         video.addEventListener("durationchange", updateDuration);
         video.addEventListener("play", handlePlay);
         video.addEventListener("pause", handlePause);
+        video.addEventListener("ended", handleEnded);
         video.addEventListener("loadeddata", updateDuration);
 
-        // 保存清理函数
-        cleanup = () => {
-          video.removeEventListener("timeupdate", updateTime);
-          video.removeEventListener("loadedmetadata", updateDuration);
-          video.removeEventListener("durationchange", updateDuration);
-          video.removeEventListener("play", handlePlay);
-          video.removeEventListener("pause", handlePause);
-          video.removeEventListener("loadeddata", updateDuration);
-        };
+        if (token) {
+          watchLogIntervalId = window.setInterval(() => {
+            flushWatchLog(token);
+          }, 15000);
+        }
+
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = playUrl;
+          try {
+            await video.play();
+            setPlayerStatus("");
+          } catch {
+            setPlayerStatus("已就绪，请点击播放");
+          }
+          return;
+        }
+
+        if (!Hls.isSupported()) {
+          setPlayerStatus("当前浏览器不支持 HLS 播放");
+          return;
+        }
+
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+        hlsRef.current = hls;
+        hls.loadSource(playUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setPlayerStatus("已就绪");
+          video.play().catch(() => setPlayerStatus("已就绪，请点击播放"));
+        });
+
+        hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+          const segmentName =
+            data.frag?.relurl ||
+            data.frag?.url?.split("?")[0]?.split("/").pop() ||
+            "";
+          if (token) reportSegment(token, segmentName);
+          if (token) flushWatchLog(token);
+        });
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          console.warn("HLS 播放错误:", data);
+          if (!data.fatal) return;
+
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            setPlayerStatus("网络异常，正在重试...");
+            hls.startLoad();
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            setPlayerStatus("媒体异常，正在恢复...");
+            hls.recoverMediaError();
+          } else {
+            setPlayerStatus(`播放失败: ${data.details}`);
+            destroyHls();
+          }
+        });
+      } catch (error: any) {
+        setPlayerStatus(error.message || "播放失败");
       }
     };
 
-    // 延迟查找，等待 Stream 组件渲染
-    const timeoutId = setTimeout(() => {
-      findVideoElement();
-    }, 100);
-
-    // 使用 MutationObserver 监听 DOM 变化
-    const observer = new MutationObserver(() => {
-      findVideoElement();
-    });
-
-    observer.observe(container, { childList: true, subtree: true });
+    setupPlayer();
 
     return () => {
-      clearTimeout(timeoutId);
-      observer.disconnect();
-      if (cleanup) {
-        cleanup();
+      cancelled = true;
+      video.removeEventListener("timeupdate", updateTime);
+      video.removeEventListener("loadedmetadata", updateDuration);
+      video.removeEventListener("durationchange", updateDuration);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("loadeddata", updateDuration);
+      if (watchLogIntervalId) {
+        window.clearInterval(watchLogIntervalId);
       }
+      saveLessonProgress(
+        currentLesson,
+        video.currentTime,
+        video.duration || duration,
+        true,
+        Math.floor(watchedSecondsSinceLastLog),
+        `lesson:${lessonId}`
+      );
+      destroyHls();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLesson?.videoId]);
+  }, [currentLesson?.id, currentLesson?.videoId]);
 
   // 快进/快退
   const skipTime = (seconds: number) => {
@@ -430,9 +866,8 @@ export default function CoursePlayer({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-gray-200 sticky top-20 z-40">
-        <div className="container mx-auto px-4 py-4">
+      <div className="bg-white border-b border-gray-200 sticky top-[var(--site-header-height)] z-40">
+        <div className="container mx-auto px-4 py-2">
           <div className="flex items-center justify-between">
             <Link
               href="/courses"
@@ -459,6 +894,15 @@ export default function CoursePlayer({
                 <h1 className="text-lg font-semibold text-gray-900">
                   {course.title}
                 </h1>
+              )}
+              {isPaidCourse && (
+                <button
+                  type="button"
+                  onClick={handleOpenPurchaseModal}
+                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+                >
+                  立即购买{coursePrice > 0 ? ` ¥${coursePrice}` : ""}
+                </button>
               )}
             
             </div>
@@ -543,7 +987,7 @@ export default function CoursePlayer({
                           {chapter.lessons.map((lesson, index) => (
                             <button
                               key={lesson.id}
-                              onClick={() => handleLessonClick(lesson)}
+                              onClick={() => void handleLessonClick(lesson)}
                               disabled={lesson.isLocked && !lesson.isFree}
                               className={`w-full px-6 py-3 text-left text-sm transition-colors border-b border-gray-100 last:border-b-0 ${
                                 currentLesson?.id === lesson.id
@@ -649,18 +1093,25 @@ export default function CoursePlayer({
                       }
                     }}
                   >
-                    {
-                      <div className="w-full h-full relative">
-                        <div className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full">
-                          <Stream
-                            src={currentLesson.videoId || ""}
-                            controls={true}
-                            autoplay={true}
-                            muted={false}
-                          />
+                    <div className="relative h-full w-full">
+                      <video
+                        ref={videoRef}
+                        className="h-full w-full bg-black"
+                        controls
+                        playsInline
+                        preload="metadata"
+                      />
+                      {playerStatus && (
+                        <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+                          {playerStatus}
                         </div>
-                      </div>
-                    }
+                      )}
+                      {!currentLesson.videoId && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black text-sm text-white/70">
+                          当前课程还没有绑定视频 ID
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="p-6 border-t border-gray-200">
                     <div className="flex items-center justify-between mb-4">
@@ -726,6 +1177,105 @@ export default function CoursePlayer({
           </div>
         </div>
       </div>
+
+      {purchaseModalOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-blue-600">付费课程咨询</p>
+                  <h2 className="mt-1 text-2xl font-bold text-gray-950">提交购买意向</h2>
+                  <p className="mt-2 text-sm leading-6 text-gray-500">
+                    目前暂未接入线上支付，提交后我会主动联系你完成支付和开通。
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClosePurchaseModal}
+                  className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="关闭购买咨询"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">{course?.title}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  课程价格：{coursePrice > 0 ? `¥${coursePrice}` : "待确认"}
+                </p>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-gray-800">手机号 *</span>
+                <input
+                  value={purchasePhone}
+                  onChange={(event) => setPurchasePhone(event.target.value)}
+                  placeholder="请输入手机号"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-gray-800">微信号 *</span>
+                <input
+                  value={purchaseWechat}
+                  onChange={(event) => setPurchaseWechat(event.target.value)}
+                  placeholder="请输入微信号"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-gray-800">备注</span>
+                <textarea
+                  value={purchaseNote}
+                  onChange={(event) => setPurchaseNote(event.target.value)}
+                  placeholder="可填写想咨询的问题、方便联系的时间等"
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+
+              {purchaseError && (
+                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {purchaseError}
+                </div>
+              )}
+
+              {purchaseSuccess && (
+                <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+                  {purchaseSuccess}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={handleClosePurchaseModal}
+                disabled={isSubmittingPurchase}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitPurchaseRequest}
+                disabled={isSubmittingPurchase}
+                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmittingPurchase ? "提交中..." : "提交购买意向"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

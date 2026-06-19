@@ -108,6 +108,12 @@ export const useUserStore = create<UserStore>()(
           // 2. 更新用户基本信息
           set({ user, isAuthenticated: true })
 
+          // 本地缓存的 profile 若与当前登录用户不一致，先清掉
+          const cachedProfile = get().profile
+          if (cachedProfile && cachedProfile.id !== user.id) {
+            set({ profile: null })
+          }
+
           // 3. 获取最新的 Profile
           const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
@@ -122,8 +128,8 @@ export const useUserStore = create<UserStore>()(
           if (profile) {
             set({ profile, isLoading: false })
           } else {
-            // 如果没有 profile，保持 user 但结束 loading
-             set({ isLoading: false })
+            // 避免继续使用 localStorage 里其他账号的旧 profile
+            set({ profile: null, isLoading: false })
           }
 
           clearTimeout(timeoutId)
@@ -166,4 +172,4 @@ export const useUser = () => useUserStore((state) => state.user)
 export const useProfile = () => useUserStore((state) => state.profile)
 export const useIsAuthenticated = () => useUserStore((state) => state.isAuthenticated)
 export const useIsLoading = () => useUserStore((state) => state.isLoading)
-export const useIsAdmin = () => useUserStore((state) => state.profile?.is_admin === true)
+export const useIsAdmin = () => useUserStore((state) => Boolean(state.profile?.is_admin))
