@@ -1,4 +1,5 @@
 import Faucet from "@/components/Faucet";
+import Web3Provider from "@/components/Web3Provider";
 
 export default function FaucetPage() {
   return (
@@ -43,7 +44,9 @@ export default function FaucetPage() {
           </div>
         </section>
 
-        <Faucet />
+        <Web3Provider>
+          <Faucet />
+        </Web3Provider>
       </main>
     </div>
   );

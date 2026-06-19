@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface CodeBlockProps {
   inline?: boolean
@@ -16,7 +16,7 @@ export default function CodeBlock({ inline, className, children, node, ...props 
   const [copied, setCopied] = useState(false)
   
   // 从 className 中提取语言类型（如 "language-javascript" -> "javascript"）
-  const match = /language-(\w+)/.exec(className || '')
+  const match = /language-([\w-]+)/.exec(className || '')
   const language = match ? match[1] : ''
   
   // 获取代码内容
@@ -44,7 +44,7 @@ export default function CodeBlock({ inline, className, children, node, ...props 
   if (isInline) {
     return (
       <code
-        className="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded text-[0.9em] font-mono border border-pink-200 dark:border-pink-800/30"
+        className="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-700"
         {...props}
       >
         {children}
@@ -55,10 +55,13 @@ export default function CodeBlock({ inline, className, children, node, ...props 
   // 语言显示名映射
   const languageNames: Record<string, string> = {
     js: 'JavaScript',
+    javascript: 'JavaScript',
     jsx: 'React JSX',
     ts: 'TypeScript',
+    typescript: 'TypeScript',
     tsx: 'React TSX',
     py: 'Python',
+    python: 'Python',
     go: 'Go',
     java: 'Java',
     cpp: 'C++',
@@ -77,66 +80,72 @@ export default function CodeBlock({ inline, className, children, node, ...props 
     scss: 'SCSS',
     md: 'Markdown',
     markdown: 'Markdown',
+    solidity: 'Solidity',
+    text: 'Plain Text',
   }
 
-  const displayLanguage = languageNames[language] || language.toUpperCase() || 'TEXT'
+  const displayLanguage = languageNames[language] || language.toUpperCase() || 'Plain Text'
 
-  // 代码块
   return (
-    <div className="relative group my-6 not-prose">
-      {/* 语言标签和复制按钮 */}
-      <div className="flex items-center justify-between bg-gray-700 dark:bg-gray-900 text-gray-300 text-xs font-medium px-4 py-2 rounded-t-lg border-b border-gray-600 dark:border-gray-800">
-        <span className="font-semibold">
-          {displayLanguage}
-        </span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-gray-600 dark:hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-          title={copied ? '已复制！' : '复制代码'}
-        >
-          {copied ? (
-            <>
-              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-green-400">已复制</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <span>复制</span>
-            </>
-          )}
-        </button>
+    <div className="not-prose my-7 overflow-hidden rounded-2xl border border-slate-200 bg-[#f7f8fa] shadow-sm">
+      <div className="flex min-h-12 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2 text-slate-500">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-500">▾</span>
+          <span className="text-base font-medium text-slate-600">代码块</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="rounded-lg px-2 py-1 text-sm font-medium text-slate-600">
+            {displayLanguage}
+          </span>
+          <span className="h-5 w-px bg-slate-200" />
+          <span className="hidden rounded-lg px-2 py-1 text-sm font-medium text-slate-500 sm:inline">
+            自动换行
+          </span>
+          <span className="hidden h-5 w-px bg-slate-200 sm:block" />
+          <button
+            onClick={handleCopy}
+            className="rounded-lg px-2 py-1 text-sm font-medium text-slate-500 transition hover:bg-white hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            title={copied ? '已复制！' : '复制代码'}
+          >
+            {copied ? '已复制' : '复制'}
+          </button>
+        </div>
       </div>
 
-      {/* 代码高亮 */}
-      <SyntaxHighlighter
-        style={vscDarkPlus}
-        language={language || 'text'}
-        PreTag="div"
-        className="!mt-0 !rounded-t-none !rounded-b-lg overflow-hidden"
-        showLineNumbers={true}
-        customStyle={{
-          margin: 0,
-          padding: '1.25rem',
-          fontSize: '0.875rem',
-          lineHeight: '1.5',
-          backgroundColor: '#1e1e1e',
-        }}
-        lineNumberStyle={{
-          minWidth: '3em',
-          paddingRight: '1em',
-          color: '#858585',
-          userSelect: 'none',
-        }}
-        {...props}
-      >
-        {code}
-      </SyntaxHighlighter>
+      <div className="grid grid-cols-[56px_minmax(0,1fr)] px-0 py-4">
+        <div className="select-none border-r border-slate-200 px-3 text-right font-mono text-sm leading-6 text-slate-400">
+          {Array.from({ length: Math.max(1, code.split('\n').length) }).map((_, index) => (
+            <div key={`line-${index}`}>{index + 1}</div>
+          ))}
+        </div>
+
+        <SyntaxHighlighter
+          style={oneLight}
+          language={language || 'text'}
+          PreTag="div"
+          wrapLongLines
+          customStyle={{
+            margin: 0,
+            padding: '0 1rem',
+            background: 'transparent',
+            fontSize: '0.875rem',
+            lineHeight: '1.5rem',
+            overflow: 'visible',
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily: 'inherit',
+              whiteSpace: 'pre-wrap',
+            },
+          }}
+          showLineNumbers={false}
+          {...props}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
     </div>
   )
 }
-

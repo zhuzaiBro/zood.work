@@ -8,14 +8,18 @@ import { uploadPostBanner } from '@/lib/uploadPostBanner'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
-// window.localStorage.setItem('wangeditor-content', '')
-// can not read property 'localStorage' of undefined
-// 动态导入 Editor 组件，禁用 SSR
+const DRAFT_KEY = 'zood:create-post:draft'
+
 const Editor = dynamic(() => import('@/components/Editor'), {
   ssr: false,
   loading: () => (
-    <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-900 h-[500px] flex items-center justify-center">
-      <div className="text-gray-500">加载编辑器中...</div>
+    <div className="min-h-[560px] rounded-2xl bg-white px-8 py-10 shadow-sm ring-1 ring-black/5">
+      <div className="mb-8 h-5 w-44 animate-pulse rounded-full bg-slate-100" />
+      <div className="space-y-4">
+        <div className="h-4 w-full animate-pulse rounded-full bg-slate-100" />
+        <div className="h-4 w-11/12 animate-pulse rounded-full bg-slate-100" />
+        <div className="h-4 w-4/5 animate-pulse rounded-full bg-slate-100" />
+      </div>
     </div>
   ),
 })
@@ -26,10 +30,38 @@ interface Category {
   slug: string
 }
 
+type DraftState = {
+  title: string
+  slug: string
+  excerpt: string
+  content: string
+  markdown: string
+  selectedCategories: string[]
+  published: boolean
+  isPublic: boolean
+}
+
+function formatSavedTime(date: Date | null) {
+  if (!date) return '尚未保存'
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function generateSlug(text: string) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 export default function CreatePostPage() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
-  
+
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [excerpt, setExcerpt] = useState('')
@@ -44,23 +76,21 @@ export default function CreatePostPage() {
   const [isPublic, setIsPublic] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false)
+  const [showSettings, setShowSettings] = useState(true)
 
-  // 检查登录状态
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/login')
     }
   }, [isAuthenticated, authLoading, router])
 
-  // 获取分类列表
   useEffect(() => {
     const fetchCategories = async () => {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('post_cates')
-        .select('*')
-        .order('name')
-      
+      const { data } = await supabase.from('post_cates').select('*').order('name')
+
       if (data) {
         setCategories(data)
       }
@@ -72,10 +102,66 @@ export default function CreatePostPage() {
   }, [isAuthenticated])
 
   useEffect(() => {
+    if (!isAuthenticated || hasRestoredDraft) return
+
+    try {
+      const rawDraft = window.localStorage.getItem(DRAFT_KEY)
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft) as Partial<DraftState>
+        setTitle(draft.title ?? '')
+        setSlug(draft.slug ?? '')
+        setExcerpt(draft.excerpt ?? '')
+        setContent(draft.content ?? '')
+        setMarkdown(draft.markdown ?? '')
+        setSelectedCategories(draft.selectedCategories ?? [])
+        setPublished(draft.published ?? false)
+        setIsPublic(draft.isPublic ?? true)
+        setLastSavedAt(new Date())
+      }
+    } catch (draftError) {
+      console.warn('Restore local draft failed:', draftError)
+    } finally {
+      setHasRestoredDraft(true)
+    }
+  }, [isAuthenticated, hasRestoredDraft])
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return
+
+    const timer = window.setTimeout(() => {
+      const draft: DraftState = {
+        title,
+        slug,
+        excerpt,
+        content,
+        markdown,
+        selectedCategories,
+        published,
+        isPublic,
+      }
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+      setLastSavedAt(new Date())
+    }, 650)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    title,
+    slug,
+    excerpt,
+    content,
+    markdown,
+    selectedCategories,
+    published,
+    isPublic,
+    hasRestoredDraft,
+  ])
+
+  useEffect(() => {
     if (!bannerFile) {
       setBannerPreviewUrl(null)
       return
     }
+
     const url = URL.createObjectURL(bannerFile)
     setBannerPreviewUrl(url)
     return () => URL.revokeObjectURL(url)
@@ -86,16 +172,6 @@ export default function CreatePostPage() {
     if (bannerInputRef.current) {
       bannerInputRef.current.value = ''
     }
-  }
-
-  // 自动生成 slug
-  const generateSlug = (text: string) => {
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
   }
 
   const handleTitleChange = (newTitle: string) => {
@@ -111,18 +187,22 @@ export default function CreatePostPage() {
   }
 
   const handleCategoryToggle = (categoryId: string) => {
-    setSelectedCategories(prev => 
+    setSelectedCategories((prev) =>
       prev.includes(categoryId)
-        ? prev.filter(id => id !== categoryId)
+        ? prev.filter((id) => id !== categoryId)
         : [...prev, categoryId]
     )
+  }
+
+  const clearLocalDraft = () => {
+    window.localStorage.removeItem(DRAFT_KEY)
+    setLastSavedAt(null)
   }
 
   const handleSubmit = async (e: React.FormEvent, shouldPublish?: boolean) => {
     e.preventDefault()
     setError('')
 
-    // 确定发布状态
     const willPublish = shouldPublish !== undefined ? shouldPublish : published
 
     if (!title.trim()) {
@@ -150,7 +230,6 @@ export default function CreatePostPage() {
     try {
       const supabase = createClient()
 
-      // 检查 slug 是否已存在
       const { data: existingPost } = await supabase
         .from('posts')
         .select('id')
@@ -174,19 +253,20 @@ export default function CreatePostPage() {
         bannerPublicUrl = up.publicUrl
       }
 
-      // 创建文章
       const { data: postData, error: postError } = await supabase
         .from('posts')
-        .insert([{
-          title: title.trim(),
-          slug: slug.trim(),
-          content: markdown, // 存储 Markdown
-          excerpt: excerpt.trim() || null,
-          banner: bannerPublicUrl,
-          author_id: user.id,
-          published: willPublish,
-          is_public: isPublic,
-        }]as any)
+        .insert([
+          {
+            title: title.trim(),
+            slug: slug.trim(),
+            content: markdown,
+            excerpt: excerpt.trim() || null,
+            banner: bannerPublicUrl,
+            author_id: user.id,
+            published: willPublish,
+            is_public: isPublic,
+          },
+        ] as any)
         .select()
         .single()
 
@@ -195,9 +275,8 @@ export default function CreatePostPage() {
 
       const post = postData as any
 
-      // 关联分类
       if (selectedCategories.length > 0) {
-        const relations = selectedCategories.map(cateId => ({
+        const relations = selectedCategories.map((cateId) => ({
           post_id: post.id,
           cate_id: cateId,
         }))
@@ -211,20 +290,30 @@ export default function CreatePostPage() {
         }
       }
 
-      // 跳转到文章详情页
+      clearLocalDraft()
       router.push(`/posts/${post.slug}`)
       router.refresh()
     } catch (err: any) {
       console.error('Error creating post:', err)
-      setError(err.message || '发布失败，请重试')
+      if (err.code === '42501') {
+        setError('发布失败：posts 表的 RLS 策略不允许当前用户写入，请先执行 .sql/setup_posts_rls.sql')
+      } else {
+        setError(err.message || '发布失败，请重试')
+      }
       setIsSubmitting(false)
     }
   }
 
+  const wordCount = markdown
+    .replace(/[#>*_`[\]()!-]/g, '')
+    .trim()
+    .replace(/\s+/g, '').length
+
   if (authLoading) {
     return (
-      <div className="container mx-auto px-4 py-16 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+      <div className="min-h-[70vh] bg-[#f7f6f2] px-4 py-16 text-center">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500" />
+        <p className="mt-4 text-sm text-slate-500">正在打开文档编辑器...</p>
       </div>
     )
   }
@@ -234,221 +323,246 @@ export default function CreatePostPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* 头部 */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">创建新文章</h1>
-          <Link
-            href="/"
-            className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-          >
-            ← 返回
-          </Link>
+    <div className="-mt-20 min-h-screen bg-[#f7f6f2] pt-20 text-slate-900">
+      <form onSubmit={(e) => handleSubmit(e)} className="min-h-screen">
+        <div className="sticky top-20 z-40 border-b border-slate-200/80 bg-[#f7f6f2]/90 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/"
+                className="rounded-full px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
+              >
+                ← 返回
+              </Link>
+              <div className="hidden h-5 w-px bg-slate-200 sm:block" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-700">
+                  {title.trim() || '未命名文档'}
+                </p>
+                <p className="text-xs text-slate-400">
+                  本地自动保存 · {formatSavedTime(lastSavedAt)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSettings((value) => !value)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-900 lg:hidden"
+              >
+                设置
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e as any, false)}
+                disabled={isSubmitting}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSubmitting ? '保存中...' : '存草稿'}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e as any, true)}
+                disabled={isSubmitting}
+                className="rounded-full bg-[#1f6feb] px-5 py-2 text-sm font-bold text-white shadow-[0_12px_30px_rgba(31,111,235,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#1a5fd0] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSubmitting ? '发布中...' : '发布'}
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* 表单 */}
-        <form onSubmit={(e) => handleSubmit(e)} className="space-y-6">
-          {/* 标题 */}
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium mb-2">
-              文章标题 <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="title"
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="输入文章标题"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-              disabled={isSubmitting}
-            />
-          </div>
+        <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
+          <section className="min-w-0">
+            <div className="mx-auto max-w-4xl rounded-[28px] bg-white px-6 py-8 shadow-[0_18px_80px_rgba(15,23,42,0.06)] ring-1 ring-black/5 sm:px-10 lg:px-14">
+              <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-500">
+                  Web3 / AI 笔记
+                </span>
+                <span>{wordCount} 字</span>
+                <span>·</span>
+                <span>{published ? '发布文章' : '草稿模式'}</span>
+                <span>·</span>
+                <span>{isPublic ? '公开可见' : '仅自己可见'}</span>
+              </div>
 
-          {/* Slug */}
-          <div>
-            <label htmlFor="slug" className="block text-sm font-medium mb-2">
-              文章别名 (URL) <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="slug"
-              type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="article-slug"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white font-mono text-sm"
-              disabled={isSubmitting}
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              将作为文章的 URL 路径，例如：/posts/{slug || 'article-slug'}
-            </p>
-          </div>
+              <textarea
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="无标题"
+                rows={1}
+                disabled={isSubmitting}
+                className="mb-3 block min-h-[76px] w-full resize-none border-0 bg-transparent text-5xl font-black leading-tight tracking-tight text-slate-950 outline-none placeholder:text-slate-300 disabled:opacity-60"
+              />
 
-          {/* 卡片封面：Supabase Storage */}
-          <div>
-            <label htmlFor="banner" className="block text-sm font-medium mb-2">
-              卡片封面
-            </label>
-            <input
-              ref={bannerInputRef}
-              id="banner"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null
-                setBannerFile(f)
-              }}
-              className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
-              disabled={isSubmitting}
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              可选；JPEG / PNG / WebP / GIF，最大 5MB。发布时将上传至 Supabase Storage。
-            </p>
-            {bannerPreviewUrl ? (
-              <div className="mt-3 space-y-2">
-                <div className="aspect-[2/1] max-h-48 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
+              <textarea
+                value={excerpt}
+                onChange={(e) => setExcerpt(e.target.value)}
+                placeholder="添加摘要，让读者快速知道这篇文章解决什么问题..."
+                rows={2}
+                disabled={isSubmitting}
+                className="mb-8 block w-full resize-none border-0 bg-transparent text-lg leading-8 text-slate-500 outline-none placeholder:text-slate-300 disabled:opacity-60"
+              />
+
+              {bannerPreviewUrl ? (
+                <div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview is not served by next/image */}
                   <img
                     src={bannerPreviewUrl}
                     alt="封面预览"
-                    className="h-full w-full object-cover"
+                    className="aspect-[2.1/1] w-full object-cover"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={clearBannerSelection}
-                  disabled={isSubmitting}
-                  className="text-sm text-red-600 hover:text-red-700 dark:text-red-400"
-                >
-                  移除封面
-                </button>
+              ) : null}
+
+              <Editor
+                value={content}
+                onChange={handleEditorChange}
+                placeholder="输入 / 唤起写作灵感，或者直接开始记录你的 Web3 / AI 学习笔记..."
+              />
+            </div>
+          </section>
+
+          <aside
+            className={`${
+              showSettings ? 'block' : 'hidden'
+            } space-y-4 lg:sticky lg:top-24 lg:block lg:self-start`}
+          >
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">发布设置</h2>
+                  <p className="text-xs text-slate-400">像文档侧栏一样管理文章信息</p>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+                  自动保存
+                </span>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label htmlFor="slug" className="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                    URL
+                  </label>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <span className="text-xs text-slate-400">/posts/</span>
+                    <input
+                      id="slug"
+                      type="text"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      placeholder="article-slug"
+                      disabled={isSubmitting}
+                      className="w-full bg-transparent font-mono text-sm text-slate-700 outline-none placeholder:text-slate-300 disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label htmlFor="banner" className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                      封面
+                    </label>
+                    {bannerPreviewUrl ? (
+                      <button
+                        type="button"
+                        onClick={clearBannerSelection}
+                        disabled={isSubmitting}
+                        className="text-xs font-semibold text-rose-500 hover:text-rose-600"
+                      >
+                        移除
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    ref={bannerInputRef}
+                    id="banner"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(e) => setBannerFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => bannerInputRef.current?.click()}
+                    disabled={isSubmitting}
+                    className="flex w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {bannerPreviewUrl ? '更换封面图' : '上传封面图'}
+                  </button>
+                </div>
+
+                {categories.length > 0 ? (
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                      分类
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map((category) => (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => handleCategoryToggle(category.id)}
+                          disabled={isSubmitting}
+                          className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+                            selectedCategories.includes(category.id)
+                              ? 'bg-sky-500 text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {category.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPublished((value) => !value)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      published
+                        ? 'border-sky-300 bg-sky-50 text-sky-700'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <span className="block text-sm font-bold">{published ? '发布' : '草稿'}</span>
+                    <span className="text-xs opacity-70">文章状态</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublic((value) => !value)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      isPublic
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <span className="block text-sm font-bold">{isPublic ? '公开' : '私密'}</span>
+                    <span className="text-xs opacity-70">可见范围</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {error ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                {error}
               </div>
             ) : null}
-          </div>
 
-          {/* 摘要 */}
-          <div>
-            <label htmlFor="excerpt" className="block text-sm font-medium mb-2">
-              文章摘要
-            </label>
-            <textarea
-              id="excerpt"
-              value={excerpt}
-              onChange={(e) => setExcerpt(e.target.value)}
-              placeholder="简短描述文章内容（可选）"
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {/* 内容编辑器 */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              文章内容 <span className="text-red-500">*</span>
-            </label>
-            <Editor
-              value={content}
-              onChange={handleEditorChange}
-              placeholder="开始撰写你的文章..."
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              编辑器内容将自动转换为 Markdown 格式存储
-            </p>
-          </div>
-
-          {/* 分类选择 */}
-          {categories.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                选择分类
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => handleCategoryToggle(category.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      selectedCategories.includes(category.id)
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    disabled={isSubmitting}
-                  >
-                    {category.name}
-                  </button>
-                ))}
-              </div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
+              <p className="font-semibold text-slate-700">写作小提示</p>
+              <p className="mt-2 leading-6">
+                标题和摘要直接在正文上方编辑；URL、封面、分类放在侧栏。内容会先保存到本地草稿，发布成功后自动清空。
+              </p>
             </div>
-          )}
-
-          {/* 发布选项 */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <input
-                id="published"
-                type="checkbox"
-                checked={published}
-                onChange={(e) => setPublished(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="published" className="text-sm font-medium">
-                发布文章（取消勾选则保存为草稿）
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="is_public"
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="is_public" className="text-sm font-medium">
-                公开文章（所有人可见）
-              </label>
-            </div>
-          </div>
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {/* 提交按钮 */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                handleSubmit(e as any, true)
-              }}
-              disabled={isSubmitting}
-              className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {isSubmitting ? '发布中...' : '发布文章'}
-            </button>
-            
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                handleSubmit(e as any, false)
-              }}
-              disabled={isSubmitting}
-              className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 py-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {isSubmitting ? '保存中...' : '保存草稿'}
-            </button>
-          </div>
-        </form>
-      </div>
+          </aside>
+        </main>
+      </form>
     </div>
   )
 }
-

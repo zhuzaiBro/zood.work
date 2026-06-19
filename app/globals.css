@@ -305,6 +305,118 @@ body {
   .prose em {
     @apply italic text-gray-700 dark:text-gray-300;
   }
+
+  .document-prose {
+    @apply text-slate-700;
+  }
+
+  .document-prose h1,
+  .document-prose h2,
+  .document-prose h3,
+  .document-prose h4,
+  .document-prose h5,
+  .document-prose h6 {
+    @apply border-0 p-0 pl-0 tracking-tight text-slate-950;
+  }
+
+  .document-prose h1 {
+    @apply mt-10 mb-5 text-4xl font-black;
+  }
+
+  .document-prose h2 {
+    @apply mt-10 mb-4 text-3xl font-extrabold;
+  }
+
+  .document-prose h3 {
+    @apply mt-8 mb-3 text-2xl font-bold;
+  }
+
+  .document-prose h3::before {
+    @apply hidden;
+  }
+
+  .document-prose h4 {
+    @apply mt-7 mb-3 text-xl font-bold;
+  }
+
+  .document-prose h5,
+  .document-prose h6 {
+    @apply mt-6 mb-2 text-lg font-bold;
+  }
+
+  .document-prose p {
+    @apply my-4 text-[17px] leading-8 text-slate-700;
+  }
+
+  .document-prose blockquote {
+    @apply my-6 rounded-none border-l-4 border-slate-200 bg-transparent py-1 pl-4 text-slate-500;
+    font-style: normal;
+  }
+
+  .document-prose ul,
+  .document-prose ol {
+    @apply my-4 space-y-2 pl-6;
+  }
+
+  .document-prose ul {
+    @apply list-disc;
+  }
+
+  .document-prose ol {
+    @apply list-decimal;
+    counter-reset: none;
+  }
+
+  .document-prose li {
+    @apply pl-1 text-[17px] leading-8 text-slate-700;
+  }
+
+  .document-prose ul > li::before,
+  .document-prose ul > li::after,
+  .document-prose ol > li::before,
+  .document-prose ol > li::after {
+    @apply hidden;
+  }
+
+  .document-prose table {
+    @apply my-6 overflow-hidden rounded-2xl border border-slate-200 shadow-none;
+  }
+
+  .document-prose thead {
+    @apply bg-slate-50 text-slate-500;
+  }
+
+  .document-prose thead th {
+    @apply border-b border-slate-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em];
+  }
+
+  .document-prose tbody tr {
+    @apply border-b border-slate-100 hover:bg-slate-50;
+  }
+
+  .document-prose tbody tr:nth-child(even) {
+    @apply bg-transparent;
+  }
+
+  .document-prose tbody td {
+    @apply px-4 py-3 text-slate-700;
+  }
+
+  .document-prose hr {
+    @apply my-10 border-slate-200;
+  }
+
+  .document-prose img {
+    @apply my-8 rounded-3xl border border-slate-200 shadow-sm;
+  }
+
+  .document-prose strong {
+    @apply font-bold text-slate-950;
+  }
+
+  .document-prose a {
+    @apply font-medium text-[#1f6feb] underline decoration-[#1f6feb]/30 decoration-2 underline-offset-4 transition-colors hover:text-[#1a5fd0];
+  }
 }
 
 /* 暗色模式下的表格特殊优化 */
@@ -318,7 +430,6 @@ body {
   }
 }
 
-/* WangEditor 暗色模式适配 */
 @media (prefers-color-scheme: dark) {
   .w-e-text-container {
     background-color: #1f2937 !important;
