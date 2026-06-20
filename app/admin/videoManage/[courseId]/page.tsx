@@ -44,6 +44,10 @@ interface LessonItem {
   id: string;
   title: string;
   description?: string | null;
+  coursewareName?: string | null;
+  coursewareUrl?: string | null;
+  contentHtml?: string | null;
+  contentMarkdown?: string | null;
   duration?: string;
   durationSeconds?: number | null;
   isFree: boolean;
@@ -154,6 +158,8 @@ export default function CourseDetailPage() {
   const [chapterForm] = Form.useForm<{ title: string; sortOrder?: number }>();
 
   const [lessonModalOpen, setLessonModalOpen] = useState(false);
+  const [lessonModalMode, setLessonModalMode] = useState<'create' | 'edit'>('create');
+  const [editingLesson, setEditingLesson] = useState<LessonItem | null>(null);
   const [uploadChapterId, setUploadChapterId] = useState<string | null>(null);
   const [uploadChapterTitle, setUploadChapterTitle] = useState('');
   const [uploadDefaultSort, setUploadDefaultSort] = useState(0);
@@ -435,9 +441,20 @@ export default function CourseDetailPage() {
   };
 
   const openUploadLesson = (chapter: ChapterItem) => {
+    setLessonModalMode('create');
+    setEditingLesson(null);
     setUploadChapterId(chapter.id);
     setUploadChapterTitle(chapter.title);
     setUploadDefaultSort(chapter.lessons.length);
+    setLessonModalOpen(true);
+  };
+
+  const openEditLesson = (chapter: ChapterItem, lesson: LessonItem) => {
+    setLessonModalMode('edit');
+    setEditingLesson(lesson);
+    setUploadChapterId(chapter.id);
+    setUploadChapterTitle(chapter.title);
+    setUploadDefaultSort(lesson.sortOrder);
     setLessonModalOpen(true);
   };
 
@@ -580,10 +597,41 @@ export default function CourseDetailPage() {
       render: (videoId?: string | null) => videoId || '-',
     },
     {
+      title: '资料',
+      key: 'resources',
+      width: 160,
+      render: (_, record) => (
+        <Space size={4} wrap>
+          {record.coursewareUrl ? <Tag color="cyan">课件</Tag> : null}
+          {record.contentMarkdown ? <Tag color="geekblue">讲义</Tag> : null}
+          {!record.coursewareUrl && !record.contentMarkdown ? '-' : null}
+        </Space>
+      ),
+    },
+    {
       title: '排序',
       dataIndex: 'sortOrder',
       key: 'sortOrder',
       width: 70,
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 90,
+      render: (_, record) => {
+        const chapter = chapters.find((item) => item.lessons.some((lesson) => lesson.id === record.id));
+        if (!chapter) return null;
+
+        return (
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEditLesson(chapter, record)}
+          >
+            编辑
+          </Button>
+        );
+      },
     },
   ];
 
@@ -863,12 +911,18 @@ export default function CourseDetailPage() {
 
       <LessonUploadModal
         open={lessonModalOpen}
+        mode={lessonModalMode}
+        lesson={editingLesson}
         chapterId={uploadChapterId}
         chapterTitle={uploadChapterTitle}
         defaultSortOrder={uploadDefaultSort}
-        onCancel={() => setLessonModalOpen(false)}
+        onCancel={() => {
+          setLessonModalOpen(false);
+          setEditingLesson(null);
+        }}
         onSuccess={() => {
           setLessonModalOpen(false);
+          setEditingLesson(null);
           loadCourseDetail();
         }}
       />

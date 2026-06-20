@@ -41,7 +41,7 @@ export default function UserAvatar() {
     return (
       <Link
         href="/login"
-        className="rounded-full border border-header-sky/35 bg-header-sky/10 px-5 py-2.5 text-sm font-semibold text-header-sky shadow-[0_0_28px_rgba(32,146,206,0.15)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-header-sky/55 hover:bg-header-sky/15 hover:text-sky-800"
+        className="header-text-stroke rounded-full border border-header-sky/35 bg-header-sky/10 px-5 py-2.5 text-sm font-semibold text-header-sky shadow-[0_0_28px_rgba(117,192,247,0.18)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-header-sky/55 hover:bg-header-sky/15 hover:text-sky-800"
       >
         登录
       </Link>
@@ -73,7 +73,7 @@ export default function UserAvatar() {
             {(displayProfile.display_name || displayProfile.username).charAt(0).toUpperCase()}
           </div>
         )}
-        <span className="text-sm font-medium hidden sm:inline text-header-sky">
+        <span className="header-text-stroke text-sm font-medium hidden sm:inline text-header-sky">
           {displayProfile.display_name || displayProfile.username}
         </span>
       </Link>

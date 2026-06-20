@@ -95,6 +95,24 @@ export default async function Home() {
                 </p>
               </div>
 
+              <div className="mb-6 rounded-2xl border border-[#75c0f7]/25 bg-[#07101f]/82 p-6 shadow-[0_18px_45px_rgba(14,165,233,0.14)] backdrop-blur-sm">
+                <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#75c0f7]">
+                  AI Tools
+                </p>
+                <h2 className="mt-2 text-xl font-bold text-[#f5f8ff]">
+                  简历优化 Agent
+                </h2>
+                <p className="mt-3 leading-7 text-[#9fb2d1]">
+                  用 LangChain.js 和 LangGraph.js 跑一条简历分析、策略规划、改写输出的 Agent 流程。
+                </p>
+                <Link
+                  href="/resume-agent"
+                  className="mt-5 inline-flex rounded-full bg-[#75c0f7] px-4 py-2 text-sm font-black text-[#03111f] transition-transform hover:-translate-y-0.5"
+                >
+                  去优化简历
+                </Link>
+              </div>
+
               {categories && categories.length > 0 && (
                 <div className="rounded-2xl border border-[#172846] bg-[#07101f]/82 p-6 shadow-[0_18px_45px_rgba(0,0,0,0.2)] backdrop-blur-sm">
                   <h2 className="mb-4 text-xl font-bold text-[#f5f8ff]">知识专题</h2>

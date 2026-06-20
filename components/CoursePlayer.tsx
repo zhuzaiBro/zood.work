@@ -2,8 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Hls from "hls.js";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { videoApiUrl } from "@/lib/videoApi";
 
 interface Lesson {
@@ -13,14 +17,32 @@ interface Lesson {
   durationSeconds?: number;
   isFree: boolean;
   isLocked: boolean;
-  videoUrl?: string;
-  videoId?: string; // 外部 Video Manager API 的视频 ID
+  coursewareName?: string | null;
+  coursewareUrl?: string | null;
+  contentHtml?: string | null;
+  contentMarkdown?: string | null;
+  videoUrl?: string | null;
+  videoId?: string | null; // 外部 Video Manager API 的视频 ID
+  accessReason?: "login" | "purchase" | null;
 }
 
 interface Chapter {
   id: string;
   title: string;
   lessons: Lesson[];
+}
+
+interface CourseDetail {
+  id: string;
+  title: string;
+  description?: string | null;
+  coverImageUrl?: string | null;
+  price: number;
+  isFree: boolean;
+  hasAccess: boolean;
+  accessSource?: "free" | "admin" | "enrollment" | "none";
+  status: string;
+  createdAt?: string | null;
 }
 
 interface CoursePlayerProps {
@@ -52,6 +74,8 @@ export default function CoursePlayer({
   courseId,
   courseTitle,
 }: CoursePlayerProps) {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState("catalog");
   const [selectedChapter, setSelectedChapter] = useState<string>("all");
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
@@ -59,7 +83,7 @@ export default function CoursePlayer({
   );
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [course, setCourse] = useState<any>(null);
+  const [course, setCourse] = useState<CourseDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -96,7 +120,19 @@ export default function CoursePlayer({
   ];
 
   const isPaidCourse = Boolean(course && !course.isFree);
+  const hasCourseAccess = Boolean(course?.hasAccess);
+  const shouldShowPurchaseButton = isAuthenticated && isPaidCourse && !hasCourseAccess;
+  const accessBadgeText =
+    course?.accessSource === "admin"
+      ? "管理员预览"
+      : course?.accessSource === "enrollment"
+        ? "平台已开通"
+        : "已开通";
   const coursePrice = Number(course?.price ?? 0);
+  const loginRedirectPath = courseId
+    ? `/learn?courseId=${encodeURIComponent(courseId)}`
+    : "/learn";
+  const loginHref = `/login?redirect=${encodeURIComponent(loginRedirectPath)}`;
 
   const toggleChapter = (chapterId: string) => {
     const newExpanded = new Set(expandedChapters);
@@ -170,10 +206,9 @@ export default function CoursePlayer({
     targetCourseId: string | undefined,
     chapterList: Chapter[]
   ) => {
-    const allLessons = flattenLessons(chapterList).filter(
-      (lesson) => !lesson.isLocked || lesson.isFree
-    );
+    const allLessons = flattenLessons(chapterList);
     if (allLessons.length === 0) return;
+    const accessibleLessons = allLessons.filter((lesson) => !lesson.isLocked);
 
     const localProgress = getLocalProgress(undefined, targetCourseId);
     let remoteProgress: LessonProgress | null = null;
@@ -193,7 +228,10 @@ export default function CoursePlayer({
     const useRemote = Boolean(remoteProgress?.lesson_id && remoteTime >= localTime);
     const targetLessonId = useRemote ? remoteProgress?.lesson_id : localProgress?.lessonId;
     const targetLesson =
-      allLessons.find((lesson) => lesson.id === targetLessonId) ?? allLessons[0];
+      accessibleLessons.find((lesson) => lesson.id === targetLessonId) ??
+      allLessons.find((lesson) => lesson.id === targetLessonId) ??
+      accessibleLessons[0] ??
+      allLessons[0];
 
     pendingResumeTimeRef.current = useRemote
       ? remoteProgress?.current_seconds ?? 0
@@ -203,7 +241,18 @@ export default function CoursePlayer({
   };
 
   const handleLessonClick = async (lesson: Lesson) => {
-    if (!lesson.isLocked || lesson.isFree) {
+    if (lesson.accessReason === "login") {
+      pendingResumeTimeRef.current = 0;
+      resumeAppliedLessonRef.current = null;
+      setCurrentLesson(lesson);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+      setPlayerStatus("登录后即可观看当前课程视频");
+      return;
+    }
+
+    if (!lesson.isLocked) {
       const localProgress = getLocalProgress(lesson.id);
 
       try {
@@ -230,6 +279,17 @@ export default function CoursePlayer({
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+    } else if (shouldShowPurchaseButton) {
+      setCurrentLesson(lesson);
+      handleOpenPurchaseModal();
+    } else {
+      pendingResumeTimeRef.current = 0;
+      resumeAppliedLessonRef.current = null;
+      setCurrentLesson(lesson);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+      setPlayerStatus("当前课时需要先开通课程权限");
     }
   };
 
@@ -359,7 +419,8 @@ export default function CoursePlayer({
             const firstCourse = courses[0];
             console.log("使用第一个课程:", firstCourse.id);
             const detailResponse = await fetch(
-              `/api/courses/${firstCourse.id}`
+              `/api/courses/${firstCourse.id}`,
+              { cache: "no-store" }
             );
 
             if (!detailResponse.ok) {
@@ -390,7 +451,9 @@ export default function CoursePlayer({
 
         // 有 courseId，直接获取课程详情
         console.log("获取课程详情:", courseId);
-        const response = await fetch(`/api/courses/${courseId}`);
+        const response = await fetch(`/api/courses/${courseId}`, {
+          cache: "no-store",
+        });
 
         console.log("课程详情响应状态:", response.status);
 
@@ -534,8 +597,18 @@ export default function CoursePlayer({
     const videoId = currentLesson?.videoId;
     const lessonId = currentLesson?.id;
 
-    if (!video || !videoId || !lessonId || !currentLesson) {
+    if (!video || !lessonId || !currentLesson) {
       setPlayerStatus("");
+      return;
+    }
+
+    if (currentLesson.accessReason === "login") {
+      setPlayerStatus("登录后即可观看当前课程视频");
+      return;
+    }
+
+    if (currentLesson.isLocked || !videoId) {
+      setPlayerStatus("当前课时需要先开通课程权限");
       return;
     }
 
@@ -889,13 +962,31 @@ export default function CoursePlayer({
               <span>返回</span>
             </Link>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-end gap-3">
               {course && (
                 <h1 className="text-lg font-semibold text-gray-900">
                   {course.title}
                 </h1>
               )}
-              {isPaidCourse && (
+              {!isAuthenticated && (
+                <Link
+                  href={loginHref}
+                  className="rounded-full bg-gray-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800"
+                >
+                  登录后观看
+                </Link>
+              )}
+              {isPaidCourse && hasCourseAccess && (
+                <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                  {accessBadgeText}
+                </span>
+              )}
+              {course?.isFree && (
+                <span className="rounded-full bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 ring-1 ring-green-200">
+                  免费课程
+                </span>
+              )}
+              {shouldShowPurchaseButton && (
                 <button
                   type="button"
                   onClick={handleOpenPurchaseModal}
@@ -988,12 +1079,13 @@ export default function CoursePlayer({
                             <button
                               key={lesson.id}
                               onClick={() => void handleLessonClick(lesson)}
-                              disabled={lesson.isLocked && !lesson.isFree}
                               className={`w-full px-6 py-3 text-left text-sm transition-colors border-b border-gray-100 last:border-b-0 ${
                                 currentLesson?.id === lesson.id
                                   ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600"
-                                  : lesson.isLocked && !lesson.isFree
-                                  ? "text-gray-400 cursor-not-allowed opacity-60"
+                                  : lesson.accessReason === "login"
+                                  ? "text-amber-700 hover:bg-amber-50"
+                                  : lesson.isLocked
+                                  ? "text-gray-500 hover:bg-gray-100"
                                   : "text-gray-700 hover:bg-gray-100"
                               }`}
                             >
@@ -1005,7 +1097,12 @@ export default function CoursePlayer({
                                       免费试听
                                     </span>
                                   )}
-                                  {lesson.isLocked && !lesson.isFree && (
+                                  {lesson.accessReason === "login" && (
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 whitespace-nowrap">
+                                      需登录
+                                    </span>
+                                  )}
+                                  {lesson.isLocked && lesson.accessReason !== "login" && (
                                     <svg
                                       className="w-4 h-4 text-gray-400"
                                       fill="none"
@@ -1106,7 +1203,51 @@ export default function CoursePlayer({
                           {playerStatus}
                         </div>
                       )}
-                      {!currentLesson.videoId && (
+                      {currentLesson.accessReason === "login" && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center">
+                          <div className="max-w-md">
+                            <p className="text-lg font-semibold text-white">登录后即可观看视频课程</p>
+                            <p className="mt-2 text-sm leading-6 text-white/75">
+                              默认需要登录后才能播放视频、同步学习进度并继续上次观看位置。
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => router.push(loginHref)}
+                              className="mt-5 inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                            >
+                              去登录
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {currentLesson.accessReason === "purchase" && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center">
+                          <div className="max-w-md">
+                            <p className="text-lg font-semibold text-white">当前课时需要先开通课程权限</p>
+                            <p className="mt-2 text-sm leading-6 text-white/75">
+                              登录后购买或开通课程，即可观看完整视频内容。
+                            </p>
+                            {shouldShowPurchaseButton ? (
+                              <button
+                                type="button"
+                                onClick={handleOpenPurchaseModal}
+                                className="mt-5 inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                              >
+                                立即购买{coursePrice > 0 ? ` ¥${coursePrice}` : ""}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => router.push(loginHref)}
+                                className="mt-5 inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                              >
+                                登录后开通
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {!currentLesson.videoId && !currentLesson.accessReason && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black text-sm text-white/70">
                           当前课程还没有绑定视频 ID
                         </div>
@@ -1144,6 +1285,43 @@ export default function CoursePlayer({
                         </span>
                       )}
                     </div>
+                    {currentLesson.description && (
+                      <p className="mt-4 text-sm leading-7 text-gray-600">
+                        {currentLesson.description}
+                      </p>
+                    )}
+                    {(currentLesson.coursewareUrl || currentLesson.contentMarkdown) && (
+                      <div className="mt-6 space-y-6 rounded-2xl border border-gray-200 bg-gray-50/70 p-5">
+                        {currentLesson.coursewareUrl && (
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900">课件资料</h3>
+                            <div className="mt-3">
+                              <a
+                                href={currentLesson.coursewareUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                              >
+                                下载课件
+                                <span className="max-w-[220px] truncate">
+                                  {currentLesson.coursewareName || "查看资料"}
+                                </span>
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                        {currentLesson.contentMarkdown && (
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900">课时讲义</h3>
+                            <div className="prose prose-slate mt-3 max-w-none prose-headings:scroll-mt-24 prose-pre:overflow-x-auto">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {currentLesson.contentMarkdown}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (

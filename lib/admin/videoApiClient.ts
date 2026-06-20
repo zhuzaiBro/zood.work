@@ -81,18 +81,28 @@ export async function getVideoDetail(
 }
 
 export async function saveLessonWithVideo(options: {
+  lessonId?: string;
   chapterId: string;
   title: string;
   description: string;
+  coursewareName?: string | null;
+  coursewareUrl?: string | null;
+  contentHtml?: string | null;
+  contentMarkdown?: string | null;
   videoId: string;
   duration?: number | null;
   isFree: boolean;
   sortOrder: number;
 }) {
   const {
+    lessonId,
     chapterId,
     title,
     description,
+    coursewareName,
+    coursewareUrl,
+    contentHtml,
+    contentMarkdown,
     videoId,
     duration,
     isFree,
@@ -100,12 +110,17 @@ export async function saveLessonWithVideo(options: {
   } = options;
 
   const lessonResponse = await fetch('/api/lessons', {
-    method: 'POST',
+    method: lessonId ? 'PATCH' : 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      id: lessonId,
       chapterId,
       title,
       description,
+      coursewareName: coursewareName ?? null,
+      coursewareUrl: coursewareUrl ?? null,
+      contentHtml: contentHtml ?? null,
+      contentMarkdown: contentMarkdown ?? null,
       videoId,
       videoUrl: videoApiUrl(`/api/videos/${videoId}`),
       duration: duration ?? null,

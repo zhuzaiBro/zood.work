@@ -44,10 +44,10 @@ export default function Header() {
     setIsMobileUserMenuOpen(false);
   };
 
-  const linkClass = "text-header-sky hover:text-sky-800 transition-colors";
+  const linkClass = "header-text-stroke text-header-sky hover:text-sky-800 transition-colors";
 
   const mobileLinkClass =
-    "block py-2 text-header-sky hover:text-sky-800 transition-colors text-lg font-medium";
+    "header-text-stroke block py-2 text-header-sky hover:text-sky-800 transition-colors text-lg font-medium";
 
   return (
     <header
@@ -88,6 +88,9 @@ export default function Header() {
             </Link>
             <Link href="/interview" className={linkClass}>
               面试题库
+            </Link>
+            <Link href="/resume-agent" className={linkClass}>
+              简历优化
             </Link>
             <Link href="/faucet" className={linkClass}>
               测试币
@@ -155,6 +158,13 @@ export default function Header() {
               onClick={closeMobileMenu}
             >
               面试题库
+            </Link>
+            <Link
+              href="/resume-agent"
+              className={mobileLinkClass}
+              onClick={closeMobileMenu}
+            >
+              简历优化
             </Link>
             <Link
               href="/faucet"

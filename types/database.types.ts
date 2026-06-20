@@ -154,6 +154,10 @@ export type Database = {
       interview_question_submissions: {
         Row: {
           admin_note: string | null
+          attachment_mime_type: string | null
+          attachment_name: string | null
+          attachment_path: string | null
+          attachment_size_bytes: number | null
           collection_id: string | null
           contact: string | null
           content: string
@@ -169,6 +173,10 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          attachment_mime_type?: string | null
+          attachment_name?: string | null
+          attachment_path?: string | null
+          attachment_size_bytes?: number | null
           collection_id?: string | null
           contact?: string | null
           content: string
@@ -184,6 +192,10 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          attachment_mime_type?: string | null
+          attachment_name?: string | null
+          attachment_path?: string | null
+          attachment_size_bytes?: number | null
           collection_id?: string | null
           contact?: string | null
           content?: string
@@ -546,6 +558,10 @@ export type Database = {
           chapter_id: string
           title: string
           description: string | null
+          courseware_name: string | null
+          courseware_url: string | null
+          content_html: string | null
+          content_markdown: string | null
           video_id: string | null
           video_url: string | null
           duration: number | null
@@ -560,6 +576,10 @@ export type Database = {
           chapter_id: string
           title: string
           description?: string | null
+          courseware_name?: string | null
+          courseware_url?: string | null
+          content_html?: string | null
+          content_markdown?: string | null
           video_id?: string | null
           video_url?: string | null
           duration?: number | null
@@ -574,6 +594,10 @@ export type Database = {
           chapter_id?: string
           title?: string
           description?: string | null
+          courseware_name?: string | null
+          courseware_url?: string | null
+          content_html?: string | null
+          content_markdown?: string | null
           video_id?: string | null
           video_url?: string | null
           duration?: number | null

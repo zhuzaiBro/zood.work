@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Web3LoginButton from './Web3LoginButton'
 import { useUserStore } from '@/store/userStore'
 
@@ -14,7 +14,13 @@ export default function LoginForm() {
   const [message, setMessage] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { initialize } = useUserStore()
+  const redirectTarget = searchParams.get('redirect') || '/'
+  const safeRedirectTarget =
+    redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')
+      ? redirectTarget
+      : '/'
 
   const handleGithubLogin = async () => {
     setIsLoading(true)
@@ -24,7 +30,7 @@ export default function LoginForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeRedirectTarget)}`,
         },
       })
       if (error) throw error
@@ -50,7 +56,7 @@ export default function LoginForm() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeRedirectTarget)}`,
           },
         })
 
@@ -71,7 +77,7 @@ export default function LoginForm() {
         // 登录成功后，手动初始化用户状态
         await initialize()
 
-        router.push('/')
+        router.push(safeRedirectTarget)
         router.refresh()
       }
     } catch (err: any) {
@@ -182,4 +188,3 @@ export default function LoginForm() {
     </div>
   )
 }
-

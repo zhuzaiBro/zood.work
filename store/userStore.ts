@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, UserProfile, UserState } from '@/types/user'
 import { createClient } from '@/lib/supabase/client'
+import { buildDefaultUserProfile } from '@/lib/user-profiles'
 
 interface UserStore extends UserState {
   // Actions
@@ -128,8 +129,28 @@ export const useUserStore = create<UserStore>()(
           if (profile) {
             set({ profile, isLoading: false })
           } else {
-            // 避免继续使用 localStorage 里其他账号的旧 profile
-            set({ profile: null, isLoading: false })
+            const fallbackProfile = buildDefaultUserProfile(user)
+            const { data: insertedProfile, error: insertProfileError } = await supabase
+              .from('user_profiles')
+              .insert(fallbackProfile as never)
+              .select('*')
+              .maybeSingle()
+
+            if (insertProfileError && insertProfileError.code !== '23505') {
+              console.error('Failed to create missing profile:', insertProfileError)
+              set({ profile: null, isLoading: false })
+            } else {
+              const ensuredProfile = insertedProfile ?? (
+                await supabase
+                  .from('user_profiles')
+                  .select('*')
+                  .eq('id', user.id)
+                  .maybeSingle()
+              ).data
+
+              // 避免继续使用 localStorage 里其他账号的旧 profile
+              set({ profile: ensuredProfile ?? null, isLoading: false })
+            }
           }
 
           clearTimeout(timeoutId)

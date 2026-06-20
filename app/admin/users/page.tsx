@@ -42,6 +42,7 @@ interface AdminUserStudyRow {
   lastSignInAt: string | null;
   isSsoUser: boolean;
   isAnonymous: boolean;
+  hasProfile: boolean;
   vipLevel: number | null;
   isAdmin: boolean;
   createdAt: string | null;
@@ -56,6 +57,7 @@ interface AdminUsersResponse {
   users: AdminUserStudyRow[];
   summary: {
     userCount: number;
+    missingProfileCount: number;
     activeTodayCount: number;
     activeYesterdayCount: number;
     todayStudySeconds: number;
@@ -102,6 +104,7 @@ export default function AdminUsersPage() {
   const router = useRouter();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
+  const [repairingProfiles, setRepairingProfiles] = useState(false);
   const [hasPermission, setHasPermission] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [data, setData] = useState<AdminUsersResponse | null>(null);
@@ -144,6 +147,28 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const repairMissingProfiles = async () => {
+    setRepairingProfiles(true);
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '补齐用户资料失败');
+      }
+
+      message.success(result.message || '用户资料补齐完成');
+      await loadUsers();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '补齐用户资料失败');
+    } finally {
+      setRepairingProfiles(false);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     const value = keyword.trim().toLowerCase();
     if (!value) return data?.users ?? [];
@@ -172,6 +197,7 @@ export default function AdminUsersPage() {
               <Text strong>{record.displayName || record.username}</Text>
               {record.isAdmin ? <Tag color="blue">管理员</Tag> : null}
               {record.isAnonymous ? <Tag>匿名</Tag> : null}
+              {!record.hasProfile ? <Tag color="volcano">缺少资料</Tag> : null}
             </Space>
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>
@@ -287,9 +313,18 @@ export default function AdminUsersPage() {
             用户来源于 Supabase Authentication，并合并 profile 与视频访问日志统计学习时长。
           </Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={loadUsers} loading={loading}>
-          刷新
-        </Button>
+        <Space>
+          <Button
+            onClick={repairMissingProfiles}
+            loading={repairingProfiles}
+            disabled={(data?.summary.missingProfileCount ?? 0) === 0}
+          >
+            补齐缺失资料
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={loadUsers} loading={loading}>
+            刷新
+          </Button>
+        </Space>
       </div>
 
       <div
@@ -304,6 +339,14 @@ export default function AdminUsersPage() {
             title="Auth 总用户"
             value={data?.summary.userCount ?? 0}
             prefix={<TeamOutlined />}
+          />
+        </Card>
+        <Card>
+          <Statistic
+            title="缺失资料"
+            value={data?.summary.missingProfileCount ?? 0}
+            suffix="人"
+            prefix={<UserOutlined />}
           />
         </Card>
         <Card>

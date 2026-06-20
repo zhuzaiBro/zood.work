@@ -1,9 +1,15 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { ChangeEvent, FormEvent, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET,
+  INTERVIEW_SUBMISSION_ATTACHMENT_ACCEPT,
+  uploadInterviewSubmissionAttachment,
+  validateInterviewSubmissionAttachment,
+} from '@/lib/uploadInterviewSubmissionAttachment';
 
 const parseTags = (value: string) =>
   Array.from(
@@ -23,9 +29,11 @@ export default function QuestionContributionForm() {
   const [tagsInput, setTagsInput] = useState('');
   const [source, setSource] = useState('');
   const [contact, setContact] = useState('');
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const tags = parseTags(tagsInput);
 
   const resetForm = () => {
@@ -34,6 +42,40 @@ export default function QuestionContributionForm() {
     setTagsInput('');
     setSource('');
     setContact('');
+    setAttachmentFile(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const clearAttachment = () => {
+    setAttachmentFile(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setAttachmentFile(null);
+      return;
+    }
+
+    const validationError = validateInterviewSubmissionAttachment(file);
+
+    if (validationError) {
+      setAttachmentFile(null);
+      setError(validationError);
+      event.target.value = '';
+      return;
+    }
+
+    setError('');
+    setAttachmentFile(file);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -56,23 +98,72 @@ export default function QuestionContributionForm() {
       return;
     }
 
+    if (attachmentFile) {
+      const validationError = validateInterviewSubmissionAttachment(attachmentFile);
+
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
-    const supabase = createClient();
-    const { error: insertError } = await supabase
-      .from('interview_question_submissions')
-      .insert({
-        user_id: user.id,
-        title: title.trim(),
-        content: content.trim(),
-        tags,
-        source: source.trim() || null,
-        contact: contact.trim() || null,
-      });
+    const supabase = createClient() as any;
+    let uploadedAttachmentPath: string | null = null;
+    let insertError: { code?: string; message?: string } | null = null;
+
+    if (attachmentFile) {
+      const uploadResult = await uploadInterviewSubmissionAttachment(supabase, user.id, attachmentFile);
+
+      if ('error' in uploadResult) {
+        setIsSubmitting(false);
+        setError(uploadResult.error);
+        return;
+      }
+
+      uploadedAttachmentPath = uploadResult.path;
+
+      const { error } = await supabase
+        .from('interview_question_submissions')
+        .insert({
+          user_id: user.id,
+          title: title.trim(),
+          content: content.trim(),
+          tags,
+          source: source.trim() || null,
+          contact: contact.trim() || null,
+          attachment_name: uploadResult.fileName,
+          attachment_path: uploadResult.path,
+          attachment_mime_type: uploadResult.mimeType,
+          attachment_size_bytes: uploadResult.size,
+        });
+
+      insertError = error;
+    } else {
+      const { error } = await supabase
+        .from('interview_question_submissions')
+        .insert({
+          user_id: user.id,
+          title: title.trim(),
+          content: content.trim(),
+          tags,
+          source: source.trim() || null,
+          contact: contact.trim() || null,
+        });
+
+      insertError = error;
+    }
 
     setIsSubmitting(false);
 
     if (insertError) {
+      if (uploadedAttachmentPath) {
+        await supabase.storage
+          .from(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET)
+          .remove([uploadedAttachmentPath]);
+      }
+
       if (insertError.code === '42501') {
         setError('投稿权限还没有初始化，请先执行 .sql/setup_interview_contributions.sql。');
         return;
@@ -222,6 +313,51 @@ export default function QuestionContributionForm() {
                   />
                 </label>
               </div>
+
+              <label className="space-y-3">
+                <span className="text-sm font-semibold text-gray-800">附件资料</span>
+                <div className="rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">
+                        支持上传 PDF、Word、Excel
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        可选，最多 1 个附件，单文件不超过 20MB。
+                      </p>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept={INTERVIEW_SUBMISSION_ATTACHMENT_ACCEPT}
+                      onChange={handleFileChange}
+                      className="block w-full max-w-xs cursor-pointer text-sm text-gray-600 file:mr-4 file:rounded-xl file:border-0 file:bg-gray-950 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-blue-600"
+                    />
+                  </div>
+
+                  {attachmentFile ? (
+                    <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-blue-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{attachmentFile.name}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {(attachmentFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearAttachment}
+                        className="h-10 rounded-xl border border-gray-200 px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+                      >
+                        移除附件
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs leading-5 text-gray-500">
+                      适合补充题目截图、题面 PDF、整理过的 Excel 表格等资料。
+                    </p>
+                  )}
+                </div>
+              </label>
 
               <div className="flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs leading-5 text-gray-500">

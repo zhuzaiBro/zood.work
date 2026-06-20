@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS lessons (
   chapter_id UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
+  courseware_name TEXT,
+  courseware_url TEXT,
+  content_html TEXT,
+  content_markdown TEXT,
   video_id TEXT, -- 外部 Video Manager API 的 videoId
   video_url TEXT, -- 兼容旧字段；播放时通过 video_id 向外部视频 API 获取签名 m3u8
   duration INTEGER, -- 视频时长（秒）

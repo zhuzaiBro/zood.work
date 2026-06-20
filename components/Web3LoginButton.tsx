@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { buildDefaultUserProfile } from '@/lib/user-profiles'
 
 export default function Web3LoginButton() {
   const [isLoading, setIsLoading] = useState(false)
@@ -64,37 +65,18 @@ export default function Web3LoginButton() {
         throw new Error('登录失败，请重试')
       }
 
-      // 获取钱包地址（从用户的 identities 中获取）
-      const walletAddress = data.user.identities?.[0]?.identity_data?.address
-      
-      if (!walletAddress) {
-        console.warn('无法获取钱包地址，使用用户 ID')
-      }
-
       // 检查是否需要创建用户资料
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('id')
         .eq('id', data.user.id)
-        .single()
+        .maybeSingle()
 
       if (!profile) {
-        // 创建新用户资料
-        const profileData = {
-          id: data.user.id,
-          username: walletAddress ? walletAddress.toLowerCase() : `user_${data.user.id.slice(0, 8)}`,
-          display_name: walletAddress 
-            ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-            : 'Web3 用户',
-          avatar_url: walletAddress 
-            ? `https://api.dicebear.com/7.x/identicon/svg?seed=${walletAddress}`
-            : `https://api.dicebear.com/7.x/identicon/svg?seed=${data.user.id}`,
-          bio: `Web3 用户 - ${chainType === 'ethereum' ? 'Ethereum' : 'Solana'}`,
-        }
-        
+        const profileData = buildDefaultUserProfile(data.user)
         const { error: insertError } = await supabase
           .from('user_profiles')
-          .insert(profileData as any)
+          .insert(profileData as never)
 
         if (insertError) {
           console.error('创建用户资料失败:', insertError)
@@ -161,4 +143,3 @@ export default function Web3LoginButton() {
     </div>
   )
 }
-

@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   App,
+  Button,
   Form,
   Input,
   InputNumber,
@@ -20,6 +22,7 @@ import type { UploadFile } from 'antd/es/upload';
 import type { ColumnsType } from 'antd/es/table';
 import { createClient } from '@/lib/supabase/client';
 import { uploadLessonVideo } from '@/lib/admin/uploadLessonVideo';
+import { uploadLessonCourseware } from '@/lib/uploadLessonCourseware';
 import {
   formatVideoDuration,
   getVideoDetail,
@@ -29,6 +32,8 @@ import {
 } from '@/lib/admin/videoApiClient';
 
 type VideoSourceMode = 'upload' | 'reuse';
+
+const Editor = dynamic(() => import('@/components/Editor'), { ssr: false });
 
 const VIDEO_PAGE_SIZE = 10;
 
@@ -41,6 +46,20 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 interface LessonUploadModalProps {
   open: boolean;
+  mode?: 'create' | 'edit';
+  lesson?: {
+    id: string;
+    title: string;
+    description?: string | null;
+    coursewareName?: string | null;
+    coursewareUrl?: string | null;
+    contentHtml?: string | null;
+    contentMarkdown?: string | null;
+    videoId?: string | null;
+    durationSeconds?: number | null;
+    isFree: boolean;
+    sortOrder: number;
+  } | null;
   chapterId: string | null;
   chapterTitle?: string;
   defaultSortOrder?: number;
@@ -50,6 +69,8 @@ interface LessonUploadModalProps {
 
 export default function LessonUploadModal({
   open,
+  mode = 'create',
+  lesson,
   chapterId,
   chapterTitle,
   defaultSortOrder = 0,
@@ -70,6 +91,9 @@ export default function LessonUploadModal({
   const [videoSearch, setVideoSearch] = useState('');
   const [videoPage, setVideoPage] = useState(1);
   const [videoTotal, setVideoTotal] = useState(0);
+  const [coursewareFile, setCoursewareFile] = useState<File | null>(null);
+  const [contentHtml, setContentHtml] = useState('');
+  const [contentMarkdown, setContentMarkdown] = useState('');
   const abortRef = useRef<AbortController | null>(null);
 
   const loadVideos = useCallback(
@@ -93,24 +117,29 @@ export default function LessonUploadModal({
   useEffect(() => {
     if (!open) return;
     form.setFieldsValue({
-      title: '',
-      description: '',
-      sortOrder: defaultSortOrder,
-      isFree: false,
+      title: lesson?.title ?? '',
+      description: lesson?.description ?? '',
+      coursewareName: lesson?.coursewareName ?? '',
+      coursewareUrl: lesson?.coursewareUrl ?? '',
+      sortOrder: lesson?.sortOrder ?? defaultSortOrder,
+      isFree: lesson?.isFree ?? false,
     });
-    setVideoMode('upload');
+    setVideoMode(mode === 'edit' ? 'reuse' : 'upload');
     setVideoFile(null);
-    setSelectedVideoId(null);
+    setCoursewareFile(null);
+    setSelectedVideoId(lesson?.videoId ?? null);
     setVideoSearch('');
     setUploadProgress(0);
     setChunkProgress({ uploaded: 0, total: 0, percent: 0 });
-  }, [open, defaultSortOrder, form]);
+    setContentHtml(lesson?.contentHtml ?? lesson?.contentMarkdown ?? '');
+    setContentMarkdown(lesson?.contentMarkdown ?? '');
+  }, [open, defaultSortOrder, form, lesson, mode]);
 
   useEffect(() => {
-    if (open && videoMode === 'reuse') {
+    if (open && (videoMode === 'reuse' || mode === 'edit')) {
       loadVideos(1);
     }
-  }, [open, videoMode, loadVideos]);
+  }, [open, videoMode, loadVideos, mode]);
 
   const filteredVideos = useMemo(() => {
     const keyword = videoSearch.trim().toLowerCase();
@@ -120,6 +149,9 @@ export default function LessonUploadModal({
 
   const uploadFileList: UploadFile[] = videoFile
     ? [{ uid: 'video', name: videoFile.name, status: 'done' }]
+    : [];
+  const coursewareFileList: UploadFile[] = coursewareFile
+    ? [{ uid: 'courseware', name: coursewareFile.name, status: 'done' }]
     : [];
 
   const handleCancel = () => {
@@ -134,6 +166,30 @@ export default function LessonUploadModal({
     }
 
     const values = await form.validateFields();
+    let finalCoursewareUrl = values.coursewareUrl?.trim() || '';
+    let finalCoursewareName = values.coursewareName?.trim() || '';
+
+    if (coursewareFile) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        message.error('登录状态失效，请重新登录后再上传课件');
+        return;
+      }
+
+      const uploadResult = await uploadLessonCourseware(supabase, user.id, coursewareFile);
+      if ('error' in uploadResult) {
+        message.error(uploadResult.error);
+        return;
+      }
+
+      finalCoursewareUrl = uploadResult.publicUrl;
+      if (!finalCoursewareName) {
+        finalCoursewareName = uploadResult.fileName;
+      }
+    }
 
     if (videoMode === 'upload') {
       if (!videoFile) {
@@ -151,6 +207,10 @@ export default function LessonUploadModal({
           videoFile,
           lessonTitle: values.title.trim(),
           lessonDescription: values.description?.trim() || '',
+          coursewareName: finalCoursewareName || null,
+          coursewareUrl: finalCoursewareUrl || null,
+          contentHtml: contentHtml.trim() || null,
+          contentMarkdown: contentMarkdown.trim() || null,
           chapterId,
           isFreeLesson: values.isFree,
           sortOrder: values.sortOrder ?? 0,
@@ -182,16 +242,21 @@ export default function LessonUploadModal({
         (await getVideoDetail(supabase, selectedVideoId));
 
       await saveLessonWithVideo({
+        lessonId: mode === 'edit' ? lesson?.id : undefined,
         chapterId,
         title: values.title.trim(),
         description: values.description?.trim() || '',
+        coursewareName: finalCoursewareName || null,
+        coursewareUrl: finalCoursewareUrl || null,
+        contentHtml: contentHtml.trim() || null,
+        contentMarkdown: contentMarkdown.trim() || null,
         videoId: selectedVideoId,
         duration: selected.duration,
         isFree: values.isFree,
         sortOrder: values.sortOrder ?? 0,
       });
 
-      message.success('课时添加成功');
+      message.success(mode === 'edit' ? '课时更新成功' : '课时添加成功');
       onSuccess();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '添加失败';
@@ -242,14 +307,20 @@ export default function LessonUploadModal({
     videoMode === 'upload'
       ? loading
         ? `上传中 ${uploadProgress}%`
-        : '开始上传'
+        : mode === 'edit'
+          ? '上传并更新'
+          : '开始上传'
       : loading
-        ? '添加中…'
-        : '确认添加';
+        ? mode === 'edit' ? '保存中…' : '添加中…'
+        : mode === 'edit' ? '保存修改' : '确认添加';
 
   return (
     <Modal
-      title={chapterTitle ? `添加课时 · ${chapterTitle}` : '添加课时'}
+      title={
+        chapterTitle
+          ? `${mode === 'edit' ? '编辑课时' : '添加课时'} · ${chapterTitle}`
+          : mode === 'edit' ? '编辑课时' : '添加课时'
+      }
       open={open}
       onCancel={handleCancel}
       onOk={handleSubmit}
@@ -270,10 +341,49 @@ export default function LessonUploadModal({
         <Form.Item name="description" label="课时描述">
           <Input.TextArea rows={3} placeholder="可选" disabled={loading} />
         </Form.Item>
+        <Form.Item name="coursewareName" label="课件名称">
+          <Input placeholder="例如：第一课讲义.pdf" disabled={loading} />
+        </Form.Item>
+        <Form.Item name="coursewareUrl" label="课件链接">
+          <Input placeholder="可直接粘贴外部 URL，或下方上传课件文件" disabled={loading || Boolean(coursewareFile)} />
+        </Form.Item>
+        <Form.Item label="上传课件">
+          <Upload
+            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,application/pdf"
+            maxCount={1}
+            fileList={coursewareFileList}
+            beforeUpload={(file) => {
+              setCoursewareFile(file);
+              if (!form.getFieldValue('coursewareName')) {
+                form.setFieldValue('coursewareName', file.name);
+              }
+              return false;
+            }}
+            onRemove={() => {
+              setCoursewareFile(null);
+              return true;
+            }}
+            disabled={loading}
+          >
+            <Button disabled={loading}>选择课件文件</Button>
+          </Upload>
+        </Form.Item>
+        <Form.Item label="课时讲义 / 富文本">
+          <Editor
+            value={contentHtml || contentMarkdown}
+            onChange={(html, markdown) => {
+              setContentHtml(html);
+              setContentMarkdown(markdown);
+            }}
+          />
+        </Form.Item>
         <Form.Item label="视频来源" required>
           <Tabs
             activeKey={videoMode}
             onChange={(key) => {
+              if (mode === 'edit' && key === 'upload') {
+                setSelectedVideoId(null);
+              }
               setVideoMode(key as VideoSourceMode);
               setSelectedVideoId(null);
               setVideoFile(null);
@@ -281,7 +391,7 @@ export default function LessonUploadModal({
             items={[
               {
                 key: 'upload',
-                label: '上传新视频',
+                label: mode === 'edit' ? '替换为新视频' : '上传新视频',
                 children: (
                   <Upload.Dragger
                     accept="video/mp4,video/*"
@@ -311,7 +421,7 @@ export default function LessonUploadModal({
               },
               {
                 key: 'reuse',
-                label: '复用已有视频',
+                label: mode === 'edit' ? '切换已有视频' : '复用已有视频',
                 children: (
                   <div className="space-y-3">
                     <Input.Search

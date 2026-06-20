@@ -7,13 +7,22 @@ export const metadata = {
   description: '登录到你的账户',
 }
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  const { redirect: redirectTarget } = await searchParams
+  const safeRedirectTarget =
+    redirectTarget && redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')
+      ? redirectTarget
+      : '/'
 
   // 如果已登录，重定向到首页
   if (user) {
-    redirect('/')
+    redirect(safeRedirectTarget)
   }
 
   return (
@@ -27,4 +36,3 @@ export default async function LoginPage() {
     </div>
   )
 }
-

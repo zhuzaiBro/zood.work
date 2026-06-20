@@ -14,6 +14,10 @@ export async function uploadLessonVideo(options: {
   videoFile: File;
   lessonTitle: string;
   lessonDescription: string;
+  coursewareName?: string | null;
+  coursewareUrl?: string | null;
+  contentHtml?: string | null;
+  contentMarkdown?: string | null;
   chapterId: string;
   isFreeLesson: boolean;
   sortOrder: number;
@@ -26,6 +30,10 @@ export async function uploadLessonVideo(options: {
     videoFile,
     lessonTitle,
     lessonDescription,
+    coursewareName,
+    coursewareUrl,
+    contentHtml,
+    contentMarkdown,
     chapterId,
     isFreeLesson,
     sortOrder,
@@ -125,6 +133,10 @@ export async function uploadLessonVideo(options: {
     chapterId,
     title: lessonTitle,
     description: lessonDescription,
+    coursewareName,
+    coursewareUrl,
+    contentHtml,
+    contentMarkdown,
     videoId: complete.videoId,
     duration,
     isFree: isFreeLesson,

@@ -85,6 +85,13 @@ body {
   .animate-spin-slow {
     animation: spin-slow 1.2s linear infinite;
   }
+
+  .header-text-stroke {
+    -webkit-text-stroke: 0.35px rgb(8 22 45 / 0.72);
+    text-shadow:
+      0 0 10px rgb(117 192 247 / 0.22),
+      0 1px 0 rgb(2 8 23 / 0.48);
+  }
 }
 
 /* 文章富文本样式优化 */

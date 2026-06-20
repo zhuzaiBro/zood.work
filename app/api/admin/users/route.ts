@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database.types';
 import type { AuthUser } from '@supabase/supabase-js';
+import { buildDefaultUserProfile } from '@/lib/user-profiles';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type VideoAccessLog = Pick<
@@ -129,27 +130,34 @@ function addLogToAccumulator(
   }
 }
 
+async function requireAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { error: NextResponse.json({ error: '未登录' }, { status: 401 }) };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('user_profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single<Pick<UserProfile, 'is_admin'>>();
+
+  if (profileError || !profile?.is_admin) {
+    return { error: NextResponse.json({ error: '无权访问' }, { status: 403 }) };
+  }
+
+  return { user };
+}
+
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single<Pick<UserProfile, 'is_admin'>>();
-
-    if (profileError || !profile?.is_admin) {
-      return NextResponse.json({ error: '无权访问' }, { status: 403 });
-    }
+    const auth = await requireAdmin();
+    if ('error' in auth && auth.error) return auth.error;
 
     const today = getShanghaiDayRange(0);
     const yesterday = getShanghaiDayRange(-1);
@@ -219,6 +227,7 @@ export async function GET() {
         lastSignInAt: authUser?.last_sign_in_at ?? null,
         isSsoUser: Boolean(authUser?.is_sso_user),
         isAnonymous: Boolean(authUser?.is_anonymous),
+        hasProfile: Boolean(userProfile),
         vipLevel: userProfile?.vip_level ?? null,
         isAdmin: Boolean(userProfile?.is_admin),
         createdAt: authUser?.created_at ?? userProfile?.created_at ?? null,
@@ -247,6 +256,7 @@ export async function GET() {
       users,
       summary: {
         userCount: users.length,
+        missingProfileCount: users.filter((item) => !item.hasProfile).length,
         activeTodayCount: users.filter((item) => item.todayStudySeconds > 0).length,
         activeYesterdayCount: users.filter((item) => item.yesterdayStudySeconds > 0).length,
         todayStudySeconds: users.reduce((sum, item) => sum + item.todayStudySeconds, 0),
@@ -264,6 +274,53 @@ export async function GET() {
           end: yesterday.end.toISOString(),
         },
       },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '服务器错误';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST() {
+  try {
+    const auth = await requireAdmin();
+    if ('error' in auth && auth.error) return auth.error;
+
+    const adminClient = createAdminClient();
+    const authUsers = await listAllAuthUsers(adminClient);
+
+    const { data: profiles, error: profilesError } = await adminClient
+      .from('user_profiles')
+      .select('id');
+
+    if (profilesError) {
+      return NextResponse.json({ error: profilesError.message }, { status: 500 });
+    }
+
+    const profileIds = new Set((profiles ?? []).map((item) => item.id));
+    const missingUsers = authUsers.filter((item) => !profileIds.has(item.id));
+
+    if (missingUsers.length === 0) {
+      return NextResponse.json({
+        createdCount: 0,
+        skippedCount: authUsers.length,
+        message: '所有 Auth 用户都已经有 user_profiles 资料。',
+      });
+    }
+
+    const rows = missingUsers.map((item) => buildDefaultUserProfile(item));
+    const { error: insertError } = await adminClient
+      .from('user_profiles')
+      .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      createdCount: missingUsers.length,
+      skippedCount: authUsers.length - missingUsers.length,
+      message: `已补齐 ${missingUsers.length} 条缺失的 user_profiles 资料。`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '服务器错误';

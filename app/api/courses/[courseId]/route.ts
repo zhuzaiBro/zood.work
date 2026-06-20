@@ -41,9 +41,13 @@ export async function GET(
     const {
       data: { user: viewer },
     } = await supabase.auth.getUser();
+    const viewerLoggedIn = Boolean(viewer);
 
     let isAdminViewer = false;
     let hasCourseAccess = Boolean(course.is_free);
+    let accessSource: 'free' | 'admin' | 'enrollment' | 'none' = course.is_free
+      ? 'free'
+      : 'none';
 
     if (viewer) {
       const { data: viewerProfile } = await adminClient
@@ -55,7 +59,7 @@ export async function GET(
       isAdminViewer = Boolean(viewerProfile?.is_admin);
 
       if (!hasCourseAccess && !isAdminViewer) {
-        const { data: enrollment } = await adminClient
+        const { data: enrollment, error: enrollmentError } = await adminClient
           .from('course_enrollments')
           .select('id')
           .eq('course_id', courseId)
@@ -63,12 +67,20 @@ export async function GET(
           .eq('status', 'active')
           .maybeSingle();
 
+        if (enrollmentError) {
+          console.error('查询课程开通状态失败:', enrollmentError);
+        }
+
         hasCourseAccess = Boolean(enrollment);
+        if (hasCourseAccess) {
+          accessSource = 'enrollment';
+        }
       }
     }
 
     if (isAdminViewer) {
       hasCourseAccess = true;
+      accessSource = 'admin';
     }
 
     // 2. 获取章节列表
@@ -107,18 +119,28 @@ export async function GET(
         .filter((lesson: any) => lesson.chapter_id === chapter.id)
         .map((lesson: any) => {
           const isLessonFree = Boolean(lesson.is_free);
-          const canWatchLesson = hasCourseAccess || isLessonFree;
+          const canWatchLesson = viewerLoggedIn && (hasCourseAccess || isLessonFree);
+          const accessReason = !viewerLoggedIn
+            ? 'login'
+            : canWatchLesson
+              ? null
+              : 'purchase';
 
           return {
             id: lesson.id,
             title: lesson.title,
             description: lesson.description,
+            coursewareName: lesson.courseware_name,
+            coursewareUrl: lesson.courseware_url,
+            contentHtml: lesson.content_html,
+            contentMarkdown: lesson.content_markdown,
             duration: lesson.duration ? formatDuration(lesson.duration) : undefined,
             durationSeconds: lesson.duration,
             isFree: isLessonFree,
-            isLocked: canWatchLesson ? false : Boolean(lesson.is_locked),
-            videoUrl: lesson.video_url,
-            videoId: lesson.video_id,
+            isLocked: !canWatchLesson,
+            accessReason,
+            videoUrl: canWatchLesson ? lesson.video_url : null,
+            videoId: canWatchLesson ? lesson.video_id : null,
             sortOrder: lesson.sort_order,
           };
         });
@@ -141,10 +163,15 @@ export async function GET(
         price: Number(course.price) || 0,
         isFree: course.is_free,
         hasAccess: hasCourseAccess,
+        accessSource,
         status: course.status,
         createdAt: course.created_at,
       },
       chapters: chaptersWithLessons,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store',
+      },
     });
   } catch (error: any) {
     console.error('获取课程详情异常:', error);

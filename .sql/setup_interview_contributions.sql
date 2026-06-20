@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS public.interview_question_submissions (
   difficulty TEXT CHECK (difficulty IS NULL OR difficulty IN ('简单', '中等', '困难')),
   source TEXT,
   contact TEXT,
+  attachment_name TEXT,
+  attachment_path TEXT,
+  attachment_mime_type TEXT,
+  attachment_size_bytes BIGINT CHECK (attachment_size_bytes IS NULL OR attachment_size_bytes >= 0),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
   admin_note TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -23,9 +27,26 @@ CREATE TABLE IF NOT EXISTS public.interview_question_submissions (
 ALTER TABLE public.interview_question_submissions
 ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 
+ALTER TABLE public.interview_question_submissions
+ADD COLUMN IF NOT EXISTS attachment_name TEXT,
+ADD COLUMN IF NOT EXISTS attachment_path TEXT,
+ADD COLUMN IF NOT EXISTS attachment_mime_type TEXT,
+ADD COLUMN IF NOT EXISTS attachment_size_bytes BIGINT;
+
+ALTER TABLE public.interview_question_submissions
+DROP CONSTRAINT IF EXISTS interview_question_submissions_attachment_size_bytes_check;
+
+ALTER TABLE public.interview_question_submissions
+ADD CONSTRAINT interview_question_submissions_attachment_size_bytes_check
+CHECK (attachment_size_bytes IS NULL OR attachment_size_bytes >= 0);
+
 COMMENT ON TABLE public.interview_question_submissions IS '普通用户提交的面试题投稿，管理员审核后再进入正式题库';
 COMMENT ON COLUMN public.interview_question_submissions.collection_id IS '管理员整理投稿时可选关联的题集，普通用户投稿不需要填写';
 COMMENT ON COLUMN public.interview_question_submissions.tags IS '普通用户投递时填写的自由标签，用于后续归类整理';
+COMMENT ON COLUMN public.interview_question_submissions.attachment_name IS '投稿附件原始文件名';
+COMMENT ON COLUMN public.interview_question_submissions.attachment_path IS 'Supabase Storage 中的附件路径';
+COMMENT ON COLUMN public.interview_question_submissions.attachment_mime_type IS '投稿附件 MIME 类型';
+COMMENT ON COLUMN public.interview_question_submissions.attachment_size_bytes IS '投稿附件大小（字节）';
 COMMENT ON COLUMN public.interview_question_submissions.status IS 'pending=待审核, accepted=已采纳, rejected=未采纳';
 
 -- 2. 索引

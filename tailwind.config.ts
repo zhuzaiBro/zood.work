@@ -11,11 +11,10 @@ const config: Config = {
       colors: {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
-        'header-sky': '#2092ce',
+        'header-sky': '#75c0f7',
       },
     },
   },
   plugins: [],
 }
 export default config
-

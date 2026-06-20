@@ -245,7 +245,7 @@ export default function Faucet() {
       <div className="pointer-events-none absolute -bottom-28 left-8 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
 
       <div className="relative space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs font-bold text-sky-200">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.9)]" />
@@ -264,8 +264,72 @@ export default function Faucet() {
               。
             </p>
           </div>
-          <div className="shrink-0">
-            <ConnectButton />
+          <div className="w-full xl:w-auto xl:shrink-0">
+            <ConnectButton.Custom>
+              {({
+                account,
+                chain: connectedChain,
+                mounted,
+                openAccountModal,
+                openChainModal,
+                openConnectModal,
+              }) => {
+                const ready = mounted;
+                const connected = ready && account && connectedChain;
+
+                if (!connected) {
+                  return (
+                    <button
+                      type="button"
+                      onClick={openConnectModal}
+                      className="inline-flex w-full items-center justify-center rounded-2xl border border-sky-300/30 bg-sky-300/10 px-4 py-3 text-sm font-black text-sky-100 shadow-[0_0_24px_rgba(117,192,247,0.14)] transition-all hover:border-sky-200/60 hover:bg-sky-300/15 xl:w-auto"
+                    >
+                      连接钱包
+                    </button>
+                  );
+                }
+
+                return (
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+                    <button
+                      type="button"
+                      onClick={openChainModal}
+                      className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition-all ${
+                        connectedChain.unsupported
+                          ? "border-rose-300/40 bg-rose-300/10 text-rose-100 hover:bg-rose-300/15"
+                          : "border-sky-300/30 bg-sky-300/10 text-sky-100 hover:border-sky-200/60 hover:bg-sky-300/15"
+                      }`}
+                    >
+                      {connectedChain.hasIcon && connectedChain.iconUrl && (
+                        <img
+                          src={connectedChain.iconUrl}
+                          alt={connectedChain.name ?? "chain"}
+                          className="h-5 w-5 rounded-full"
+                        />
+                      )}
+                      <span className="truncate">
+                        {connectedChain.unsupported
+                          ? "网络不支持"
+                          : connectedChain.name}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={openAccountModal}
+                      className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-black text-slate-900 shadow-[0_14px_36px_rgba(2,8,23,0.22)] transition-all hover:-translate-y-0.5 hover:bg-sky-50 sm:max-w-[260px]"
+                    >
+                      {account.displayBalance && (
+                        <span className="shrink-0 text-slate-700">
+                          {account.displayBalance}
+                        </span>
+                      )}
+                      <span className="truncate">{account.displayName}</span>
+                    </button>
+                  </div>
+                );
+              }}
+            </ConnectButton.Custom>
           </div>
         </div>
 
