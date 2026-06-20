@@ -938,8 +938,8 @@ export default function CoursePlayer({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-[var(--site-header-height)] z-40">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)]">
+      <div className="sticky top-[var(--site-header-height)] z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
         <div className="container mx-auto px-4 py-2">
           <div className="flex items-center justify-between">
             <Link

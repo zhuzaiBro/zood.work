@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,8 +33,89 @@ export default function QuestionContributionForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hoverGlow, setHoverGlow] = useState({
+    active: false,
+    xPercent: 50,
+    yPercent: 50,
+    x: '50%',
+    y: '50%',
+  });
+  const [trailGlow, setTrailGlow] = useState({
+    active: false,
+    xPercent: 50,
+    yPercent: 50,
+    x: '50%',
+    y: '50%',
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const glowAnimationRef = useRef<number | null>(null);
   const tags = parseTags(tagsInput);
+
+  const handleCardPointerMove = (event: MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
+    const yPercent = ((event.clientY - rect.top) / rect.height) * 100;
+    const x = `${xPercent}%`;
+    const y = `${yPercent}%`;
+
+    setHoverGlow({
+      active: true,
+      xPercent,
+      yPercent,
+      x,
+      y,
+    });
+  };
+
+  const primaryHue = 208 + hoverGlow.xPercent * 1.1;
+  const secondaryHue = 320 - hoverGlow.yPercent * 0.95;
+  const accentHue = 180 + ((hoverGlow.xPercent + hoverGlow.yPercent) / 2) * 0.7;
+  const trailPrimaryHue = 220 + trailGlow.xPercent * 0.95;
+  const trailSecondaryHue = 338 - trailGlow.yPercent * 0.75;
+  const trailAccentHue = 160 + ((trailGlow.xPercent + trailGlow.yPercent) / 2) * 0.8;
+  const buttonBackground = hoverGlow.active
+    ? `linear-gradient(135deg, hsl(${primaryHue} 86% 52%), hsl(${secondaryHue} 88% 60%), hsl(${trailAccentHue} 84% 56%))`
+    : 'linear-gradient(135deg, rgb(3 7 18), rgb(15 23 42))';
+  const buttonShadow = hoverGlow.active
+    ? `0 18px 40px hsla(${primaryHue}, 88%, 52%, 0.28), 0 10px 30px hsla(${secondaryHue}, 92%, 62%, 0.2)`
+    : '0 14px 30px rgba(15, 23, 42, 0.18)';
+
+  useEffect(() => {
+    if (!hoverGlow.active) {
+      if (glowAnimationRef.current !== null) {
+        cancelAnimationFrame(glowAnimationRef.current);
+        glowAnimationRef.current = null;
+      }
+      setTrailGlow((current) => ({ ...current, active: false }));
+      return;
+    }
+
+    const animate = () => {
+      setTrailGlow((current) => {
+        const nextXPercent = current.xPercent + (hoverGlow.xPercent - current.xPercent) * 0.14;
+        const nextYPercent = current.yPercent + (hoverGlow.yPercent - current.yPercent) * 0.14;
+
+        return {
+          active: true,
+          xPercent: nextXPercent,
+          yPercent: nextYPercent,
+          x: `${nextXPercent}%`,
+          y: `${nextYPercent}%`,
+        };
+      });
+
+      glowAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    glowAnimationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (glowAnimationRef.current !== null) {
+        cancelAnimationFrame(glowAnimationRef.current);
+        glowAnimationRef.current = null;
+      }
+    };
+  }, [hoverGlow.active, hoverGlow.xPercent, hoverGlow.yPercent]);
 
   const resetForm = () => {
     setTitle('');
@@ -179,9 +260,42 @@ export default function QuestionContributionForm() {
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-3xl border border-blue-100 bg-white p-5 shadow-sm">
-        <div className="absolute right-[-3rem] top-[-3rem] h-32 w-32 rounded-full bg-blue-100/70 blur-2xl" />
-        <div className="absolute bottom-[-3.5rem] left-12 h-24 w-24 rounded-full bg-cyan-100/80 blur-2xl" />
+      <div
+        className="group relative overflow-hidden rounded-3xl border border-blue-100/80 bg-white/88 p-5 shadow-[0_22px_60px_rgba(148,163,184,0.16)] transition-all duration-500 hover:border-sky-200/90 hover:shadow-[0_28px_80px_rgba(96,165,250,0.16)]"
+        onMouseMove={handleCardPointerMove}
+        onMouseEnter={() => setHoverGlow((current) => ({ ...current, active: true }))}
+        onMouseLeave={() => setHoverGlow((current) => ({ ...current, active: false }))}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+          style={{
+            background: `
+              radial-gradient(circle at ${hoverGlow.x} ${hoverGlow.y}, hsla(${primaryHue}, 88%, 68%, 0.26), transparent 18%),
+              radial-gradient(circle at calc(${hoverGlow.x} - 8%) calc(${hoverGlow.y} + 6%), hsla(${secondaryHue}, 92%, 72%, 0.24), transparent 24%),
+              radial-gradient(circle at calc(${hoverGlow.x} + 10%) calc(${hoverGlow.y} - 12%), hsla(${accentHue}, 90%, 70%, 0.2), transparent 20%),
+              radial-gradient(circle at calc(${hoverGlow.x} - 16%) calc(${hoverGlow.y} - 18%), hsla(${secondaryHue + 24}, 85%, 76%, 0.14), transparent 22%)
+            `,
+            filter: 'blur(10px)',
+            opacity: hoverGlow.active ? 1 : 0,
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-700 group-hover:opacity-100"
+          style={{
+            background: `
+              radial-gradient(circle at ${trailGlow.x} ${trailGlow.y}, hsla(${trailPrimaryHue}, 92%, 72%, 0.18), transparent 24%),
+              radial-gradient(circle at calc(${trailGlow.x} + 16%) calc(${trailGlow.y} - 10%), hsla(${trailSecondaryHue}, 90%, 74%, 0.16), transparent 28%),
+              radial-gradient(circle at calc(${trailGlow.x} - 14%) calc(${trailGlow.y} + 16%), hsla(${trailAccentHue}, 88%, 72%, 0.14), transparent 26%)
+            `,
+            filter: 'blur(24px)',
+            transform: 'scale(1.08)',
+            opacity: trailGlow.active ? 1 : 0,
+          }}
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-200/80 to-transparent" />
+        <div className="absolute right-[-3rem] top-[-3rem] h-32 w-32 rounded-full bg-blue-100/70 blur-2xl transition-transform duration-500 group-hover:scale-110" />
+        <div className="absolute bottom-[-3.5rem] left-12 h-24 w-24 rounded-full bg-cyan-100/80 blur-2xl transition-transform duration-500 group-hover:scale-110" />
+        <div className="absolute left-1/3 top-1/2 h-28 w-28 -translate-y-1/2 rounded-full bg-pink-100/60 blur-3xl transition-opacity duration-500 group-hover:opacity-100 opacity-0" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-semibold text-blue-600">Build in Public</p>
@@ -197,9 +311,28 @@ export default function QuestionContributionForm() {
               setSuccess('');
               setIsOpen(true);
             }}
-            className="inline-flex h-12 items-center justify-center rounded-2xl bg-gray-950 px-6 text-sm font-bold text-white shadow-lg shadow-gray-900/15 transition hover:-translate-y-0.5 hover:bg-blue-600"
+            className="relative inline-flex h-12 items-center justify-center overflow-hidden rounded-2xl px-6 text-sm font-bold text-white transition duration-300 hover:-translate-y-0.5"
+            style={{
+              backgroundImage: buttonBackground,
+              boxShadow: buttonShadow,
+            }}
           >
-            我要投稿
+            <span
+              className="pointer-events-none absolute inset-0 transition-opacity duration-500"
+              style={{
+                background: `linear-gradient(120deg, transparent 15%, hsla(${accentHue}, 100%, 95%, 0.45) 50%, transparent 85%)`,
+                opacity: hoverGlow.active ? 1 : 0,
+                transform: `translateX(${(hoverGlow.xPercent - 50) * 0.18}%)`,
+              }}
+            />
+            <span
+              className="pointer-events-none absolute -inset-x-4 -bottom-5 h-8 rounded-full blur-2xl transition-opacity duration-500"
+              style={{
+                background: `radial-gradient(circle, hsla(${trailPrimaryHue}, 95%, 70%, 0.45), transparent 70%)`,
+                opacity: hoverGlow.active ? 1 : 0,
+              }}
+            />
+            <span className="relative z-10">我要投稿</span>
           </button>
         </div>
       </div>

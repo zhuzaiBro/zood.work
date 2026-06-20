@@ -19,7 +19,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className={`flex-1 ${lightContentPage ? 'pt-[var(--site-header-height)] bg-gray-50' : 'pt-20'}`}>{children}</main>
+      <main
+        className={`flex-1 ${
+          lightContentPage
+            ? 'bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-[var(--site-header-height)]'
+            : 'pt-20'
+        }`}
+      >
+        {children}
+      </main>
       <Footer />
       <FloatingContact />
     </div>

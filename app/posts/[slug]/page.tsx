@@ -84,10 +84,10 @@ export default async function PostPage({ params }: PageProps) {
     .eq('post_id', postData.id)
 
   return (
-    <div className="-mt-20 min-h-screen bg-[#f7f6f2] pt-20 text-slate-900">
+    <div className="-mt-20 min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-20 text-slate-900">
       <ArticleToc content={postData.content} />
 
-      <div className="sticky top-20 z-30 border-b border-slate-200/80 bg-[#f7f6f2]/90 backdrop-blur-xl">
+      <div className="sticky top-20 z-30 bg-[#f7fafe]/88 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Link
@@ -117,7 +117,7 @@ export default async function PostPage({ params }: PageProps) {
       </div>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <article className="mx-auto max-w-4xl rounded-[28px] bg-white px-6 py-8 shadow-[0_18px_80px_rgba(15,23,42,0.06)] ring-1 ring-black/5 sm:px-10 lg:px-14">
+        <article className="mx-auto max-w-4xl rounded-[28px] bg-white/96 px-6 py-8 shadow-[0_24px_80px_rgba(148,163,184,0.18)] ring-1 ring-slate-200/70 sm:px-10 lg:px-14">
           <header className="mb-10">
             <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-500">
@@ -207,6 +207,28 @@ export default async function PostPage({ params }: PageProps) {
                 h4: (props) => <MarkdownHeading level={4} {...props} />,
                 h5: (props) => <MarkdownHeading level={5} {...props} />,
                 h6: (props) => <MarkdownHeading level={6} {...props} />,
+                table: ({ children }) => (
+                  <div className="my-8 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+                      {children}
+                    </table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead className="bg-slate-50 text-slate-700">{children}</thead>
+                ),
+                tbody: ({ children }) => (
+                  <tbody className="divide-y divide-slate-100 bg-white">{children}</tbody>
+                ),
+                tr: ({ children }) => <tr className="align-top">{children}</tr>,
+                th: ({ children }) => (
+                  <th className="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-800">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="px-4 py-3 leading-7 text-slate-600">{children}</td>
+                ),
               }}
             >
               {postData.content}

@@ -67,8 +67,8 @@ export default async function InterviewPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
-      <div className="mt-[-5rem] pt-24 bg-gradient-to-b from-blue-50 to-gray-50">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pb-12">
+      <div className="mt-[-5rem] bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-24">
         <div className="container mx-auto px-4 pb-3">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-2xl">🔥</span>

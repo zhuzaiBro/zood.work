@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
@@ -357,6 +357,20 @@ function getBlockShortcut(text: string): BlockShortcut | null {
   return null
 }
 
+function normalizePastedText(text: string) {
+  return text.replace(/\r\n?/g, '\n').replace(/\\n/g, '\n')
+}
+
+function splitPastedTextIntoSegments(text: string) {
+  const normalized = normalizePastedText(text)
+  const segments = normalized
+    .split('\n')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+
+  return segments.length > 1 ? segments : null
+}
+
 export default function Editor({
   value = '',
   onChange,
@@ -638,7 +652,7 @@ export default function Editor({
       const cursor = event.currentTarget.selectionStart
       const prefix = block.text.slice(0, cursor)
       const suffix = block.text.slice(cursor)
-      const shortcut = !suffix && getBlockShortcut(prefix.trim())
+      const shortcut = !suffix ? getBlockShortcut(prefix.trim()) : null
 
       if (shortcut) {
         event.preventDefault()
@@ -662,7 +676,7 @@ export default function Editor({
       const cursor = event.currentTarget.selectionStart
       const prefix = block.text.slice(0, cursor)
       const suffix = block.text.slice(cursor)
-      const shortcut = !suffix && getBlockShortcut(prefix.trim())
+      const shortcut = !suffix ? getBlockShortcut(prefix.trim()) : null
 
       if (shortcut?.type === 'code') {
         event.preventDefault()
@@ -689,6 +703,50 @@ export default function Editor({
       setSlashBlockId(null)
       setMenuBlockId(null)
     }
+  }
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>, block: Block) => {
+    if (block.type === 'code') return
+
+    const pastedText = event.clipboardData.getData('text/plain')
+    const segments = splitPastedTextIntoSegments(pastedText)
+
+    if (!segments) return
+
+    const index = blocks.findIndex((item) => item.id === block.id)
+    if (index === -1) return
+
+    event.preventDefault()
+
+    const selectionStart = event.currentTarget.selectionStart ?? block.text.length
+    const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart
+    const before = block.text.slice(0, selectionStart)
+    const after = block.text.slice(selectionEnd)
+
+    const nextBlocks = [...blocks]
+    const insertedBlocks = segments.map((segment, segmentIndex) =>
+      segmentIndex === 0 ? { ...block, text: segment } : createBlock('paragraph', segment)
+    )
+
+    insertedBlocks[0] = {
+      ...insertedBlocks[0],
+      text: `${before}${segments[0]}`,
+    }
+
+    const lastBlock = insertedBlocks[insertedBlocks.length - 1]
+    insertedBlocks[insertedBlocks.length - 1] = {
+      ...lastBlock,
+      text: `${lastBlock.text}${after}`,
+    }
+
+    nextBlocks.splice(index, 1, ...insertedBlocks)
+    commitBlocks(nextBlocks)
+
+    const focusTarget = insertedBlocks[insertedBlocks.length - 1]
+    setActiveBlockId(focusTarget.id)
+    setMenuBlockId(null)
+    setSlashBlockId(null)
+    focusBlock(focusTarget.id)
   }
 
   return (
@@ -885,6 +943,7 @@ export default function Editor({
                           onFocus={() => setActiveBlockId(block.id)}
                           onChange={(event) => updateBlockText(block.id, event.target.value)}
                           onKeyDown={(event) => handleKeyDown(event, block)}
+                          onPaste={(event) => handlePaste(event, block)}
                           placeholder=""
                           rows={1}
                           spellCheck={false}
@@ -909,6 +968,7 @@ export default function Editor({
                     onFocus={() => setActiveBlockId(block.id)}
                     onChange={(event) => updateBlockText(block.id, event.target.value)}
                     onKeyDown={(event) => handleKeyDown(event, block)}
+                    onPaste={(event) => handlePaste(event, block)}
                     placeholder=""
                     rows={1}
                     className={`${getTextareaClass(block.type)} ${

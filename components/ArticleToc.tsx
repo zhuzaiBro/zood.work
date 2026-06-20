@@ -101,8 +101,8 @@ export default function ArticleToc({ content }: ArticleTocProps) {
   const TocContent = () => (
     <>
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-4 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
           </svg>
@@ -116,7 +116,7 @@ export default function ArticleToc({ content }: ArticleTocProps) {
               setIsMobileMenuOpen(false)
             }
           }}
-          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-transform xl:block hidden"
+          className="hidden rounded-full p-1 text-slate-400 transition hover:bg-white hover:text-slate-700 xl:block"
           style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(180deg)' }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@ export default function ArticleToc({ content }: ArticleTocProps) {
         {/* 移动端关闭按钮 */}
         <button
           onClick={() => setIsMobileMenuOpen(false)}
-          className="xl:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          className="text-slate-400 transition hover:text-slate-700 xl:hidden"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -136,20 +136,20 @@ export default function ArticleToc({ content }: ArticleTocProps) {
 
       {/* 目录列表 */}
       {isOpen && (
-        <nav className="py-2 max-h-[calc(100vh-200px)] xl:max-h-[calc(100vh-200px)] overflow-y-auto">
-          <ul className="space-y-1">
+        <nav className="max-h-[calc(100vh-16rem)] overflow-y-auto py-3">
+          <ul className="space-y-1 px-2">
             {toc.map((item, index) => {
               const isActive = activeId === item.id
-              const paddingLeft = (item.level - 1) * 12 + 16 // 根据标题级别设置缩进
+              const paddingLeft = (item.level - 1) * 12 + 14 // 根据标题级别设置缩进
 
               return (
                 <li key={`${item.id}-${index}`}>
                   <button
                     onClick={() => handleClick(item.id)}
-                    className={`w-full text-left text-sm py-1.5 px-4 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    className={`w-full rounded-xl py-2 pr-3 text-left text-sm transition-all ${
                       isActive
-                        ? 'text-blue-600 dark:text-blue-400 font-medium bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-600 dark:text-gray-400'
+                        ? 'bg-sky-50 font-semibold text-sky-700 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.45)]'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                     }`}
                     style={{ paddingLeft: `${paddingLeft}px` }}
                   >
@@ -166,9 +166,9 @@ export default function ArticleToc({ content }: ArticleTocProps) {
 
   return (
     <>
-      {/* 桌面端 - 固定在左上角 */}
-      <div className="fixed top-20 left-4 z-40 hidden xl:block">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+      {/* 桌面端 - 贴近正文区域 */}
+      <div className="fixed left-6 top-44 z-20 hidden xl:block 2xl:left-[calc(50%-42rem)]">
+        <div className="w-56 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur">
           <TocContent />
         </div>
       </div>
@@ -176,7 +176,7 @@ export default function ArticleToc({ content }: ArticleTocProps) {
       {/* 移动端 - 固定按钮 */}
       <button
         onClick={() => setIsMobileMenuOpen(true)}
-        className="fixed bottom-20 right-4 z-40 xl:hidden bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-all hover:scale-110 active:scale-95"
+        className="fixed bottom-20 right-4 z-40 rounded-full bg-slate-900 p-3 text-white shadow-[0_18px_30px_rgba(15,23,42,0.2)] transition-all hover:scale-110 hover:bg-slate-800 active:scale-95 xl:hidden"
         aria-label="打开目录"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,7 +195,7 @@ export default function ArticleToc({ content }: ArticleTocProps) {
 
           {/* 目录抽屉 */}
           <div className="fixed inset-x-0 bottom-0 z-50 xl:hidden animate-slide-up">
-            <div className="bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl border-t border-gray-200 dark:border-gray-700 max-h-[80vh] flex flex-col">
+            <div className="flex max-h-[80vh] flex-col rounded-t-[28px] border-t border-slate-200 bg-white shadow-2xl">
               <TocContent />
             </div>
           </div>
@@ -204,4 +204,3 @@ export default function ArticleToc({ content }: ArticleTocProps) {
     </>
   )
 }
-

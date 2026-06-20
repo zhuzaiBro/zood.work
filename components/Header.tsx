@@ -44,19 +44,19 @@ export default function Header() {
     setIsMobileUserMenuOpen(false);
   };
 
-  const linkClass = "header-text-stroke text-header-sky hover:text-sky-800 transition-colors";
+  const linkClass = "text-header-sky hover:text-sky-800 transition-colors font-medium";
 
   const mobileLinkClass =
-    "header-text-stroke block py-2 text-header-sky hover:text-sky-800 transition-colors text-lg font-medium";
+    "block py-2 text-header-sky hover:text-sky-800 transition-colors text-lg font-medium";
 
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-header-sky backdrop-blur-md ${
         lightContentPage
-          ? "bg-white border-transparent"
+          ? "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
           : isImmersiveHero
           ? "bg-transparent border-transparent"
-          : "border-b border-[#172846]/80"
+          : "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
       }`}
     >
       <nav className="container mx-auto px-4 py-4">
@@ -144,7 +144,7 @@ export default function Header() {
 
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-[#02050b] border-b border-[#172846] shadow-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
+          <div className="md:hidden absolute top-full left-0 right-0 bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
             <Link
               href="/courses"
               className={mobileLinkClass}
@@ -177,7 +177,7 @@ export default function Header() {
               分类
             </Link> */}
 
-            <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="border-t border-slate-200/80 pt-4">
               {isLoading ? (
                 <div className="w-20 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
               ) : isAuthenticated && profile ? (
@@ -204,13 +204,13 @@ export default function Header() {
                         </div>
                       )}
                       <div className="text-left">
-                        <div className="font-medium text-gray-900 dark:text-white">
+                        <div className="font-medium text-slate-900">
                           {profile.display_name || profile.username}
                         </div>
                       </div>
                     </div>
                     <svg
-                      className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${
+                      className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${
                         isMobileUserMenuOpen ? "rotate-180" : ""
                       }`}
                       fill="none"
@@ -231,11 +231,11 @@ export default function Header() {
                     <div className="pl-2 space-y-1 animate-in slide-in-from-top-2 fade-in duration-200">
                       <Link
                         href="/profile"
-                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors"
+                        className="flex items-center gap-3 rounded-lg p-3 text-slate-700 transition-colors hover:bg-white"
                         onClick={closeMobileMenu}
                       >
                         <svg
-                          className="w-5 h-5 text-gray-500"
+                          className="w-5 h-5 text-slate-400"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"

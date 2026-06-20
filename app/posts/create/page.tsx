@@ -323,9 +323,9 @@ export default function CreatePostPage() {
   }
 
   return (
-    <div className="-mt-20 min-h-screen bg-[#f7f6f2] pt-20 text-slate-900">
-      <form onSubmit={(e) => handleSubmit(e)} className="min-h-screen">
-        <div className="sticky top-20 z-40 border-b border-slate-200/80 bg-[#f7f6f2]/90 backdrop-blur-xl">
+      <div className="-mt-20 min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-20 text-slate-900">
+        <form onSubmit={(e) => handleSubmit(e)} className="min-h-screen">
+        <div className="sticky top-20 z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
               <Link

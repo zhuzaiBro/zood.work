@@ -50,9 +50,9 @@ export default async function CollectionPage({
   const questions = questionsData as any[] as Question[];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pb-12">
       {/* Header */}
-      <div className="bg-gradient-to-b from-blue-50 to-gray-50 pt-20 mt-[-5rem] border-b border-gray-200 shadow-sm">
+      <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-20 mt-[-5rem]">
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8">
             <Link href="/interview" className="inline-flex items-center text-gray-500 hover:text-gray-900 transition-colors">
