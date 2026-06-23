@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import Image from 'next/image'
+import { getPublishedCoursesWithStats } from '@/lib/courses/getPublishedCoursesWithStats'
+import { formatDuration } from '@/lib/formatDuration'
 
 export const metadata = {
   title: '课程列表 - zood的小破站',
@@ -19,88 +20,33 @@ interface Course {
   status: string
   created_at: string
   lessonCount: number
-  totalDuration: number // 总时长（秒）
-}
-
-// 格式化时长（秒转 MM:SS 或 HH:MM:SS）
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '0:00'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
-  if (h > 0) {
-    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  }
-  return `${m}:${s.toString().padStart(2, '0')}`
+  totalDuration: number
 }
 
 export default async function CoursesPage() {
-  const supabase = await createClient()
+  let coursesWithStats: Course[] = []
 
-  // 获取所有已发布的课程
-  const { data: courses, error } = await supabase
-    .from('courses')
-    .select('*')
-    .eq('status', 'published')
-    .order('created_at', { ascending: false })
+  try {
+    coursesWithStats = await getPublishedCoursesWithStats()
+  } catch (error) {
+    console.error('获取课程统计失败:', error)
 
-  if (error) {
-    console.error('获取课程列表失败:', error)
-  }
+    const supabase = await createClient()
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select('*')
+      .eq('status', 'published')
+      .order('created_at', { ascending: false })
 
-  // 为每门课程统计课程数量和总时长
-  const coursesWithStats: Course[] = []
-  
-  if (courses && Array.isArray(courses)) {
-    for (const course of courses as any[]) {
-      // 获取该课程的所有章节
-      const { data: chapters } = await supabase
-        .from('chapters')
-        .select('id')
-        .eq('course_id', course.id)
-
-      const chapterIds: string[] = []
-      if (chapters && Array.isArray(chapters)) {
-        for (const ch of chapters as any[]) {
-          if (ch?.id) {
-            chapterIds.push(ch.id)
-          }
-        }
-      }
-      
-      // 获取该课程的所有课程（lessons）
-      let lessonCount = 0
-      let totalDuration = 0
-
-      if (chapterIds.length > 0) {
-        const { data: lessons } = await supabase
-          .from('lessons')
-          .select('duration')
-          .in('chapter_id', chapterIds)
-
-        if (lessons && Array.isArray(lessons)) {
-          lessonCount = lessons.length
-          for (const lesson of lessons as any[]) {
-            if (lesson?.duration) {
-              totalDuration += lesson.duration
-            }
-          }
-        }
-      }
-
-      coursesWithStats.push({
-        id: course.id,
-        title: course.title,
-        description: course.description,
-        cover_image_url: course.cover_image_url,
-        price: course.price,
-        is_free: course.is_free,
-        status: course.status,
-        created_at: course.created_at,
-        lessonCount,
-        totalDuration,
-      })
+    if (coursesError) {
+      console.error('获取课程列表失败:', coursesError)
     }
+
+    coursesWithStats = (courses ?? []).map((course) => ({
+      ...course,
+      lessonCount: 0,
+      totalDuration: 0,
+    }))
   }
 
   return (
@@ -194,7 +140,7 @@ export default async function CoursesPage() {
                           d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                         />
                       </svg>
-                      {course.lessonCount} 个课程
+                      {course.lessonCount} 个课时
                     </span>
                     <span className="flex items-center gap-1">
                       <svg

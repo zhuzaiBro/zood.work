@@ -250,6 +250,11 @@ export default function QuestionContributionForm() {
         return;
       }
 
+      if (insertError.code === 'PGRST204') {
+        setError('投稿附件字段尚未初始化，请在 Supabase 执行 .sql/add_interview_submission_attachments.sql。');
+        return;
+      }
+
       setError(insertError.message || '提交失败，请稍后再试。');
       return;
     }

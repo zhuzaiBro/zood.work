@@ -168,3 +168,6 @@ FROM pg_policies
 WHERE schemaname = 'public'
   AND tablename = 'interview_question_submissions'
 ORDER BY policyname;
+
+-- 刷新 PostgREST schema cache
+NOTIFY pgrst, 'reload schema';

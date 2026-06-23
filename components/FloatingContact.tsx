@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useProfile } from '@/store/userStore'
+import MembershipConsultationModal from '@/components/MembershipConsultationModal'
 
 export default function FloatingContact() {
   const [showQR, setShowQR] = useState(false)
   const [showVIP, setShowVIP] = useState(false)
+  const [consultationOpen, setConsultationOpen] = useState(false)
   const profile = useProfile()
 
   // 监听点击外部关闭
@@ -90,15 +92,26 @@ export default function FloatingContact() {
             <button
               onClick={() => {
                 setShowVIP(false)
-                setShowQR(true)
+                setConsultationOpen(true)
               }}
               className="w-full rounded-xl bg-[linear-gradient(135deg,#5f82ff,#8fe7ff)] px-6 py-3 font-bold text-[#04101f] shadow-[0_16px_34px_rgba(86,145,255,0.28)] transition-all hover:-translate-y-0.5"
             >
-              立即开通 / 获取兑换码
+              立即开通 / 提交咨询
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowVIP(false)
+                setShowQR(true)
+              }}
+              className="w-full rounded-xl border border-sky-300/20 px-6 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-white/5"
+            >
+              或直接扫码添加老师微信
             </button>
             
             <p className="text-[#60708f] text-xs text-center">
-              点击按钮联系客服获取兑换码
+              提交手机号和微信号后，我会主动联系你
             </p>
           </div>
         </div>
@@ -202,6 +215,12 @@ export default function FloatingContact() {
           </svg>
         </a>
       </div>
+
+      <MembershipConsultationModal
+        open={consultationOpen}
+        onClose={() => setConsultationOpen(false)}
+        source="floating_contact"
+      />
 
       {/* 主按钮 */}
       {/* <button

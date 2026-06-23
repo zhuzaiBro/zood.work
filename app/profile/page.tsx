@@ -8,6 +8,7 @@ import Image from 'next/image'
 import { useProfile, useUser, useIsAuthenticated, useUserStore } from '@/store/userStore'
 import type { Database } from '@/types/database.types'
 import QiniuUploader from '@/components/QiniuUploader'
+import MembershipConsultationModal from '@/components/MembershipConsultationModal'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -18,6 +19,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('favorites')
   const [copiedId, setCopiedId] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [membershipConsultationOpen, setMembershipConsultationOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     username: '',
@@ -249,7 +251,11 @@ export default function ProfilePage() {
                   <h3 className="text-lg font-bold mb-2">未开通永久会员</h3>
                   <p className="text-sm text-gray-300">畅刷 9000+ 高频面试题</p>
                 </div>
-                <button className="w-full bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMembershipConsultationOpen(true)}
+                  className="w-full bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
                   立即开通
                 </button>
               </div>
@@ -561,6 +567,12 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      <MembershipConsultationModal
+        open={membershipConsultationOpen}
+        onClose={() => setMembershipConsultationOpen(false)}
+        source="profile"
+      />
     </div>
   )
 }

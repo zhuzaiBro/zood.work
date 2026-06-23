@@ -9,7 +9,9 @@ import {
   Card,
   Empty,
   Input,
+  Popconfirm,
   Result,
+  Select,
   Space,
   Spin,
   Statistic,
@@ -108,6 +110,7 @@ export default function AdminUsersPage() {
   const [hasPermission, setHasPermission] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [data, setData] = useState<AdminUsersResponse | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -184,6 +187,30 @@ export default function AdminUsersPage() {
     });
   }, [data?.users, keyword]);
 
+  const updateMembership = async (userId: string, vipLevel: number) => {
+    setUpdatingUserId(userId);
+
+    try {
+      const response = await fetch('/api/admin/users/membership', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, vipLevel }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '更新会员状态失败');
+      }
+
+      message.success(result.message || '会员状态已更新');
+      await loadUsers();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '更新会员状态失败');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
   const columns: ColumnsType<AdminUserStudyRow> = [
     {
       title: '用户',
@@ -240,6 +267,18 @@ export default function AdminUsersPage() {
       },
     },
     {
+      title: '会员',
+      dataIndex: 'vipLevel',
+      key: 'vipLevel',
+      width: 120,
+      render: (vipLevel: number | null) =>
+        (vipLevel ?? 0) > 0 ? (
+          <Tag color="gold">VIP {vipLevel}</Tag>
+        ) : (
+          <Tag>普通用户</Tag>
+        ),
+    },
+    {
       title: `今天学习${data?.ranges.today.label ? ` (${data.ranges.today.label})` : ''}`,
       dataIndex: 'todayStudySeconds',
       key: 'todayStudySeconds',
@@ -276,6 +315,56 @@ export default function AdminUsersPage() {
       key: 'recentStudyAt',
       width: 140,
       render: (value: string | null) => formatDateTime(value),
+    },
+    {
+      title: '会员操作',
+      key: 'membershipAction',
+      width: 180,
+      fixed: 'right',
+      render: (_, record) => {
+        if (!record.hasProfile) {
+          return <Text type="secondary">先补齐资料</Text>;
+        }
+
+        const vip = record.vipLevel ?? 0;
+
+        if (vip > 0) {
+          return (
+            <Space direction="vertical" size={4}>
+              <Select
+                size="small"
+                value={vip}
+                disabled={updatingUserId === record.id}
+                onChange={(value) => updateMembership(record.id, value)}
+                options={[1, 2, 3, 4, 5].map((level) => ({
+                  value: level,
+                  label: `VIP ${level}`,
+                }))}
+                style={{ width: 96 }}
+              />
+              <Popconfirm
+                title="确认取消该用户会员？"
+                onConfirm={() => updateMembership(record.id, 0)}
+              >
+                <Button size="small" danger loading={updatingUserId === record.id}>
+                  取消会员
+                </Button>
+              </Popconfirm>
+            </Space>
+          );
+        }
+
+        return (
+          <Popconfirm
+            title="确认为该用户开通永久会员？"
+            onConfirm={() => updateMembership(record.id, 1)}
+          >
+            <Button type="primary" size="small" loading={updatingUserId === record.id}>
+              开通会员
+            </Button>
+          </Popconfirm>
+        );
+      },
     },
   ];
 
@@ -391,6 +480,7 @@ export default function AdminUsersPage() {
           columns={columns}
           dataSource={filteredUsers}
           loading={loading}
+          scroll={{ x: 1400 }}
           locale={{ emptyText: <Empty description="暂无用户学习数据" /> }}
           pagination={{
             pageSize: 12,

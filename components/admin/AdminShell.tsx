@@ -2,6 +2,7 @@
 
 import { Layout, Menu, Typography, Button, theme } from 'antd';
 import {
+  InboxOutlined,
   FileTextOutlined,
   HomeOutlined,
   ShoppingCartOutlined,
@@ -31,9 +32,14 @@ const menuItems = [
     label: <Link href="/admin/users">用户管理</Link>,
   },
   {
+    key: '/admin/submissions',
+    icon: <InboxOutlined />,
+    label: <Link href="/admin/submissions">用户投稿</Link>,
+  },
+  {
     key: '/admin/purchaseRequests',
     icon: <ShoppingCartOutlined />,
-    label: <Link href="/admin/purchaseRequests">购买咨询</Link>,
+    label: <Link href="/admin/purchaseRequests">咨询管理</Link>,
   },
 ];
 
