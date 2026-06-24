@@ -75,7 +75,7 @@ export default function CoursePlayer({
   courseTitle,
 }: CoursePlayerProps) {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [activeTab, setActiveTab] = useState("catalog");
   const [selectedChapter, setSelectedChapter] = useState<string>("all");
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
@@ -133,6 +133,21 @@ export default function CoursePlayer({
     ? `/learn?courseId=${encodeURIComponent(courseId)}`
     : "/learn";
   const loginHref = `/login?redirect=${encodeURIComponent(loginRedirectPath)}`;
+  const requiresLoginToWatch =
+    !isAuthLoading && (!isAuthenticated || currentLesson?.accessReason === "login");
+
+  const clearVideoPlayer = () => {
+    const video = videoRef.current;
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    if (video) {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    }
+  };
 
   const toggleChapter = (chapterId: string) => {
     const newExpanded = new Set(expandedChapters);
@@ -241,7 +256,7 @@ export default function CoursePlayer({
   };
 
   const handleLessonClick = async (lesson: Lesson) => {
-    if (lesson.accessReason === "login") {
+    if (lesson.accessReason === "login" || !isAuthenticated) {
       pendingResumeTimeRef.current = 0;
       resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
@@ -380,6 +395,8 @@ export default function CoursePlayer({
 
   // 从 API 获取课程数据
   useEffect(() => {
+    if (isAuthLoading) return;
+
     let timeoutId: NodeJS.Timeout | null = null;
 
     const fetchCourseData = async () => {
@@ -507,7 +524,7 @@ export default function CoursePlayer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId]);
+  }, [courseId, isAuthenticated, isAuthLoading]);
 
   // // 全屏切换
   // const toggleFullscreen = () => {
@@ -597,17 +614,19 @@ export default function CoursePlayer({
     const videoId = currentLesson?.videoId;
     const lessonId = currentLesson?.id;
 
-    if (!video || !lessonId || !currentLesson) {
+    if (!video || !lessonId || !currentLesson || isAuthLoading) {
       setPlayerStatus("");
       return;
     }
 
-    if (currentLesson.accessReason === "login") {
+    if (!isAuthenticated || currentLesson.accessReason === "login") {
+      clearVideoPlayer();
       setPlayerStatus("登录后即可观看当前课程视频");
       return;
     }
 
     if (currentLesson.isLocked || !videoId) {
+      clearVideoPlayer();
       setPlayerStatus("当前课时需要先开通课程权限");
       return;
     }
@@ -741,12 +760,14 @@ export default function CoursePlayer({
 
       const token = session?.access_token;
       if (!token) {
-        setPlayerStatus("未登录，仅使用本地进度恢复");
+        clearVideoPlayer();
+        setPlayerStatus("请先登录后观看视频");
+        return;
       }
 
       try {
         const response = await fetch(
-          videoApiUrl(`/api/videos/${videoId}/play?token=${encodeURIComponent(token || "")}`),
+          videoApiUrl(`/api/videos/${videoId}/play?token=${encodeURIComponent(token)}`),
           { headers: { Accept: "application/json" } }
         );
         const body = await response.json().catch(() => ({}));
@@ -856,7 +877,13 @@ export default function CoursePlayer({
       destroyHls();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLesson?.id, currentLesson?.videoId]);
+  }, [
+    currentLesson?.id,
+    currentLesson?.videoId,
+    currentLesson?.accessReason,
+    isAuthenticated,
+    isAuthLoading,
+  ]);
 
   // 快进/快退
   const skipTime = (seconds: number) => {
@@ -910,7 +937,7 @@ export default function CoursePlayer({
       ? chapters
       : chapters.filter((ch) => ch.id === selectedChapter);
 
-  if (isLoading) {
+  if (isLoading || isAuthLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -1194,21 +1221,21 @@ export default function CoursePlayer({
                       <video
                         ref={videoRef}
                         className="h-full w-full bg-black"
-                        controls
+                        controls={!requiresLoginToWatch}
                         playsInline
                         preload="metadata"
                       />
-                      {playerStatus && (
+                      {playerStatus && !requiresLoginToWatch && (
                         <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
                           {playerStatus}
                         </div>
                       )}
-                      {currentLesson.accessReason === "login" && (
+                      {requiresLoginToWatch && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center">
                           <div className="max-w-md">
                             <p className="text-lg font-semibold text-white">登录后即可观看视频课程</p>
                             <p className="mt-2 text-sm leading-6 text-white/75">
-                              默认需要登录后才能播放视频、同步学习进度并继续上次观看位置。
+                              请先登录账号，再播放视频、同步学习进度并继续上次观看位置。
                             </p>
                             <button
                               type="button"
@@ -1220,7 +1247,7 @@ export default function CoursePlayer({
                           </div>
                         </div>
                       )}
-                      {currentLesson.accessReason === "purchase" && (
+                      {!requiresLoginToWatch && currentLesson.accessReason === "purchase" && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center">
                           <div className="max-w-md">
                             <p className="text-lg font-semibold text-white">当前课时需要先开通课程权限</p>
@@ -1322,6 +1349,22 @@ export default function CoursePlayer({
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+              ) : !isAuthenticated ? (
+                <div className="aspect-video bg-black flex items-center justify-center px-6 text-center">
+                  <div className="max-w-md">
+                    <p className="text-lg font-semibold text-white">登录后即可观看视频课程</p>
+                    <p className="mt-2 text-sm leading-6 text-white/75">
+                      从左侧目录选择课时前，请先登录账号。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => router.push(loginHref)}
+                      className="mt-5 inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                    >
+                      去登录
+                    </button>
                   </div>
                 </div>
               ) : (
