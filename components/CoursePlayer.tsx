@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Hls from "hls.js";
@@ -9,10 +9,18 @@ import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { videoApiUrl } from "@/lib/videoApi";
+import CodeBlock from "@/components/CodeBlock";
+import LessonDocumentViewer from "@/components/LessonDocumentViewer";
+import { extractLessonCodeExamples } from "@/lib/lessonCodeExamples";
+import {
+  hasLessonDocument,
+  isDocumentOnlyLesson,
+} from "@/lib/lessonContent";
 
 interface Lesson {
   id: string;
   title: string;
+  description?: string | null;
   duration?: string;
   durationSeconds?: number;
   isFree: boolean;
@@ -82,6 +90,8 @@ export default function CoursePlayer({
     new Set()
   );
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [learningWorkspaceTab, setLearningWorkspaceTab] = useState("courseware");
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -135,6 +145,59 @@ export default function CoursePlayer({
   const loginHref = `/login?redirect=${encodeURIComponent(loginRedirectPath)}`;
   const requiresLoginToWatch =
     !isAuthLoading && (!isAuthenticated || currentLesson?.accessReason === "login");
+  const codeExamples = useMemo(
+    () => extractLessonCodeExamples(currentLesson?.contentMarkdown),
+    [currentLesson?.contentMarkdown],
+  );
+  const isCurrentDocumentOnly = Boolean(
+    currentLesson && isDocumentOnlyLesson(currentLesson),
+  );
+  const documentChapters = useMemo(
+    () =>
+      chapters
+        .map((chapter) => ({
+          id: chapter.id,
+          title: chapter.title,
+          lessons: chapter.lessons
+            .filter((lesson) => hasLessonDocument(lesson))
+            .map((lesson) => ({
+              id: lesson.id,
+              title: lesson.title,
+              description: lesson.description,
+              contentMarkdown: lesson.contentMarkdown!.trim(),
+              isLocked: lesson.isLocked,
+              accessReason: lesson.accessReason,
+              coursewareName: lesson.coursewareName,
+              coursewareUrl: lesson.coursewareUrl,
+            })),
+        }))
+        .filter((chapter) => chapter.lessons.length > 0),
+    [chapters],
+  );
+  const learningWorkspaceTabs = useMemo(() => {
+    if (isCurrentDocumentOnly) return [];
+
+    const tabs: { id: string; label: string }[] = [];
+
+    if (currentLesson?.coursewareUrl) {
+      tabs.push({ id: "courseware", label: "课件资料" });
+    }
+
+    if (codeExamples.length > 0) {
+      tabs.push({ id: "code", label: `代码学习 (${codeExamples.length})` });
+    }
+
+    if (currentLesson?.contentMarkdown) {
+      tabs.push({ id: "lesson", label: "课时讲义" });
+    }
+
+    return tabs;
+  }, [
+    codeExamples.length,
+    currentLesson?.contentMarkdown,
+    currentLesson?.coursewareUrl,
+    isCurrentDocumentOnly,
+  ]);
 
   const clearVideoPlayer = () => {
     const video = videoRef.current;
@@ -190,7 +253,7 @@ export default function CoursePlayer({
     const payload: LocalLessonProgress = {
       courseId,
       lessonId: lesson.id,
-      videoId: lesson.videoId,
+      videoId: lesson.videoId ?? undefined,
       currentSeconds: Math.max(0, Math.floor(currentSeconds)),
       durationSeconds: durationSeconds ? Math.floor(durationSeconds) : undefined,
       updatedAt: new Date().toISOString(),
@@ -253,6 +316,13 @@ export default function CoursePlayer({
       : localProgress?.currentSeconds ?? 0;
     resumeAppliedLessonRef.current = null;
     setCurrentLesson(targetLesson);
+  };
+
+  const selectLessonById = (lessonId: string) => {
+    const lesson = flattenLessons(chapters).find((item) => item.id === lessonId);
+    if (lesson) {
+      void handleLessonClick(lesson);
+    }
   };
 
   const handleLessonClick = async (lesson: Lesson) => {
@@ -625,9 +695,15 @@ export default function CoursePlayer({
       return;
     }
 
-    if (currentLesson.isLocked || !videoId) {
+    if (currentLesson.isLocked) {
       clearVideoPlayer();
       setPlayerStatus("当前课时需要先开通课程权限");
+      return;
+    }
+
+    if (!videoId) {
+      clearVideoPlayer();
+      setPlayerStatus("");
       return;
     }
 
@@ -932,10 +1008,19 @@ export default function CoursePlayer({
     };
   }, [showControls, isPlaying]);
 
+  useEffect(() => {
+    if (learningWorkspaceTabs.length === 0) return;
+
+    if (!learningWorkspaceTabs.some((tab) => tab.id === learningWorkspaceTab)) {
+      setLearningWorkspaceTab(learningWorkspaceTabs[0].id);
+    }
+  }, [learningWorkspaceTab, learningWorkspaceTabs]);
+
   const filteredChapters =
     selectedChapter === "all"
       ? chapters
       : chapters.filter((ch) => ch.id === selectedChapter);
+  const filteredLessons = flattenLessons(filteredChapters);
 
   if (isLoading || isAuthLoading) {
     return (
@@ -966,8 +1051,8 @@ export default function CoursePlayer({
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)]">
-      <div className="sticky top-[var(--site-header-height)] z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
-        <div className="container mx-auto px-4 py-2">
+      <div className="sticky top-[var(--site-header-height)] z-40 border-b border-slate-200/70 bg-[#f7fafe]/88 backdrop-blur-xl">
+        <div className="mx-auto max-w-[1680px] px-4 py-3 sm:px-6 xl:px-8">
           <div className="flex items-center justify-between">
             <Link
               href="/courses"
@@ -1028,35 +1113,80 @@ export default function CoursePlayer({
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex flex-col lg:flex-row gap-6">
+      <div className="mx-auto max-w-[1720px] px-4 py-6 sm:px-6 xl:px-8 xl:py-8">
+        <div
+          className={`grid gap-4 xl:gap-6 ${
+            isSidebarCollapsed
+              ? "xl:grid-cols-[72px_minmax(0,1fr)]"
+              : "xl:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]"
+          }`}
+        >
           {/* 左侧：课程目录 */}
-          <div className="w-full lg:w-80 flex-shrink-0">
+          <div className="w-full xl:sticky xl:top-[calc(var(--site-header-height)+88px)] xl:self-start">
             {/* 标签页 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-              <div className="flex flex-wrap border-b border-gray-200">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex-1 min-w-[100px] px-3 py-3 text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    }`}
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(148,163,184,0.12)]">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
+                {!isSidebarCollapsed ? (
+                  <div className="grid flex-1 grid-cols-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-3 py-3 text-sm font-semibold transition-colors ${
+                          activeTab === tab.id
+                            ? "bg-blue-50 text-blue-600 shadow-[inset_0_-2px_0_0_#2563eb]"
+                            : "text-gray-600 hover:text-gray-900 hover:bg-white/80"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-500 ring-1 ring-slate-200">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                    </svg>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarCollapsed((value) => !value)}
+                  className="ml-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-500 ring-1 ring-slate-200 transition hover:text-slate-900"
+                  aria-label={isSidebarCollapsed ? "展开学习栏" : "最小化学习栏"}
+                  title={isSidebarCollapsed ? "展开学习栏" : "最小化学习栏"}
+                >
+                  <svg
+                    className={`h-5 w-5 transition-transform ${isSidebarCollapsed ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    {tab.label}
-                  </button>
-                ))}
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
               </div>
 
               {/* 章节选择下拉框 */}
-              {activeTab === "catalog" && (
-                <div className="p-4 border-b border-gray-200">
+              {!isSidebarCollapsed && activeTab === "catalog" && (
+                <div className="border-b border-slate-200 px-5 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-500">
+                        Course Map
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        按章节浏览本课程
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                      {flattenLessons(filteredChapters).length} 节课
+                    </span>
+                  </div>
                   <select
                     value={selectedChapter}
                     onChange={(e) => setSelectedChapter(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   >
                     <option value="all">全部章节</option>
                     {chapters.map((chapter) => (
@@ -1069,22 +1199,22 @@ export default function CoursePlayer({
               )}
 
               {/* 章节列表 */}
-              {activeTab === "catalog" && (
-                <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
+              {!isSidebarCollapsed && activeTab === "catalog" && (
+                <div className="max-h-[calc(100vh-260px)] overflow-y-auto">
                   {filteredChapters.map((chapter) => (
                     <div
                       key={chapter.id}
-                      className="border-b border-gray-100 last:border-b-0"
+                      className="border-b border-slate-100 last:border-b-0"
                     >
                       <button
                         onClick={() => toggleChapter(chapter.id)}
-                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors group"
+                        className="group flex w-full items-center justify-between px-5 py-4 transition-colors hover:bg-slate-50"
                       >
-                        <span className="text-sm font-medium text-gray-900 text-left flex-1">
+                        <span className="flex-1 text-left text-sm font-semibold text-slate-900">
                           {chapter.title}
                         </span>
                         <svg
-                          className={`w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-transform flex-shrink-0 ${
+                          className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform group-hover:text-slate-600 ${
                             expandedChapters.has(chapter.id) ? "rotate-180" : ""
                           }`}
                           fill="none"
@@ -1101,31 +1231,58 @@ export default function CoursePlayer({
                       </button>
 
                       {expandedChapters.has(chapter.id) && (
-                        <div className="bg-gray-50/50">
+                        <div className="bg-slate-50/70">
                           {chapter.lessons.map((lesson, index) => (
                             <button
                               key={lesson.id}
                               onClick={() => void handleLessonClick(lesson)}
-                              className={`w-full px-6 py-3 text-left text-sm transition-colors border-b border-gray-100 last:border-b-0 ${
+                              className={`w-full border-b border-slate-100 px-5 py-4 text-left text-sm transition-colors last:border-b-0 ${
                                 currentLesson?.id === lesson.id
-                                  ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600"
+                                  ? "border-l-4 border-blue-600 bg-blue-50/80 text-blue-700"
                                   : lesson.accessReason === "login"
                                   ? "text-amber-700 hover:bg-amber-50"
                                   : lesson.isLocked
-                                  ? "text-gray-500 hover:bg-gray-100"
-                                  : "text-gray-700 hover:bg-gray-100"
+                                  ? "text-gray-500 hover:bg-slate-100"
+                                  : "text-gray-700 hover:bg-white"
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="flex-1">{lesson.title}</span>
-                                <div className="flex items-center gap-2 flex-shrink-0">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start gap-3">
+                                    <span className="mt-0.5 text-xs font-bold text-slate-400">
+                                      {String(index + 1).padStart(2, "0")}
+                                    </span>
+                                    <span className="line-clamp-2 leading-6">{lesson.title}</span>
+                                  </div>
+                                  {lesson.duration && (
+                                    <div className="mt-2 pl-7 text-xs text-gray-500">
+                                      {lesson.duration}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex flex-shrink-0 flex-wrap justify-end gap-2">
                                   {lesson.isFree && (
-                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded whitespace-nowrap">
+                                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                                       免费试听
                                     </span>
                                   )}
+                                  {lesson.coursewareUrl && (
+                                    <span className="whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
+                                      课件
+                                    </span>
+                                  )}
+                                  {isDocumentOnlyLesson(lesson) && (
+                                    <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                      文档
+                                    </span>
+                                  )}
+                                  {lesson.contentMarkdown?.includes("```") && (
+                                    <span className="whitespace-nowrap rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
+                                      代码
+                                    </span>
+                                  )}
                                   {lesson.accessReason === "login" && (
-                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 whitespace-nowrap">
+                                    <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                                       需登录
                                     </span>
                                   )}
@@ -1146,11 +1303,6 @@ export default function CoursePlayer({
                                   )}
                                 </div>
                               </div>
-                              {lesson.duration && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {lesson.duration}
-                                </div>
-                              )}
                             </button>
                           ))}
                         </div>
@@ -1160,8 +1312,31 @@ export default function CoursePlayer({
                 </div>
               )}
 
+              {isSidebarCollapsed && (
+                <div className="flex max-h-[calc(100vh-260px)] flex-col items-center gap-3 overflow-y-auto px-3 py-4">
+                  {filteredLessons.map((lesson, index) => {
+                      const isActive = currentLesson?.id === lesson.id;
+                      return (
+                        <button
+                          key={lesson.id}
+                          type="button"
+                          onClick={() => void handleLessonClick(lesson)}
+                          className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xs font-bold transition ${
+                            isActive
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                          }`}
+                          title={lesson.title}
+                        >
+                          {String(index + 1).padStart(2, "0")}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+
               {/* 其他标签页内容 */}
-              {activeTab !== "catalog" && (
+              {!isSidebarCollapsed && activeTab !== "catalog" && (
                 <div className="p-4 text-gray-600 text-sm">
                   {activeTab === "details" && (
                     <div>
@@ -1204,8 +1379,34 @@ export default function CoursePlayer({
 
           {/* 右侧：视频播放器 */}
           <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(148,163,184,0.14)]">
               {currentLesson ? (
+                isCurrentDocumentOnly ? (
+                  <div className="p-0">
+                    <LessonDocumentViewer
+                      chapters={documentChapters}
+                      activeLessonId={currentLesson.id}
+                      onSelectLesson={selectLessonById}
+                      blocked={
+                        requiresLoginToWatch ||
+                        currentLesson.accessReason === "purchase"
+                      }
+                      blockTitle={
+                        currentLesson.accessReason === "purchase"
+                          ? "当前课时需要先开通课程权限"
+                          : "登录后即可阅读文档课程"
+                      }
+                      blockDescription={
+                        currentLesson.accessReason === "purchase"
+                          ? "开通课程后即可阅读完整文档内容。"
+                          : "请先登录账号，再阅读课时文档并同步学习进度。"
+                      }
+                      loginHref={loginHref}
+                      onPurchase={handleOpenPurchaseModal}
+                      showPurchaseButton={shouldShowPurchaseButton}
+                    />
+                  </div>
+                ) : (
                 <div>
                   <div
                     ref={streamContainerRef}
@@ -1276,81 +1477,196 @@ export default function CoursePlayer({
                       )}
                       {!currentLesson.videoId && !currentLesson.accessReason && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black text-sm text-white/70">
-                          当前课程还没有绑定视频 ID
+                          当前课时暂无视频，请查看下方讲义或文档
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="p-6 border-t border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-bold text-gray-900">
-                        {currentLesson.title}
-                      </h2>
-                      {currentLesson.isFree && (
-                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
-                          免费试听
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {currentLesson.duration && (
-                        <span className="flex items-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                          时长: {currentLesson.duration}
-                        </span>
-                      )}
+                  <div className="border-t border-gray-200 p-6 lg:p-8">
+                    <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#fbfdff_0%,#f7faff_100%)] px-5 py-5 shadow-sm sm:px-6">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="max-w-3xl">
+                          <p className="text-sm font-semibold text-sky-600">当前课时</p>
+                          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 lg:text-[2rem]">
+                            {currentLesson.title}
+                          </h2>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {currentLesson.duration && (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-slate-600 ring-1 ring-slate-200">
+                              <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              时长 {currentLesson.duration}
+                            </span>
+                          )}
+                          {currentLesson.isFree && (
+                            <span className="rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700">
+                              免费试听
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     {currentLesson.description && (
-                      <p className="mt-4 text-sm leading-7 text-gray-600">
+                      <p className="mt-5 max-w-4xl text-sm leading-7 text-gray-600 lg:text-[15px]">
                         {currentLesson.description}
                       </p>
                     )}
-                    {(currentLesson.coursewareUrl || currentLesson.contentMarkdown) && (
-                      <div className="mt-6 space-y-6 rounded-2xl border border-gray-200 bg-gray-50/70 p-5">
-                        {currentLesson.coursewareUrl && (
-                          <div>
-                            <h3 className="text-sm font-semibold text-gray-900">课件资料</h3>
-                            <div className="mt-3">
-                              <a
-                                href={currentLesson.coursewareUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-                              >
-                                下载课件
-                                <span className="max-w-[220px] truncate">
-                                  {currentLesson.coursewareName || "查看资料"}
-                                </span>
-                              </a>
+                    {learningWorkspaceTabs.length > 0 && (
+                      <div className="mt-7 overflow-hidden rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#fbfdff_0%,#f6f9fd_100%)] shadow-sm">
+                        <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-sky-600">学习工作台</p>
+                              <h3 className="mt-1 text-lg font-bold text-slate-950">
+                                课件、代码与讲义
+                              </h3>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {learningWorkspaceTabs.map((tab) => (
+                                <button
+                                  key={tab.id}
+                                  type="button"
+                                  onClick={() => setLearningWorkspaceTab(tab.id)}
+                                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                    learningWorkspaceTab === tab.id
+                                      ? "bg-slate-950 text-white shadow-sm"
+                                      : "bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-900"
+                                  }`}
+                                >
+                                  {tab.label}
+                                </button>
+                              ))}
                             </div>
                           </div>
-                        )}
-                        {currentLesson.contentMarkdown && (
-                          <div>
-                            <h3 className="text-sm font-semibold text-gray-900">课时讲义</h3>
-                            <div className="prose prose-slate mt-3 max-w-none prose-headings:scroll-mt-24 prose-pre:overflow-x-auto">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {currentLesson.contentMarkdown}
-                              </ReactMarkdown>
+                        </div>
+
+                        <div className="p-5 sm:p-6 lg:p-7">
+                          {learningWorkspaceTab === "courseware" && currentLesson.coursewareUrl && (
+                            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+                              <div className="rounded-3xl border border-sky-100 bg-white p-6 shadow-sm">
+                                <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-500">
+                                  Courseware
+                                </p>
+                                <h4 className="mt-3 text-2xl font-bold text-slate-950">
+                                  {currentLesson.coursewareName || "当前课时课件"}
+                                </h4>
+                                <p className="mt-3 text-sm leading-7 text-slate-500">
+                                  这部分适合先下载资料，再配合视频与讲义一起看。你可以把课件当成本节课的结构化索引。
+                                </p>
+                                <div className="mt-6 flex flex-wrap gap-3">
+                                  <a
+                                    href={currentLesson.coursewareUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                                  >
+                                    下载课件
+                                  </a>
+                                  <a
+                                    href={currentLesson.coursewareUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                                  >
+                                    新窗口打开
+                                  </a>
+                                </div>
+                              </div>
+
+                              <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
+                                <p className="text-sm font-semibold text-slate-900">使用建议</p>
+                                <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-600">
+                                  <li>先快速浏览目录，知道本节课覆盖哪些知识点。</li>
+                                  <li>看视频时同步在课件上定位章节，形成自己的知识地图。</li>
+                                  <li>课后回看时优先翻课件，再回视频找重点片段。</li>
+                                </ul>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+
+                          {learningWorkspaceTab === "code" && (
+                            <div className="space-y-5">
+                              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-500">
+                                  Code Practice
+                                </p>
+                                <h4 className="mt-2 text-2xl font-bold text-slate-950">
+                                  从讲义里拆出来的代码片段
+                                </h4>
+                                <p className="mt-3 text-sm leading-7 text-slate-500">
+                                  这一栏会自动提取课时讲义中的代码块，方便你单独刷代码，不用在整篇讲义里来回找。
+                                </p>
+                              </div>
+
+                              <div className="space-y-4">
+                                {codeExamples.map((example, index) => (
+                                  <div
+                                    key={example.id}
+                                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                                      <div>
+                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                                          Snippet {String(index + 1).padStart(2, "0")}
+                                        </p>
+                                        <h5 className="mt-1 text-lg font-bold text-slate-950">
+                                          {example.title}
+                                        </h5>
+                                      </div>
+                                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                        {example.language}
+                                      </span>
+                                    </div>
+                                    <div className="px-5 py-5">
+                                      <CodeBlock className={`language-${example.language}`}>
+                                        {example.code}
+                                      </CodeBlock>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {learningWorkspaceTab === "lesson" && currentLesson.contentMarkdown && (
+                            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                              <div className="mb-4">
+                                <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-500">
+                                  Lesson Notes
+                                </p>
+                                <h4 className="mt-2 text-2xl font-bold text-slate-950">课时讲义</h4>
+                              </div>
+                              <div className="document-prose prose prose-slate max-w-none prose-headings:scroll-mt-24 prose-pre:overflow-x-auto">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    code: CodeBlock as any,
+                                  }}
+                                >
+                                  {currentLesson.contentMarkdown}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
+                          )}
+
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
+                )
               ) : !isAuthenticated ? (
                 <div className="aspect-video bg-black flex items-center justify-center px-6 text-center">
                   <div className="max-w-md">

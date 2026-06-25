@@ -47,11 +47,19 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!chapterId || !title || !title.trim()) {
-      return NextResponse.json({ error: '章节ID和视频标题不能为空' }, { status: 400 });
+      return NextResponse.json({ error: '章节ID和课时标题不能为空' }, { status: 400 });
     }
 
-    if (!videoId || !videoUrl) {
-      return NextResponse.json({ error: '视频ID和URL不能为空' }, { status: 400 });
+    const normalizedMarkdown = normalizeOptionalText(contentMarkdown);
+    const normalizedHtml = normalizeOptionalText(contentHtml);
+    const hasDocument = Boolean(normalizedMarkdown || normalizedHtml);
+    const hasVideo = Boolean(videoId && videoUrl);
+
+    if (!hasVideo && !hasDocument) {
+      return NextResponse.json(
+        { error: '请绑定视频，或填写课时讲义以创建纯文档课时' },
+        { status: 400 },
+      );
     }
 
     // 转换 duration 为整数（秒）
@@ -79,11 +87,11 @@ export async function POST(request: NextRequest) {
         description: normalizeOptionalText(description),
         courseware_name: normalizeOptionalText(coursewareName),
         courseware_url: normalizeOptionalText(coursewareUrl),
-        content_html: normalizeOptionalText(contentHtml),
-        content_markdown: normalizeOptionalText(contentMarkdown),
-        video_id: videoId,
-        video_url: videoUrl,
-        duration: durationInt,
+        content_html: normalizedHtml,
+        content_markdown: normalizedMarkdown,
+        video_id: hasVideo ? videoId : null,
+        video_url: hasVideo ? videoUrl : null,
+        duration: hasVideo ? durationInt : null,
         is_free: isFree || false,
         is_locked: isLocked !== undefined ? isLocked : !isFree,
         sort_order: sortOrder || 0,
@@ -131,6 +139,9 @@ export async function PATCH(request: NextRequest) {
       coursewareUrl,
       contentHtml,
       contentMarkdown,
+      videoId,
+      videoUrl,
+      duration,
       isFree,
       isLocked,
       sortOrder,
@@ -144,20 +155,60 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '课时标题不能为空' }, { status: 400 });
     }
 
+    const normalizedMarkdown = normalizeOptionalText(contentMarkdown);
+    const normalizedHtml = normalizeOptionalText(contentHtml);
+    const hasDocument = Boolean(normalizedMarkdown || normalizedHtml);
+    const hasVideoFields = 'videoId' in body || 'videoUrl' in body;
+    const hasVideo = hasVideoFields
+      ? Boolean(videoId && videoUrl)
+      : undefined;
+
+    if (hasVideoFields && !hasVideo && !hasDocument) {
+      return NextResponse.json(
+        { error: '请绑定视频，或保留课时讲义作为纯文档课时' },
+        { status: 400 },
+      );
+    }
+
+    let durationInt: number | null | undefined = undefined;
+    if ('duration' in body) {
+      durationInt = null;
+      if (duration) {
+        if (typeof duration === 'number') {
+          durationInt = Math.round(duration);
+        } else if (typeof duration === 'string') {
+          const parsed = parseFloat(duration);
+          if (!isNaN(parsed)) {
+            durationInt = Math.round(parsed);
+          }
+        }
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      title: String(title).trim(),
+      description: normalizeOptionalText(description),
+      courseware_name: normalizeOptionalText(coursewareName),
+      courseware_url: normalizeOptionalText(coursewareUrl),
+      content_html: normalizedHtml,
+      content_markdown: normalizedMarkdown,
+      is_free: Boolean(isFree),
+      is_locked: typeof isLocked === 'boolean' ? isLocked : !Boolean(isFree),
+      sort_order: typeof sortOrder === 'number' ? sortOrder : 0,
+    };
+
+    if (hasVideoFields) {
+      updatePayload.video_id = hasVideo ? videoId : null;
+      updatePayload.video_url = hasVideo ? videoUrl : null;
+      updatePayload.duration = hasVideo ? durationInt ?? null : null;
+    } else if ('duration' in body) {
+      updatePayload.duration = durationInt ?? null;
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('lessons')
-      .update({
-        title: String(title).trim(),
-        description: normalizeOptionalText(description),
-        courseware_name: normalizeOptionalText(coursewareName),
-        courseware_url: normalizeOptionalText(coursewareUrl),
-        content_html: normalizeOptionalText(contentHtml),
-        content_markdown: normalizeOptionalText(contentMarkdown),
-        is_free: Boolean(isFree),
-        is_locked: typeof isLocked === 'boolean' ? isLocked : !Boolean(isFree),
-        sort_order: typeof sortOrder === 'number' ? sortOrder : 0,
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();

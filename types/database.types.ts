@@ -280,6 +280,229 @@ export type Database = {
         }
         Relationships: []
       }
+      job_listings: {
+        Row: {
+          apply_count: number
+          base_location: string | null
+          benefits: string | null
+          company_external_id: string | null
+          company_intro: string | null
+          company_logo: string | null
+          company_name: string | null
+          company_size: string | null
+          company_website: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          external_id: string
+          extra_content: string | null
+          first_synced_at: string
+          id: string
+          is_top_job: boolean
+          last_synced_at: string
+          location: string | null
+          max_salary: number | null
+          min_salary: number | null
+          office_mode_id: number | null
+          office_mode_name: string | null
+          phone: string | null
+          position_id: number | null
+          publisher: Json | null
+          raw_data: Json | null
+          requirements: string | null
+          source_created_at: string | null
+          source_id: string
+          source_url: string | null
+          status: number
+          tags: Json
+          telegram: string | null
+          title: string | null
+          updated_at: string
+          urgency_id: number | null
+          urgency_name: string | null
+          view_count: number
+          wechat: string | null
+          work_type_id: number | null
+          work_type_name: string | null
+        }
+        Insert: {
+          apply_count?: number
+          base_location?: string | null
+          benefits?: string | null
+          company_external_id?: string | null
+          company_intro?: string | null
+          company_logo?: string | null
+          company_name?: string | null
+          company_size?: string | null
+          company_website?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          external_id: string
+          extra_content?: string | null
+          first_synced_at?: string
+          id?: string
+          is_top_job?: boolean
+          last_synced_at?: string
+          location?: string | null
+          max_salary?: number | null
+          min_salary?: number | null
+          office_mode_id?: number | null
+          office_mode_name?: string | null
+          phone?: string | null
+          position_id?: number | null
+          publisher?: Json | null
+          raw_data?: Json | null
+          requirements?: string | null
+          source_created_at?: string | null
+          source_id: string
+          source_url?: string | null
+          status?: number
+          tags?: Json
+          telegram?: string | null
+          title?: string | null
+          updated_at?: string
+          urgency_id?: number | null
+          urgency_name?: string | null
+          view_count?: number
+          wechat?: string | null
+          work_type_id?: number | null
+          work_type_name?: string | null
+        }
+        Update: {
+          apply_count?: number
+          base_location?: string | null
+          benefits?: string | null
+          company_external_id?: string | null
+          company_intro?: string | null
+          company_logo?: string | null
+          company_name?: string | null
+          company_size?: string | null
+          company_website?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          external_id?: string
+          extra_content?: string | null
+          first_synced_at?: string
+          id?: string
+          is_top_job?: boolean
+          last_synced_at?: string
+          location?: string | null
+          max_salary?: number | null
+          min_salary?: number | null
+          office_mode_id?: number | null
+          office_mode_name?: string | null
+          phone?: string | null
+          position_id?: number | null
+          publisher?: Json | null
+          raw_data?: Json | null
+          requirements?: string | null
+          source_created_at?: string | null
+          source_id?: string
+          source_url?: string | null
+          status?: number
+          tags?: Json
+          telegram?: string | null
+          title?: string | null
+          updated_at?: string
+          urgency_id?: number | null
+          urgency_name?: string | null
+          view_count?: number
+          wechat?: string | null
+          work_type_id?: number | null
+          work_type_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_listings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "job_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_sources: {
+        Row: {
+          base_url: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sync_config: Json
+          updated_at: string
+        }
+        Insert: {
+          base_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sync_config?: Json
+          updated_at?: string
+        }
+        Update: {
+          base_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sync_config?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      job_sync_runs: {
+        Row: {
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          jobs_created: number
+          jobs_failed: number
+          jobs_fetched: number
+          jobs_skipped: number
+          source_id: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          jobs_created?: number
+          jobs_failed?: number
+          jobs_fetched?: number
+          jobs_skipped?: number
+          source_id?: string | null
+          started_at?: string
+          status: string
+        }
+        Update: {
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          jobs_created?: number
+          jobs_failed?: number
+          jobs_fetched?: number
+          jobs_skipped?: number
+          source_id?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_sync_runs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "job_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_cate_relations: {
         Row: {
           cate_id: string

@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '@/types/user';
 import LessonUploadModal from '@/components/admin/LessonUploadModal';
+import { isDocumentOnlyLesson } from '@/lib/lessonContent';
 import {
   App,
   Avatar,
@@ -587,6 +588,20 @@ export default function CourseDetailPage() {
       key: 'isFree',
       width: 80,
       render: (_, record) => (record.isFree ? <Tag color="blue">免费</Tag> : '-'),
+    },
+    {
+      title: '类型',
+      key: 'lessonType',
+      width: 100,
+      render: (_, record) => {
+        if (isDocumentOnlyLesson(record)) {
+          return <Tag color="green">文档</Tag>;
+        }
+        if (record.videoId) {
+          return <Tag color="blue">视频</Tag>;
+        }
+        return <Tag>未配置</Tag>;
+      },
     },
     {
       title: 'Video ID',

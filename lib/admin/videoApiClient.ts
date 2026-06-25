@@ -80,7 +80,7 @@ export async function getVideoDetail(
   });
 }
 
-export async function saveLessonWithVideo(options: {
+export async function saveLesson(options: {
   lessonId?: string;
   chapterId: string;
   title: string;
@@ -89,7 +89,7 @@ export async function saveLessonWithVideo(options: {
   coursewareUrl?: string | null;
   contentHtml?: string | null;
   contentMarkdown?: string | null;
-  videoId: string;
+  videoId?: string | null;
   duration?: number | null;
   isFree: boolean;
   sortOrder: number;
@@ -109,25 +109,31 @@ export async function saveLessonWithVideo(options: {
     sortOrder,
   } = options;
 
+  const hasVideo = Boolean(videoId?.trim());
+  const payload: Record<string, unknown> = {
+    id: lessonId,
+    chapterId,
+    title,
+    description,
+    coursewareName: coursewareName ?? null,
+    coursewareUrl: coursewareUrl ?? null,
+    contentHtml: contentHtml ?? null,
+    contentMarkdown: contentMarkdown ?? null,
+    isFree,
+    isLocked: !isFree,
+    sortOrder,
+  };
+
+  if (lessonId || hasVideo) {
+    payload.videoId = hasVideo ? videoId : null;
+    payload.videoUrl = hasVideo ? videoApiUrl(`/api/videos/${videoId}`) : null;
+    payload.duration = hasVideo ? duration ?? null : null;
+  }
+
   const lessonResponse = await fetch('/api/lessons', {
     method: lessonId ? 'PATCH' : 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: lessonId,
-      chapterId,
-      title,
-      description,
-      coursewareName: coursewareName ?? null,
-      coursewareUrl: coursewareUrl ?? null,
-      contentHtml: contentHtml ?? null,
-      contentMarkdown: contentMarkdown ?? null,
-      videoId,
-      videoUrl: videoApiUrl(`/api/videos/${videoId}`),
-      duration: duration ?? null,
-      isFree,
-      isLocked: !isFree,
-      sortOrder,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!lessonResponse.ok) {
@@ -136,6 +142,23 @@ export async function saveLessonWithVideo(options: {
       '保存课时失败: ' + ((errorData as { error?: string }).error || '未知错误'),
     );
   }
+}
+
+export async function saveLessonWithVideo(options: {
+  lessonId?: string;
+  chapterId: string;
+  title: string;
+  description: string;
+  coursewareName?: string | null;
+  coursewareUrl?: string | null;
+  contentHtml?: string | null;
+  contentMarkdown?: string | null;
+  videoId: string;
+  duration?: number | null;
+  isFree: boolean;
+  sortOrder: number;
+}) {
+  return saveLesson(options);
 }
 
 export function formatVideoDuration(seconds?: number | null) {

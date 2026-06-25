@@ -3,16 +3,25 @@
 import { useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { isRunnableLanguage } from '@/lib/codePlayground'
 
 interface CodeBlockProps {
   inline?: boolean
   className?: string
   children?: React.ReactNode
   node?: any
+  onRunCode?: (payload: { code: string; language: string; title: string }) => void
   [key: string]: any
 }
 
-export default function CodeBlock({ inline, className, children, node, ...props }: CodeBlockProps) {
+export default function CodeBlock({
+  inline,
+  className,
+  children,
+  node,
+  onRunCode,
+  ...props
+}: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
   
   // 从 className 中提取语言类型（如 "language-javascript" -> "javascript"）
@@ -85,6 +94,16 @@ export default function CodeBlock({ inline, className, children, node, ...props 
   }
 
   const displayLanguage = languageNames[language] || language.toUpperCase() || 'Plain Text'
+  const canRun = Boolean(onRunCode && isRunnableLanguage(language))
+
+  const handleRun = () => {
+    if (!onRunCode || !canRun) return
+    onRunCode({
+      code,
+      language,
+      title: displayLanguage,
+    })
+  }
 
   return (
     <div className="not-prose my-7 overflow-hidden rounded-2xl border border-slate-200 bg-[#f7f8fa] shadow-sm">
@@ -102,6 +121,18 @@ export default function CodeBlock({ inline, className, children, node, ...props 
             自动换行
           </span>
           <span className="hidden h-5 w-px bg-slate-200 sm:block" />
+          {canRun && (
+            <button
+              onClick={handleRun}
+              className="group inline-flex items-center gap-1.5 rounded-full bg-[linear-gradient(135deg,#2563eb_0%,#6366f1_48%,#a855f7_100%)] px-3 py-1.5 text-sm font-semibold text-white shadow-[0_6px_20px_rgba(99,102,241,0.45)] transition hover:scale-[1.02] hover:shadow-[0_8px_26px_rgba(168,85,247,0.5)] focus:outline-none focus:ring-2 focus:ring-violet-200 active:scale-[0.98]"
+              title="在线运行这段代码"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 font-mono text-[11px] leading-none">
+                &gt;_
+              </span>
+              <span>在线运行</span>
+            </button>
+          )}
           <button
             onClick={handleCopy}
             className="rounded-lg px-2 py-1 text-sm font-medium text-slate-500 transition hover:bg-white hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"

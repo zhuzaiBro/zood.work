@@ -27,11 +27,13 @@ import {
   formatVideoDuration,
   getVideoDetail,
   listVideos,
+  saveLesson,
   saveLessonWithVideo,
   type VideoRecord,
 } from '@/lib/admin/videoApiClient';
+import { hasLessonDocument, hasLessonVideo } from '@/lib/lessonContent';
 
-type VideoSourceMode = 'upload' | 'reuse';
+type LessonSourceMode = 'upload' | 'reuse' | 'document';
 
 const Editor = dynamic(() => import('@/components/Editor'), { ssr: false });
 
@@ -81,7 +83,7 @@ export default function LessonUploadModal({
   const supabase = createClient();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [videoMode, setVideoMode] = useState<VideoSourceMode>('upload');
+  const [lessonMode, setLessonMode] = useState<LessonSourceMode>('upload');
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [chunkProgress, setChunkProgress] = useState({ uploaded: 0, total: 0, percent: 0 });
@@ -114,6 +116,18 @@ export default function LessonUploadModal({
     [supabase, message],
   );
 
+  const resolveInitialLessonMode = (): LessonSourceMode => {
+    if (mode === 'edit' && lesson) {
+      if (!hasLessonVideo(lesson) && hasLessonDocument(lesson)) {
+        return 'document';
+      }
+      if (lesson.videoId) {
+        return 'reuse';
+      }
+    }
+    return 'upload';
+  };
+
   useEffect(() => {
     if (!open) return;
     form.setFieldsValue({
@@ -124,7 +138,7 @@ export default function LessonUploadModal({
       sortOrder: lesson?.sortOrder ?? defaultSortOrder,
       isFree: lesson?.isFree ?? false,
     });
-    setVideoMode(mode === 'edit' ? 'reuse' : 'upload');
+    setLessonMode(resolveInitialLessonMode());
     setVideoFile(null);
     setCoursewareFile(null);
     setSelectedVideoId(lesson?.videoId ?? null);
@@ -136,10 +150,10 @@ export default function LessonUploadModal({
   }, [open, defaultSortOrder, form, lesson, mode]);
 
   useEffect(() => {
-    if (open && (videoMode === 'reuse' || mode === 'edit')) {
+    if (open && (lessonMode === 'reuse' || (mode === 'edit' && lesson?.videoId))) {
       loadVideos(1);
     }
-  }, [open, videoMode, loadVideos, mode]);
+  }, [open, lessonMode, loadVideos, mode, lesson?.videoId]);
 
   const filteredVideos = useMemo(() => {
     const keyword = videoSearch.trim().toLowerCase();
@@ -191,7 +205,41 @@ export default function LessonUploadModal({
       }
     }
 
-    if (videoMode === 'upload') {
+    if (lessonMode === 'document') {
+      if (!contentMarkdown.trim() && !contentHtml.trim()) {
+        message.warning('纯文档课时请填写课时讲义');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await saveLesson({
+          lessonId: mode === 'edit' ? lesson?.id : undefined,
+          chapterId,
+          title: values.title.trim(),
+          description: values.description?.trim() || '',
+          coursewareName: finalCoursewareName || null,
+          coursewareUrl: finalCoursewareUrl || null,
+          contentHtml: contentHtml.trim() || null,
+          contentMarkdown: contentMarkdown.trim() || null,
+          videoId: null,
+          duration: null,
+          isFree: values.isFree,
+          sortOrder: values.sortOrder ?? 0,
+        });
+
+        message.success(mode === 'edit' ? '文档课时更新成功' : '文档课时创建成功');
+        onSuccess();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '保存失败';
+        message.error(msg);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (lessonMode === 'upload') {
       if (!videoFile) {
         message.warning('请选择视频文件');
         return;
@@ -304,7 +352,13 @@ export default function LessonUploadModal({
   ];
 
   const okText =
-    videoMode === 'upload'
+    lessonMode === 'document'
+      ? loading
+        ? '保存中…'
+        : mode === 'edit'
+          ? '保存文档课时'
+          : '创建文档课时'
+      : lessonMode === 'upload'
       ? loading
         ? `上传中 ${uploadProgress}%`
         : mode === 'edit'
@@ -368,7 +422,15 @@ export default function LessonUploadModal({
             <Button disabled={loading}>选择课件文件</Button>
           </Upload>
         </Form.Item>
-        <Form.Item label="课时讲义 / 富文本">
+        <Form.Item
+          label="课时讲义 / 富文本"
+          required={lessonMode === 'document'}
+          extra={
+            lessonMode === 'document'
+              ? '纯文档课时必须填写讲义，学员将在学习页以文档形式阅读。'
+              : '可选。填写后学员可在视频下方查看讲义，或配合代码学习 Tab。'
+          }
+        >
           <Editor
             value={contentHtml || contentMarkdown}
             onChange={(html, markdown) => {
@@ -377,18 +439,40 @@ export default function LessonUploadModal({
             }}
           />
         </Form.Item>
-        <Form.Item label="视频来源" required>
+        <Form.Item
+          label="课时类型"
+          required={lessonMode !== 'document'}
+        >
           <Tabs
-            activeKey={videoMode}
+            activeKey={lessonMode}
             onChange={(key) => {
-              if (mode === 'edit' && key === 'upload') {
+              const nextMode = key as LessonSourceMode;
+              if (mode === 'edit' && nextMode === 'upload') {
                 setSelectedVideoId(null);
               }
-              setVideoMode(key as VideoSourceMode);
-              setSelectedVideoId(null);
-              setVideoFile(null);
+              setLessonMode(nextMode);
+              if (nextMode !== 'reuse') {
+                setSelectedVideoId(null);
+              }
+              if (nextMode !== 'upload') {
+                setVideoFile(null);
+              }
             }}
             items={[
+              {
+                key: 'document',
+                label: '纯文档课时',
+                children: (
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-sm leading-6 text-slate-600">
+                    不需要上传视频。填写上方「课时讲义」即可，学员在学习页会以文档阅读模式查看本课时。
+                    {mode === 'edit' && lesson?.videoId ? (
+                      <p className="mt-2 text-amber-700">
+                        保存后将会移除当前课时绑定的视频，改为纯文档课时。
+                      </p>
+                    ) : null}
+                  </div>
+                ),
+              },
               {
                 key: 'upload',
                 label: mode === 'edit' ? '替换为新视频' : '上传新视频',
@@ -467,7 +551,7 @@ export default function LessonUploadModal({
         </Form.Item>
       </Form>
 
-      {loading && videoMode === 'upload' && uploadProgress > 0 && (
+      {loading && lessonMode === 'upload' && uploadProgress > 0 && (
         <Progress
           percent={uploadProgress}
           status="active"
