@@ -1125,7 +1125,7 @@ export default function CoursePlayer({
             <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(148,163,184,0.12)]">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
                 {!isSidebarCollapsed ? (
-                  <div className="grid flex-1 grid-cols-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="grid flex-1 grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                     {tabs.map((tab) => (
                       <button
                         key={tab.id}
