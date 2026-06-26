@@ -123,8 +123,6 @@ export default function CoursePlayer({
   const tabs = [
     { id: "catalog", label: "课程目录" },
     { id: "details", label: "课程详情" },
-    { id: "teacher", label: "教师简介" },
-    { id: "mirror", label: "课程镜像" },
     { id: "homework", label: "随堂作业" },
     { id: "faq", label: "常见问题" },
   ];
@@ -1346,20 +1344,6 @@ export default function CoursePlayer({
                       <h3 className="font-medium mb-2">课程详情</h3>
                       <p className="text-gray-500">
                         这里显示课程的详细介绍、学习目标、适用人群等信息。
-                      </p>
-                    </div>
-                  )}
-                  {activeTab === "teacher" && (
-                    <div>
-                      <h3 className="font-medium mb-2">教师简介</h3>
-                      <p className="text-gray-500">这里显示教师的介绍信息。</p>
-                    </div>
-                  )}
-                  {activeTab === "mirror" && (
-                    <div>
-                      <h3 className="font-medium mb-2">课程镜像</h3>
-                      <p className="text-gray-500">
-                        这里显示课程镜像相关信息。
                       </p>
                     </div>
                   )}
