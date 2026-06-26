@@ -60,25 +60,25 @@ export default async function CoursesPage() {
         </div>
 
         {coursesWithStats && coursesWithStats.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {coursesWithStats.map((course: Course) => (
               <Link
                 key={course.id}
                 href={`/learn?courseId=${course.id}`}
-                className="group bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 dark:border-gray-700"
+                className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
               >
-                {/* 封面图片 */}
-                <div className="relative w-full h-48 bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                {/* 封面：固定 4:3 */}
+                <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden">
                   {course.cover_image_url ? (
                     <img
                       src={course.cover_image_url}
                       alt={course.title}
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500">
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500">
                       <svg
-                        className="w-16 h-16 text-white opacity-50"
+                        className="h-16 w-16 text-white opacity-50"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -98,37 +98,39 @@ export default async function CoursesPage() {
                       </svg>
                     </div>
                   )}
-                  {/* 状态标签 */}
-                  <div className="absolute top-2 right-2">
+
+                  {/* 封面底部：全透明 → 白色，衔接到下方信息区 */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent to-white dark:to-gray-900" />
+
+                  <div className="absolute right-3 top-3 z-10">
                     {course.is_free ? (
-                      <span className="bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
+                      <span className="rounded-full bg-green-500/95 px-2.5 py-1 text-xs font-semibold text-white shadow-md">
                         免费
                       </span>
                     ) : (
-                      <span className="bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
+                      <span className="rounded-full bg-blue-500/95 px-2.5 py-1 text-xs font-semibold text-white shadow-md">
                         ¥{course.price}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* 课程信息 */}
-                <div className="p-5">
-                  <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2">
+                {/* 底部信息：白底 */}
+                <div className="relative bg-white px-5 pb-5 pt-3 dark:bg-gray-900">
+                  <h2 className="mb-2 line-clamp-2 text-lg font-bold leading-snug text-gray-900 transition-colors group-hover:text-sky-600 dark:text-white dark:group-hover:text-sky-400">
                     {course.title}
                   </h2>
-                  
+
                   {course.description && (
-                    <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-2 text-sm">
+                    <p className="mb-4 line-clamp-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
                       {course.description}
                     </p>
                   )}
 
-                  {/* 课程统计信息 */}
-                  <div className="flex items-center gap-4 mb-4 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
                     <span className="flex items-center gap-1">
                       <svg
-                        className="w-4 h-4"
+                        className="h-4 w-4 shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -145,7 +147,7 @@ export default async function CoursesPage() {
                     {course.totalDuration >= 3600 && (
                       <span className="flex items-center gap-1">
                         <svg
-                          className="w-4 h-4"
+                          className="h-4 w-4 shrink-0"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -163,10 +165,10 @@ export default async function CoursesPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                    <span className="flex items-center gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-1 text-gray-500">
                       <svg
-                        className="w-4 h-4"
+                        className="h-4 w-4 shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -184,7 +186,7 @@ export default async function CoursesPage() {
                         day: 'numeric',
                       })}
                     </span>
-                    <span className="text-blue-600 dark:text-blue-400 font-medium">
+                    <span className="font-semibold text-sky-600 transition-colors group-hover:text-sky-700 dark:text-sky-400 dark:group-hover:text-sky-300">
                       开始学习 →
                     </span>
                   </div>

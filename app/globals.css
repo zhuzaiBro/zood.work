@@ -314,6 +314,90 @@ body {
     @apply italic text-gray-700 dark:text-gray-300;
   }
 
+  /* 面试题详情页：紧凑排版，覆盖全局 .prose 大标题 */
+  .question-prose.prose {
+    @apply text-[15px] leading-7 text-slate-700;
+  }
+
+  .question-prose.prose h1,
+  .question-prose.prose h2,
+  .question-prose.prose h3,
+  .question-prose.prose h4,
+  .question-prose.prose h5,
+  .question-prose.prose h6 {
+    @apply border-0 p-0 pl-0 text-slate-900;
+  }
+
+  .question-prose.prose h1 {
+    @apply mt-8 mb-3 text-xl font-bold;
+  }
+
+  .question-prose.prose h2 {
+    @apply mt-8 mb-3 text-lg font-bold;
+  }
+
+  .question-prose.prose h3 {
+    @apply mt-6 mb-2 text-base font-semibold;
+  }
+
+  .question-prose.prose h3::before,
+  .question-prose.prose h4::before {
+    @apply hidden;
+  }
+
+  .question-prose.prose h4 {
+    @apply mt-4 mb-2 text-[15px] font-semibold text-slate-800;
+  }
+
+  .question-prose.prose h5,
+  .question-prose.prose h6 {
+    @apply mt-3 mb-2 text-sm font-semibold text-slate-800;
+  }
+
+  .question-prose.prose p {
+    @apply my-3 text-[15px] leading-7 text-slate-600;
+  }
+
+  .question-prose.prose ul,
+  .question-prose.prose ol {
+    @apply my-3 pl-5 text-[15px] leading-7;
+  }
+
+  .question-prose.prose li {
+    @apply my-1;
+  }
+
+  .question-prose.prose ul > li::before,
+  .question-prose.prose ul > li::after,
+  .question-prose.prose ol > li::before,
+  .question-prose.prose ol > li::after {
+    @apply hidden;
+  }
+
+  .question-prose.prose ul > li {
+    @apply list-disc pl-1;
+  }
+
+  .question-prose.prose ol > li {
+    @apply list-decimal pl-1;
+  }
+
+  .question-prose.prose strong {
+    @apply font-semibold text-slate-900;
+  }
+
+  .question-prose.prose code:not(pre code) {
+    @apply rounded-md border border-slate-200/80 bg-slate-100 px-1.5 py-0.5 text-[0.9em] font-medium text-slate-800;
+  }
+
+  .question-prose.prose pre {
+    @apply my-4 text-sm;
+  }
+
+  .question-prose.prose hr {
+    @apply my-6 border-slate-200;
+  }
+
   .document-prose {
     @apply text-slate-700;
   }
@@ -514,5 +598,44 @@ body {
     background-color: #374151 !important;
     border-color: #4b5563 !important;
     color: #e5e7eb !important;
+  }
+}
+
+@layer utilities {
+  .course-card-stroke {
+    color: #fff;
+    text-shadow:
+      0 0 1px rgba(0, 0, 0, 1),
+      0 1px 2px rgba(0, 0, 0, 0.95),
+      1px 0 0 rgba(0, 0, 0, 0.9),
+      -1px 0 0 rgba(0, 0, 0, 0.9),
+      0 -1px 0 rgba(0, 0, 0, 0.9),
+      0 1px 0 rgba(0, 0, 0, 0.9),
+      1px 1px 0 rgba(0, 0, 0, 0.85),
+      -1px -1px 0 rgba(0, 0, 0, 0.85),
+      1px -1px 0 rgba(0, 0, 0, 0.85),
+      -1px 1px 0 rgba(0, 0, 0, 0.85);
+  }
+
+  .course-card-stroke-muted {
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow:
+      0 0 1px rgba(0, 0, 0, 1),
+      0 1px 3px rgba(0, 0, 0, 0.9),
+      1px 0 0 rgba(0, 0, 0, 0.85),
+      -1px 0 0 rgba(0, 0, 0, 0.85),
+      0 -1px 0 rgba(0, 0, 0, 0.85),
+      0 1px 0 rgba(0, 0, 0, 0.85);
+  }
+
+  .course-card-stroke-accent {
+    color: #bae6fd;
+    text-shadow:
+      0 0 1px rgba(0, 0, 0, 1),
+      0 1px 2px rgba(0, 0, 0, 0.95),
+      1px 0 0 rgba(0, 0, 0, 0.9),
+      -1px 0 0 rgba(0, 0, 0, 0.9),
+      0 -1px 0 rgba(0, 0, 0, 0.9),
+      0 1px 0 rgba(0, 0, 0, 0.9);
   }
 }

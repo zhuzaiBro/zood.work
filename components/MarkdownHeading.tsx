@@ -22,7 +22,11 @@ export default function MarkdownHeading({ level, children, ...props }: HeadingPr
   const Tag = `h${level}` as keyof JSX.IntrinsicElements
 
   return (
-    <Tag id={id} className="scroll-mt-20" {...props}>
+    <Tag
+      id={id}
+      className="scroll-mt-[calc(var(--site-header-height)+1.5rem)]"
+      {...props}
+    >
       {children}
     </Tag>
   )

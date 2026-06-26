@@ -43,7 +43,7 @@ export default async function QuestionLayout({
           
           {/* Left Sidebar: Question List */}
           <aside className="w-full lg:w-80 flex-shrink-0">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden sticky top-24 max-h-[calc(100vh-120px)] flex flex-col">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden sticky top-[calc(var(--site-header-height)+1.5rem)] max-h-[calc(100vh-var(--site-header-height)-3rem)] flex flex-col">
               <div className="p-3 border-b border-gray-100 bg-gray-50/50">
                 <div className="relative">
                   <input 

@@ -87,7 +87,7 @@ export default async function QuestionPage({
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
           {/* Title */}
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 leading-tight">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 leading-snug">
             {question.title}
           </h1>
 
@@ -169,7 +169,7 @@ export default async function QuestionPage({
           </div>
 
           {/* Content Body */}
-          <div className="prose prose-blue max-w-none prose-headings:font-bold prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4 prose-p:text-gray-600 prose-p:leading-7 prose-pre:bg-gray-800 prose-pre:border prose-pre:border-gray-700 relative">
+          <div className="question-prose prose prose-slate max-w-none relative">
             {!hasAccess ? (
               <div className="py-24 px-6 text-center bg-gray-50 rounded-xl border border-gray-200 flex flex-col items-center justify-center relative overflow-hidden">
                 {/* 背景装饰 */}
@@ -238,8 +238,10 @@ export default async function QuestionPage({
       </main>
 
       {/* Right Sidebar: TOC */}
-      <aside className="w-full lg:w-64 flex-shrink-0 hidden lg:block">
-        {question.content && <QuestionToc content={question.content} />}
+      <aside className="hidden w-56 flex-shrink-0 xl:block 2xl:w-64">
+        {question.content && hasAccess && (
+          <QuestionToc content={question.content} />
+        )}
       </aside>
     </>
   );
