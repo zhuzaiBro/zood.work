@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import FloatingContact from '@/components/FloatingContact';
+import ChatDialog from '@/components/ChatDialog';
 import { isLightContentPage } from '@/lib/layout';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -29,7 +29,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <Footer />
-      <FloatingContact />
+      <ChatDialog />
     </div>
   );
 }

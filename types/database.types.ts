@@ -503,6 +503,41 @@ export type Database = {
           },
         ]
       }
+      messages: {
+        Row: {
+          id: string
+          session_id: string
+          user_id: string | null
+          sender_type: string
+          content: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          user_id?: string | null
+          sender_type: string
+          content: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          user_id?: string | null
+          sender_type?: string
+          content?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_cate_relations: {
         Row: {
           cate_id: string
