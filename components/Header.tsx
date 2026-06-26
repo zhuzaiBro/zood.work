@@ -70,9 +70,9 @@ export default function Header() {
             <Image
               src="/logo.png"
               alt="油条TV"
-              width={2170}
-              height={725}
-              className="h-9 w-auto sm:h-10"
+              width={1888}
+              height={463}
+              className="h-12 w-auto sm:h-14"
               priority
               unoptimized
             />
