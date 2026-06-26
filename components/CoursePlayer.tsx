@@ -24,6 +24,7 @@ interface Lesson {
   duration?: string;
   durationSeconds?: number;
   isFree: boolean;
+  hasVideo?: boolean;
   isLocked: boolean;
   coursewareName?: string | null;
   coursewareUrl?: string | null;
@@ -142,7 +143,9 @@ export default function CoursePlayer({
     : "/learn";
   const loginHref = `/login?redirect=${encodeURIComponent(loginRedirectPath)}`;
   const requiresLoginToWatch =
-    !isAuthLoading && (!isAuthenticated || currentLesson?.accessReason === "login");
+    !isAuthLoading &&
+    Boolean(currentLesson?.hasVideo) &&
+    (!isAuthenticated || currentLesson?.accessReason === "login");
   const codeExamples = useMemo(
     () => extractLessonCodeExamples(currentLesson?.contentMarkdown),
     [currentLesson?.contentMarkdown],
@@ -162,9 +165,11 @@ export default function CoursePlayer({
               id: lesson.id,
               title: lesson.title,
               description: lesson.description,
-              contentMarkdown: lesson.contentMarkdown!.trim(),
-              isLocked: lesson.isLocked,
-              accessReason: lesson.accessReason,
+              contentMarkdown: lesson.contentMarkdown?.trim() ?? "",
+              isLocked: lesson.accessReason === "purchase",
+              accessReason: (lesson.accessReason === "purchase"
+                ? "purchase"
+                : null) as "purchase" | null,
               coursewareName: lesson.coursewareName,
               coursewareUrl: lesson.coursewareUrl,
             })),
@@ -321,7 +326,6 @@ export default function CoursePlayer({
   ) => {
     const allLessons = flattenLessons(chapterList);
     if (allLessons.length === 0) return;
-    const accessibleLessons = allLessons.filter((lesson) => !lesson.isLocked);
 
     const localProgress = getLocalProgress(undefined, targetCourseId);
     let remoteProgress: LessonProgress | null = null;
@@ -341,10 +345,7 @@ export default function CoursePlayer({
     const useRemote = Boolean(remoteProgress?.lesson_id && remoteTime >= localTime);
     const targetLessonId = useRemote ? remoteProgress?.lesson_id : localProgress?.lessonId;
     const targetLesson =
-      accessibleLessons.find((lesson) => lesson.id === targetLessonId) ??
-      allLessons.find((lesson) => lesson.id === targetLessonId) ??
-      accessibleLessons[0] ??
-      allLessons[0];
+      allLessons.find((lesson) => lesson.id === targetLessonId) ?? allLessons[0];
 
     pendingResumeTimeRef.current = useRemote
       ? remoteProgress?.current_seconds ?? 0
@@ -362,7 +363,21 @@ export default function CoursePlayer({
   };
 
   const handleLessonClick = async (lesson: Lesson) => {
-    if (lesson.accessReason === "login" || !isAuthenticated) {
+    const needsVideoLogin =
+      Boolean(lesson.hasVideo) &&
+      (!isAuthenticated || lesson.accessReason === "login");
+    const needsVideoPurchase =
+      Boolean(lesson.hasVideo) &&
+      lesson.accessReason === "purchase" &&
+      lesson.isLocked;
+
+    if (needsVideoPurchase && shouldShowPurchaseButton) {
+      setCurrentLesson(lesson);
+      handleOpenPurchaseModal();
+      return;
+    }
+
+    if (needsVideoLogin) {
       pendingResumeTimeRef.current = 0;
       resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
@@ -370,9 +385,26 @@ export default function CoursePlayer({
       setCurrentTime(0);
       setDuration(0);
       setPlayerStatus("登录后即可观看当前课程视频");
+      expandChapterForLesson(chapters, lesson.id);
+      saveLocalProgress(lesson, 0);
       if (isDocumentOnlyLesson(lesson) || hasLessonDocument(lesson)) {
-        saveLocalProgress(lesson, 0);
-        expandChapterForLesson(chapters, lesson.id);
+        void saveDocumentLessonProgress(lesson);
+      }
+      return;
+    }
+
+    if (needsVideoPurchase) {
+      pendingResumeTimeRef.current = 0;
+      resumeAppliedLessonRef.current = null;
+      setCurrentLesson(lesson);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+      setPlayerStatus("当前课时需要先开通课程权限");
+      expandChapterForLesson(chapters, lesson.id);
+      saveLocalProgress(lesson, 0);
+      if (isDocumentOnlyLesson(lesson) || hasLessonDocument(lesson)) {
+        void saveDocumentLessonProgress(lesson);
       }
       return;
     }
@@ -726,7 +758,7 @@ export default function CoursePlayer({
     const videoId = currentLesson?.videoId;
     const lessonId = currentLesson?.id;
 
-    if (!video || !lessonId || !currentLesson || isAuthLoading) {
+    if (!video || !lessonId || !currentLesson || isAuthLoading || !currentLesson.hasVideo) {
       setPlayerStatus("");
       return;
     }
@@ -1127,7 +1159,7 @@ export default function CoursePlayer({
                   href={loginHref}
                   className="rounded-full bg-gray-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800"
                 >
-                  登录后观看
+                  登录后看视频
                 </Link>
               )}
               {isPaidCourse && hasCourseAccess && (
@@ -1281,9 +1313,9 @@ export default function CoursePlayer({
                               className={`w-full border-b border-slate-100 px-5 py-4 text-left text-sm transition-colors last:border-b-0 ${
                                 currentLesson?.id === lesson.id
                                   ? "border-l-4 border-blue-600 bg-blue-50/80 text-blue-700"
-                                  : lesson.accessReason === "login"
+                                  : lesson.hasVideo && lesson.accessReason === "login"
                                   ? "text-amber-700 hover:bg-amber-50"
-                                  : lesson.isLocked
+                                  : lesson.hasVideo && lesson.isLocked
                                   ? "text-gray-500 hover:bg-slate-100"
                                   : "text-gray-700 hover:bg-white"
                               }`}
@@ -1326,12 +1358,12 @@ export default function CoursePlayer({
                                       )}
                                     </>
                                   )}
-                                  {lesson.accessReason === "login" && (
+                                  {lesson.hasVideo && lesson.accessReason === "login" && (
                                     <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                      需登录
+                                      视频需登录
                                     </span>
                                   )}
-                                  {lesson.isLocked && lesson.accessReason !== "login" && (
+                                  {lesson.hasVideo && lesson.isLocked && lesson.accessReason !== "login" && (
                                     <svg
                                       className="w-4 h-4 text-gray-400"
                                       fill="none"
@@ -1418,20 +1450,9 @@ export default function CoursePlayer({
                       chapters={documentChapters}
                       activeLessonId={currentLesson.id}
                       onSelectLesson={selectLessonById}
-                      blocked={
-                        requiresLoginToWatch ||
-                        currentLesson.accessReason === "purchase"
-                      }
-                      blockTitle={
-                        currentLesson.accessReason === "purchase"
-                          ? "当前课时需要先开通课程权限"
-                          : "登录后即可阅读文档课程"
-                      }
-                      blockDescription={
-                        currentLesson.accessReason === "purchase"
-                          ? "开通课程后即可阅读完整文档内容。"
-                          : "请先登录账号，再阅读课时文档并同步学习进度。"
-                      }
+                      blocked={currentLesson.accessReason === "purchase"}
+                      blockTitle="当前课时需要先开通课程权限"
+                      blockDescription="开通课程后即可阅读完整文档内容。"
                       loginHref={loginHref}
                       onPurchase={handleOpenPurchaseModal}
                       showPurchaseButton={shouldShowPurchaseButton}
@@ -1506,7 +1527,7 @@ export default function CoursePlayer({
                           </div>
                         </div>
                       )}
-                      {!currentLesson.videoId && !currentLesson.accessReason && (
+                      {!currentLesson.hasVideo && !currentLesson.accessReason && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black text-sm text-white/70">
                           当前课时暂无视频，请查看下方讲义或文档
                         </div>
@@ -1698,22 +1719,6 @@ export default function CoursePlayer({
                   </div>
                 </div>
                 )
-              ) : !isAuthenticated ? (
-                <div className="aspect-video bg-black flex items-center justify-center px-6 text-center">
-                  <div className="max-w-md">
-                    <p className="text-lg font-semibold text-white">登录后即可观看视频课程</p>
-                    <p className="mt-2 text-sm leading-6 text-white/75">
-                      从左侧目录选择课时前，请先登录账号。
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => router.push(loginHref)}
-                      className="mt-5 inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
-                    >
-                      去登录
-                    </button>
-                  </div>
-                </div>
               ) : (
                 <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
                   <div className="text-center text-gray-400">

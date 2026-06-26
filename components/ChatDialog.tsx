@@ -216,62 +216,64 @@ export default function ChatDialog() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="chat-trigger-btn group relative ml-auto flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-[0_10px_36px_rgba(37,99,235,0.2),0_4px_14px_rgba(15,23,42,0.08)] ring-1 ring-white/80 backdrop-blur-2xl transition duration-300 hover:scale-[1.04] hover:shadow-[0_14px_44px_rgba(99,102,241,0.28),0_6px_18px_rgba(15,23,42,0.1)]"
-        aria-label={open ? '关闭聊天' : '打开在线客服'}
-      >
-        <span
-          aria-hidden
-          className="chat-trigger-gradient absolute inset-0 bg-[linear-gradient(135deg,#2563eb_0%,#6366f1_48%,#a855f7_100%)]"
-        />
-        <span
-          aria-hidden
-          className="chat-trigger-blob-a absolute -left-[12%] -top-[8%] h-[72%] w-[72%] rounded-full bg-[#1d4ed8]/75 blur-[1px]"
-        />
-        <span
-          aria-hidden
-          className="chat-trigger-blob-b absolute -bottom-[6%] -right-[8%] h-[68%] w-[68%] rounded-full bg-[#c084fc]/55 blur-[2px]"
-        />
-        <span
-          aria-hidden
-          className="chat-trigger-blob-c absolute left-[18%] top-[12%] h-[42%] w-[42%] rounded-full bg-[#93c5fd]/45 blur-[3px]"
-        />
-        <span
-          aria-hidden
-          className="chat-trigger-wave-a pointer-events-none absolute -left-[10%] bottom-[-20%] h-[70%] w-[120%] rounded-[45%] bg-[#60a5fa]/50 blur-[4px]"
-        />
-        <span
-          aria-hidden
-          className="chat-trigger-wave-b pointer-events-none absolute -right-[8%] bottom-[-25%] h-[65%] w-[110%] rounded-[40%] bg-[#a78bfa]/45 blur-[5px]"
-        />
-        <span
-          aria-hidden
-          className="chat-trigger-highlight absolute inset-0 bg-[radial-gradient(circle_at_30%_24%,rgba(255,255,255,0.58)_0%,rgba(255,255,255,0.14)_30%,transparent_58%)]"
-        />
-        <span
-          aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(circle_at_74%_86%,rgba(79,70,229,0.32)_0%,transparent_52%)]"
-        />
-        <span aria-hidden className="absolute inset-0 bg-white/12 backdrop-blur-[2px]" />
-        <span className="relative z-10 text-white drop-shadow-[0_1px_2px_rgba(37,99,235,0.35)]">
-          {open ? (
-            <svg className="h-[1.35rem] w-[1.35rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          ) : (
-            <svg className="h-[1.35rem] w-[1.35rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-          )}
-        </span>
-      </button>
+      <div className="chat-trigger-shell ml-auto">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="chat-trigger-btn group"
+          aria-label={open ? '关闭聊天' : '打开在线客服'}
+        >
+          <span
+            aria-hidden
+            className="chat-trigger-gradient absolute inset-0 bg-[linear-gradient(135deg,#2563eb_0%,#6366f1_48%,#a855f7_100%)]"
+          />
+          <span
+            aria-hidden
+            className="chat-trigger-blob-a absolute -left-[12%] -top-[8%] h-[72%] w-[72%] rounded-full bg-[#1d4ed8]/75 blur-[1px]"
+          />
+          <span
+            aria-hidden
+            className="chat-trigger-blob-b absolute -bottom-[6%] -right-[8%] h-[68%] w-[68%] rounded-full bg-[#c084fc]/55 blur-[2px]"
+          />
+          <span
+            aria-hidden
+            className="chat-trigger-blob-c absolute left-[18%] top-[12%] h-[42%] w-[42%] rounded-full bg-[#93c5fd]/45 blur-[3px]"
+          />
+          <span
+            aria-hidden
+            className="chat-trigger-wave-a absolute -left-[10%] bottom-[-20%] h-[70%] w-[120%] rounded-[45%] bg-[#60a5fa]/50 blur-[4px]"
+          />
+          <span
+            aria-hidden
+            className="chat-trigger-wave-b absolute -right-[8%] bottom-[-25%] h-[65%] w-[110%] rounded-[40%] bg-[#a78bfa]/45 blur-[5px]"
+          />
+          <span
+            aria-hidden
+            className="chat-trigger-highlight absolute inset-0 bg-[radial-gradient(circle_at_30%_24%,rgba(255,255,255,0.58)_0%,rgba(255,255,255,0.14)_30%,transparent_58%)]"
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-[radial-gradient(circle_at_74%_86%,rgba(79,70,229,0.32)_0%,transparent_52%)]"
+          />
+          <span aria-hidden className="absolute inset-0 bg-white/12" />
+          <span className="relative z-10 text-white drop-shadow-[0_1px_2px_rgba(37,99,235,0.35)]">
+            {open ? (
+              <svg className="h-[1.35rem] w-[1.35rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            ) : (
+              <svg className="h-[1.35rem] w-[1.35rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+            )}
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

@@ -119,12 +119,16 @@ export async function GET(
         .filter((lesson: any) => lesson.chapter_id === chapter.id)
         .map((lesson: any) => {
           const isLessonFree = Boolean(lesson.is_free);
-          const canWatchLesson = viewerLoggedIn && (hasCourseAccess || isLessonFree);
-          const accessReason = !viewerLoggedIn
-            ? 'login'
-            : canWatchLesson
-              ? null
-              : 'purchase';
+          const hasVideo = Boolean(lesson.video_id?.trim());
+          const canWatchVideo =
+            hasVideo && viewerLoggedIn && (hasCourseAccess || isLessonFree);
+          const videoAccessReason = !hasVideo
+            ? null
+            : !viewerLoggedIn
+              ? 'login'
+              : canWatchVideo
+                ? null
+                : 'purchase';
 
           return {
             id: lesson.id,
@@ -137,10 +141,11 @@ export async function GET(
             duration: lesson.duration ? formatDuration(lesson.duration) : undefined,
             durationSeconds: lesson.duration,
             isFree: isLessonFree,
-            isLocked: !canWatchLesson,
-            accessReason,
-            videoUrl: canWatchLesson ? lesson.video_url : null,
-            videoId: canWatchLesson ? lesson.video_id : null,
+            hasVideo,
+            isLocked: hasVideo && !canWatchVideo,
+            accessReason: videoAccessReason,
+            videoUrl: canWatchVideo ? lesson.video_url : null,
+            videoId: canWatchVideo ? lesson.video_id : null,
             sortOrder: lesson.sort_order,
           };
         });

@@ -731,36 +731,79 @@ body {
     }
   }
 
+  .chat-trigger-shell {
+    position: relative;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex-shrink: 0;
+    filter: drop-shadow(0 10px 24px rgba(37, 99, 235, 0.22))
+      drop-shadow(0 4px 10px rgba(15, 23, 42, 0.08));
+    transition: transform 0.3s ease, filter 0.3s ease;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  .chat-trigger-shell:hover {
+    transform: scale(1.04);
+    filter: drop-shadow(0 14px 32px rgba(99, 102, 241, 0.32))
+      drop-shadow(0 6px 14px rgba(15, 23, 42, 0.1));
+  }
+
+  .chat-trigger-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    border-radius: 50%;
+    overflow: hidden;
+    isolation: isolate;
+    contain: paint;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-mask-image: radial-gradient(circle, #fff 99%, transparent 100%);
+    mask-image: radial-gradient(circle, #fff 99%, transparent 100%);
+  }
+
+  .chat-trigger-btn > [aria-hidden] {
+    pointer-events: none;
+  }
+
   .chat-trigger-gradient {
     background-size: 240% 240%;
     transition: background-position 0.35s ease;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-gradient {
+  .chat-trigger-shell:hover .chat-trigger-gradient {
     animation: chat-trigger-gradient-surge 2s ease-in-out infinite;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-blob-a {
+  .chat-trigger-shell:hover .chat-trigger-blob-a {
     animation: chat-trigger-blob-surge-a 1.5s ease-in-out infinite;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-blob-b {
+  .chat-trigger-shell:hover .chat-trigger-blob-b {
     animation: chat-trigger-blob-surge-b 1.7s ease-in-out infinite;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-blob-c {
+  .chat-trigger-shell:hover .chat-trigger-blob-c {
     animation: chat-trigger-blob-surge-c 1.3s ease-in-out infinite;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-highlight {
+  .chat-trigger-shell:hover .chat-trigger-highlight {
     animation: chat-trigger-highlight-roll 1.8s ease-in-out infinite;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-wave-a {
+  .chat-trigger-shell:hover .chat-trigger-wave-a {
     animation: chat-trigger-wave-ripple 1.4s ease-in-out infinite;
   }
 
-  .chat-trigger-btn:hover .chat-trigger-wave-b {
+  .chat-trigger-shell:hover .chat-trigger-wave-b {
     animation: chat-trigger-wave-ripple-delayed 1.6s ease-in-out infinite;
   }
 }
