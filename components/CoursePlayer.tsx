@@ -223,6 +223,22 @@ export default function CoursePlayer({
   const flattenLessons = (chapterList: Chapter[]) =>
     chapterList.flatMap((chapter) => chapter.lessons);
 
+  const findChapterIdByLessonId = (chapterList: Chapter[], lessonId: string) => {
+    for (const chapter of chapterList) {
+      if (chapter.lessons.some((lesson) => lesson.id === lessonId)) {
+        return chapter.id;
+      }
+    }
+    return null;
+  };
+
+  const expandChapterForLesson = (chapterList: Chapter[], lessonId: string) => {
+    const chapterId = findChapterIdByLessonId(chapterList, lessonId) ?? chapterList[0]?.id;
+    if (chapterId) {
+      setExpandedChapters(new Set([chapterId]));
+    }
+  };
+
   const getLocalProgress = (
     lessonId?: string,
     targetCourseId = courseId
@@ -258,6 +274,27 @@ export default function CoursePlayer({
     };
 
     window.localStorage.setItem(progressStorageKey(courseId), JSON.stringify(payload));
+  };
+
+  const saveDocumentLessonProgress = async (lesson: Lesson) => {
+    saveLocalProgress(lesson, 0);
+
+    if (!isAuthenticated) return;
+
+    try {
+      await fetch("/api/learning/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId,
+          lessonId: lesson.id,
+          currentSeconds: 0,
+          watchSeconds: 0,
+        }),
+      });
+    } catch (error) {
+      console.warn("保存文档课时进度失败:", error);
+    }
   };
 
   const loadRemoteProgress = async (
@@ -313,6 +350,7 @@ export default function CoursePlayer({
       ? remoteProgress?.current_seconds ?? 0
       : localProgress?.currentSeconds ?? 0;
     resumeAppliedLessonRef.current = null;
+    expandChapterForLesson(chapterList, targetLesson.id);
     setCurrentLesson(targetLesson);
   };
 
@@ -332,6 +370,10 @@ export default function CoursePlayer({
       setCurrentTime(0);
       setDuration(0);
       setPlayerStatus("登录后即可观看当前课程视频");
+      if (isDocumentOnlyLesson(lesson) || hasLessonDocument(lesson)) {
+        saveLocalProgress(lesson, 0);
+        expandChapterForLesson(chapters, lesson.id);
+      }
       return;
     }
 
@@ -358,6 +400,10 @@ export default function CoursePlayer({
 
       resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
+      expandChapterForLesson(chapters, lesson.id);
+      if (isDocumentOnlyLesson(lesson) || hasLessonDocument(lesson)) {
+        void saveDocumentLessonProgress(lesson);
+      }
       // 重置播放状态
       setIsPlaying(false);
       setCurrentTime(0);
@@ -520,7 +566,6 @@ export default function CoursePlayer({
             setChapters(data.chapters || []);
 
             if (data.chapters && data.chapters.length > 0) {
-              setExpandedChapters(new Set([data.chapters[0].id]));
               await restoreInitialLesson(firstCourse.id, data.chapters);
             }
             setIsLoading(false);
@@ -562,7 +607,6 @@ export default function CoursePlayer({
 
         // 默认展开第一个章节
         if (data.chapters && data.chapters.length > 0) {
-          setExpandedChapters(new Set([data.chapters[0].id]));
           await restoreInitialLesson(courseId, data.chapters);
         }
 
