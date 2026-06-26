@@ -1,5 +1,5 @@
 # Robots.txt for 水煮油条(Zood) - zood的小破站
-# Web3面试 | 前端技术分享 | MetaNode社区
+# Web3面试 | 前端技术分享 | zood技术社区
 
 User-agent: *
 Allow: /

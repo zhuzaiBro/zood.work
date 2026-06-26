@@ -3,51 +3,79 @@ import { MetadataRoute } from 'next'
 
 export const revalidate = 86400
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://zood.work'
+const BASE_URL = 'https://zood.work'
+const PAGE_SIZE = 1000
 
-  // 获取所有静态页面
-  const staticPages = [
+type SitemapEntry = MetadataRoute.Sitemap[number]
+
+type PostSitemapRow = { slug: string; updated_at: string | null }
+type CategorySitemapRow = { slug: string; created_at: string | null }
+type CourseSitemapRow = { id: string; updated_at: string }
+type CollectionSitemapRow = { id: string; updated_at: string }
+type QuestionSitemapRow = { id: string; updated_at: string }
+type TagSitemapRow = { slug: string; created_at: string }
+
+async function fetchAllPages<T>(
+  query: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = []
+  let from = 0
+
+  while (true) {
+    const { data, error } = await query(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    rows.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+
+  return rows
+}
+
+function toLastModified(value: string | null | undefined) {
+  return value ? new Date(value) : new Date()
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const staticPages: SitemapEntry[] = [
     {
-      url: baseUrl,
+      url: BASE_URL,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
-      priority: 1.0,
+      changeFrequency: 'daily',
+      priority: 1,
     },
     {
-      url: `${baseUrl}/categories`,
+      url: `${BASE_URL}/interview`,
       lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
+      changeFrequency: 'daily',
+      priority: 0.9,
+    },
+    {
+      url: `${BASE_URL}/courses`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: `${BASE_URL}/categories`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/interview`,
+      url: `${BASE_URL}/mock-interview`,
       lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/mock-interview`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/faucet`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
+      changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
-      url: `${baseUrl}/login`,
+      url: `${BASE_URL}/faucet`,
       lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
-      priority: 0.5,
-    },
-    {
-      url: `${baseUrl}/profile`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
+      changeFrequency: 'monthly',
       priority: 0.5,
     },
   ]
@@ -55,83 +83,115 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const supabase = createAdminClient()
 
-    // 获取所有文章
-    const { data: posts } = await supabase
-      .from('posts')
-      .select('slug, updated_at')
-      .eq('published', true)
-      .order('updated_at', { ascending: false })
+    const [
+      posts,
+      categories,
+      courses,
+      collections,
+      questions,
+      tags,
+    ] = await Promise.all([
+      fetchAllPages<PostSitemapRow>((from, to) =>
+        supabase
+          .from('posts')
+          .select('slug, updated_at')
+          .eq('published', true)
+          .eq('is_public', true)
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAllPages<CategorySitemapRow>((from, to) =>
+        supabase
+          .from('post_cates')
+          .select('slug, created_at')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAllPages<CourseSitemapRow>((from, to) =>
+        supabase
+          .from('courses')
+          .select('id, updated_at')
+          .eq('status', 'published')
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAllPages<CollectionSitemapRow>((from, to) =>
+        supabase
+          .from('interview_collections')
+          .select('id, updated_at')
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAllPages<QuestionSitemapRow>((from, to) =>
+        supabase
+          .from('interview_question')
+          .select('id, updated_at')
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAllPages<TagSitemapRow>((from, to) =>
+        supabase
+          .from('interview_tags')
+          .select('slug, created_at')
+          .order('sort', { ascending: true })
+          .order('created_at', { ascending: true })
+          .range(from, to)
+      ),
+    ])
 
-    const postPages = posts?.map((post) => ({
-      url: `${baseUrl}/posts/${post.slug}`,
-      lastModified: new Date(post.updated_at),
-      changeFrequency: 'weekly' as const,
+    const postPages: SitemapEntry[] = posts.map((post) => ({
+      url: `${BASE_URL}/posts/${post.slug}`,
+      lastModified: toLastModified(post.updated_at),
+      changeFrequency: 'weekly',
       priority: 0.9,
-    })) || []
+    }))
 
-    // 获取所有分类
-    const { data: categories } = await supabase
-      .from('post_cates')
-      .select('slug, updated_at')
-      .order('updated_at', { ascending: false })
+    const categoryPages: SitemapEntry[] = categories.map((category) => ({
+      url: `${BASE_URL}/categories/${category.slug}`,
+      lastModified: toLastModified(category.created_at),
+      changeFrequency: 'weekly',
+      priority: 0.75,
+    }))
 
-    const categoryPages = categories?.map((category) => ({
-      url: `${baseUrl}/categories/${category.slug}`,
-      lastModified: new Date(category.updated_at || Date.now()),
-      changeFrequency: 'weekly' as const,
+    const coursePages: SitemapEntry[] = courses.map((course) => ({
+      url: `${BASE_URL}/learn?courseId=${course.id}`,
+      lastModified: toLastModified(course.updated_at),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    }))
+
+    const collectionPages: SitemapEntry[] = collections.map((collection) => ({
+      url: `${BASE_URL}/interview/${collection.id}`,
+      lastModified: toLastModified(collection.updated_at),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    }))
+
+    const questionPages: SitemapEntry[] = questions.map((question) => ({
+      url: `${BASE_URL}/question/${question.id}`,
+      lastModified: toLastModified(question.updated_at),
+      changeFrequency: 'weekly',
       priority: 0.8,
-    })) || []
+    }))
 
-    // 获取所有问题（如果有questions表）
-    let questionPages: MetadataRoute.Sitemap = []
-    try {
-      const { data: questions } = await supabase
-        .from('questions')
-        .select('id, updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(1000)
-
-      questionPages = questions?.map((question) => ({
-        url: `${baseUrl}/question/${question.id}`,
-        lastModified: new Date(question.updated_at || Date.now()),
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-      })) || []
-    } catch (error) {
-      // 如果没有questions表，跳过
-      console.log('No questions table found, skipping...')
-    }
-
-    // 获取所有面试记录（如果有interviews表）
-    let interviewPages: MetadataRoute.Sitemap = []
-    try {
-      const { data: interviews } = await supabase
-        .from('interviews')
-        .select('id, updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(500)
-
-      interviewPages = interviews?.map((interview) => ({
-        url: `${baseUrl}/interview/${interview.id}`,
-        lastModified: new Date(interview.updated_at || Date.now()),
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-      })) || []
-    } catch (error) {
-      // 如果没有interviews表，跳过
-      console.log('No interviews table found, skipping...')
-    }
+    const tagPages: SitemapEntry[] = tags.map((tag) => ({
+      url: `${BASE_URL}/interview?tag=${encodeURIComponent(tag.slug)}`,
+      lastModified: toLastModified(tag.created_at),
+      changeFrequency: 'weekly',
+      priority: 0.75,
+    }))
 
     return [
       ...staticPages,
       ...postPages,
-      ...categoryPages,
+      ...coursePages,
+      ...collectionPages,
       ...questionPages,
-      ...interviewPages,
+      ...tagPages,
+      ...categoryPages,
     ]
   } catch (error) {
     console.error('Error generating sitemap:', error)
-    // 如果数据库连接失败，返回静态页面
     return staticPages
   }
 }
