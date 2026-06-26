@@ -65,13 +65,13 @@ export default function Header() {
             href="/"
             className="flex items-center text-header-sky transition-colors hover:text-sky-800"
             onClick={closeMobileMenu}
-            aria-label="水煮油条君首页"
+            aria-label="油条TV首页"
           >
             <Image
               src="/logo.png"
-              alt="水煮油条君"
-              width={1519}
-              height={348}
+              alt="油条TV"
+              width={2170}
+              height={725}
               className="h-9 w-auto sm:h-10"
               priority
               unoptimized
