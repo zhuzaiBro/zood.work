@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback } from 'react';
 import { Form, Input, InputNumber, Modal, Row, Col, Select, Switch, Typography } from 'antd';
 import type { Database } from '@/types/database.types';
 
@@ -19,6 +19,7 @@ export type QuestionFormValues = {
 interface QuestionFormModalProps {
   open: boolean;
   mode: 'create' | 'edit';
+  formKey?: string;
   loading?: boolean;
   collections: Collection[];
   initialValues?: Partial<QuestionFormValues>;
@@ -28,9 +29,22 @@ interface QuestionFormModalProps {
 
 const { Text } = Typography;
 
+function buildFormValues(initialValues?: Partial<QuestionFormValues>): Partial<QuestionFormValues> {
+  return {
+    collection_id: initialValues?.collection_id,
+    title: initialValues?.title ?? '',
+    content: initialValues?.content ?? '',
+    difficulty: initialValues?.difficulty ?? null,
+    sort: initialValues?.sort ?? null,
+    is_vip: initialValues?.is_vip ?? false,
+    vip_level_required: initialValues?.vip_level_required ?? null,
+  };
+}
+
 export default function QuestionFormModal({
   open,
   mode,
+  formKey = 'create',
   loading,
   collections,
   initialValues,
@@ -40,19 +54,18 @@ export default function QuestionFormModal({
   const [form] = Form.useForm<QuestionFormValues>();
   const isVip = Form.useWatch('is_vip', form);
 
-  useEffect(() => {
-    if (!open) return;
+  const applyInitialValues = useCallback(() => {
+    form.setFieldsValue(buildFormValues(initialValues));
+  }, [form, initialValues]);
 
-    form.setFieldsValue({
-      collection_id: initialValues?.collection_id ?? undefined,
-      title: initialValues?.title ?? '',
-      content: initialValues?.content ?? '',
-      difficulty: initialValues?.difficulty ?? null,
-      sort: initialValues?.sort ?? null,
-      is_vip: initialValues?.is_vip ?? false,
-      vip_level_required: initialValues?.vip_level_required ?? null,
-    });
-  }, [open, initialValues, form]);
+  const handleAfterOpenChange = (visible: boolean) => {
+    if (visible) {
+      form.resetFields();
+      applyInitialValues();
+      return;
+    }
+    form.resetFields();
+  };
 
   const handleOk = async () => {
     const values = await form.validateFields();
@@ -75,8 +88,15 @@ export default function QuestionFormModal({
       confirmLoading={loading}
       width={800}
       destroyOnClose
+      afterOpenChange={handleAfterOpenChange}
     >
-      <Form form={form} layout="vertical" preserve={false}>
+      <Form
+        key={formKey}
+        form={form}
+        layout="vertical"
+        preserve={false}
+        initialValues={buildFormValues(initialValues)}
+      >
         <Form.Item
           name="collection_id"
           label="所属题集"

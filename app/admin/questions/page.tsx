@@ -819,8 +819,10 @@ export default function QuestionsManagePage() {
       </Modal>
 
       <QuestionFormModal
+        key={editingQuestionId ?? 'create'}
         open={questionModalOpen}
         mode={questionModalMode}
+        formKey={editingQuestionId ?? 'create'}
         loading={isSavingQuestion}
         collections={collections}
         initialValues={questionFormInitial}

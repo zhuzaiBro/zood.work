@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import TagFilter from '@/components/interview/TagFilter';
 import CollectionCard from '@/components/interview/CollectionCard';
+import InterviewQuestionSearch from '@/components/interview/InterviewQuestionSearch';
 import QuestionContributionForm from '@/components/interview/QuestionContributionForm';
 import { Database } from '@/types/database.types';
 
@@ -10,11 +12,13 @@ type Tag = Database['public']['Tables']['interview_tags']['Row'];
 export default async function InterviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tag?: string }>;
+  searchParams: Promise<{ tag?: string; q?: string }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
   const currentTagSlug = params.tag;
+  const searchQuery = params.q?.trim() ?? '';
+  const isSearching = searchQuery.length > 0;
 
   // 1. Fetch all tags for the filter list
   const { data: tags } = await supabase
@@ -75,21 +79,29 @@ export default async function InterviewPage({
             <h1 className="text-2xl font-bold text-gray-900">热门面试题库</h1>
           </div>
 
-          <TagFilter tags={tags || []} />
+          <Suspense fallback={<div className="mb-4 h-11 rounded-xl bg-white/70" />}>
+            <InterviewQuestionSearch initialQuery={searchQuery} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <TagFilter tags={tags || []} />
+          </Suspense>
         </div>
       </div>
 
       <div className="container mx-auto px-4 pt-2">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {collections?.map((collection) => (
-            <CollectionCard key={collection.id} collection={collection} />
-          ))}
-          {(!collections || collections.length === 0) && (
-            <div className="col-span-full py-12 text-center text-gray-500">
-              暂无面试题集
-            </div>
-          )}
-        </div>
+        {!isSearching && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {collections?.map((collection) => (
+              <CollectionCard key={collection.id} collection={collection} />
+            ))}
+            {(!collections || collections.length === 0) && (
+              <div className="col-span-full py-12 text-center text-gray-500">
+                暂无面试题集
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-10">
           <QuestionContributionForm />

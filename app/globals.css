@@ -164,35 +164,35 @@ body {
     @apply text-base font-semibold mt-4 mb-2 text-gray-700 dark:text-gray-300;
   }
 
-  /* 表格样式 */
-  .prose table {
+  /* 表格样式（博客/通用 prose，不含文档课） */
+  .prose:not(.document-prose) table {
     @apply w-full border-collapse my-6 text-sm;
     @apply shadow-lg rounded-lg overflow-hidden;
   }
   
-  .prose thead {
+  .prose:not(.document-prose) thead {
     @apply bg-gradient-to-r from-blue-500 to-blue-600 text-white;
   }
   
-  .prose thead th {
+  .prose:not(.document-prose) thead th {
     @apply px-6 py-4 text-left font-semibold uppercase tracking-wider;
     @apply border-b-2 border-blue-700;
   }
   
-  .prose tbody tr {
+  .prose:not(.document-prose) tbody tr {
     @apply border-b border-gray-200 dark:border-gray-700;
     @apply hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors;
   }
   
-  .prose tbody tr:nth-child(even) {
+  .prose:not(.document-prose) tbody tr:nth-child(even) {
     @apply bg-gray-50 dark:bg-gray-800/50;
   }
   
-  .prose tbody td {
+  .prose:not(.document-prose) tbody td {
     @apply px-6 py-4 text-gray-700 dark:text-gray-300;
   }
   
-  .prose tbody tr:last-child {
+  .prose:not(.document-prose) tbody tr:last-child {
     @apply border-b-0;
   }
 
@@ -386,28 +386,45 @@ body {
     @apply hidden;
   }
 
-  .document-prose table {
-    @apply my-6 overflow-hidden rounded-2xl border border-slate-200 shadow-none;
+  /* 文档课表：macOS 风格，覆盖 typography .prose 默认蓝表头 */
+  .document-prose.prose table {
+    @apply my-8 w-full border-collapse overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)];
   }
 
-  .document-prose thead {
-    @apply bg-slate-50 text-slate-500;
+  .document-prose.prose thead {
+    background: linear-gradient(180deg, #fafafa 0%, #f3f4f6 100%) !important;
+    color: #64748b !important;
   }
 
-  .document-prose thead th {
-    @apply border-b border-slate-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em];
+  .document-prose.prose thead th {
+    @apply border-b border-slate-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500;
+    border-bottom-width: 1px !important;
+    color: #64748b !important;
+    background: transparent !important;
   }
 
-  .document-prose tbody tr {
-    @apply border-b border-slate-100 hover:bg-slate-50;
+  .document-prose.prose tbody tr {
+    @apply border-b border-slate-100 transition-colors hover:bg-slate-50/90;
   }
 
-  .document-prose tbody tr:nth-child(even) {
-    @apply bg-transparent;
+  .document-prose.prose tbody tr:last-child {
+    @apply border-b-0;
   }
 
-  .document-prose tbody td {
-    @apply px-4 py-3 text-slate-700;
+  .document-prose.prose tbody tr:nth-child(even) {
+    @apply bg-slate-50/50;
+  }
+
+  .document-prose.prose tbody td {
+    @apply px-4 py-3.5 align-top text-[15px] leading-7 text-slate-700;
+  }
+
+  .document-prose.prose tbody td code {
+    @apply rounded-md border border-slate-200/90 bg-slate-100/90 px-1.5 py-0.5 font-mono text-[0.88em] font-medium text-slate-800;
+  }
+
+  .document-prose.prose tbody td strong {
+    @apply font-semibold text-slate-900;
   }
 
   .document-prose hr {
@@ -429,12 +446,41 @@ body {
 
 /* 暗色模式下的表格特殊优化 */
 @media (prefers-color-scheme: dark) {
-  .prose thead {
+  .prose:not(.document-prose) thead {
     @apply bg-gradient-to-r from-blue-600 to-blue-700;
   }
   
-  .prose tbody td {
+  .prose:not(.document-prose) tbody td {
     @apply border-gray-700;
+  }
+
+  .document-prose.prose table {
+    @apply border-slate-700/80 bg-slate-900 shadow-none;
+  }
+
+  .document-prose.prose thead {
+    background: linear-gradient(180deg, #1f2937 0%, #111827 100%) !important;
+  }
+
+  .document-prose.prose thead th {
+    @apply border-slate-700 text-slate-400;
+    color: #94a3b8 !important;
+  }
+
+  .document-prose.prose tbody tr {
+    @apply border-slate-800 hover:bg-slate-800/60;
+  }
+
+  .document-prose.prose tbody tr:nth-child(even) {
+    @apply bg-slate-800/30;
+  }
+
+  .document-prose.prose tbody td {
+    @apply text-slate-300;
+  }
+
+  .document-prose.prose tbody td code {
+    @apply border-slate-700 bg-slate-800 text-slate-200;
   }
 }
 
