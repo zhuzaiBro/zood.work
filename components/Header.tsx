@@ -21,7 +21,12 @@ export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const lightContentPage = isLightContentPage(pathname);
-  const isImmersiveHero = pathname === "/" || pathname === "/faucet" || pathname === "/interview" || pathname === "/faucet" && isHero;
+  const isDarkImmersivePage =
+    pathname === "/" ||
+    pathname === "/faucet" ||
+    pathname === "/interview" ||
+    pathname.startsWith("/jobs");
+  const isImmersiveHero = isDarkImmersivePage && isHero;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -54,9 +59,11 @@ export default function Header() {
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-header-sky backdrop-blur-md ${
         lightContentPage
           ? "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
-          : isImmersiveHero
+        : isImmersiveHero
           ? "bg-transparent border-transparent"
-          : "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
+        : isDarkImmersivePage
+          ? "border-b border-[#75c0f7]/10 bg-[#061225]/82 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
+        : "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
       }`}
     >
       <nav className="container mx-auto px-4 py-4">
@@ -88,6 +95,9 @@ export default function Header() {
             </Link>
             <Link href="/interview" className={linkClass}>
               面试题库
+            </Link>
+            <Link href="/jobs" className={linkClass}>
+              岗位广场
             </Link>
             <Link href="/resume-agent" className={linkClass}>
               简历优化
@@ -158,6 +168,13 @@ export default function Header() {
               onClick={closeMobileMenu}
             >
               面试题库
+            </Link>
+            <Link
+              href="/jobs"
+              className={mobileLinkClass}
+              onClick={closeMobileMenu}
+            >
+              岗位广场
             </Link>
             <Link
               href="/resume-agent"
