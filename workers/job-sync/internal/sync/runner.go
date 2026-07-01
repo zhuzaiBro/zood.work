@@ -208,6 +208,11 @@ func (r *Runner) runSource(ctx context.Context, source store.JobSource) (result 
 		}
 
 		row := dejob.MapToListingRow(source, *detail)
+		if !hasContactInfo(row) {
+			result.JobsSkipped++
+			log.Printf("skip dejob job %s: missing contact info", externalID)
+			continue
+		}
 		if err := r.Store.InsertJobListing(row); err != nil {
 			result.JobsFailed++
 			log.Printf("failed to insert job %s: %v", externalID, err)
@@ -272,6 +277,11 @@ func (r *Runner) syncCake(ctx context.Context, source store.JobSource, baseURL s
 		}
 
 		row := cake.MapToListingRow(source, item)
+		if !hasContactInfo(row) {
+			result.JobsSkipped++
+			log.Printf("skip cake job %s: missing contact info", item.Path)
+			continue
+		}
 		if err := r.Store.InsertJobListing(row); err != nil {
 			result.JobsFailed++
 			log.Printf("failed to insert cake job %s: %v", item.Path, err)
@@ -333,6 +343,11 @@ func (r *Runner) syncWeb3Career(ctx context.Context, source store.JobSource, bas
 		}
 
 		row := web3career.MapToListingRow(source, item)
+		if !hasContactInfo(row) {
+			result.JobsSkipped++
+			log.Printf("skip web3career job %s: missing contact info", item.ExternalID)
+			continue
+		}
 		if err := r.Store.InsertJobListing(row); err != nil {
 			result.JobsFailed++
 			log.Printf("failed to insert web3career job %s: %v", item.ExternalID, err)
@@ -347,4 +362,13 @@ func (r *Runner) syncWeb3Career(ctx context.Context, source store.JobSource, bas
 		return fmt.Errorf("%d web3career jobs failed during sync", result.JobsFailed)
 	}
 	return nil
+}
+
+func hasContactInfo(row map[string]interface{}) bool {
+	for _, key := range []string{"email", "phone", "wechat", "telegram"} {
+		if row[key] != nil && strings.TrimSpace(fmt.Sprint(row[key])) != "" {
+			return true
+		}
+	}
+	return false
 }

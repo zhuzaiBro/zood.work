@@ -18,8 +18,6 @@ type JobDetail = {
   work_type_name: string | null;
   min_salary: number | null;
   max_salary: number | null;
-  source_slug?: string | null;
-  source_name?: string | null;
   source_created_at: string | null;
   last_synced_at: string;
   description: string | null;
@@ -62,8 +60,6 @@ export default async function JobDetailPage({ params }: { params: Params }) {
       work_type_name,
       min_salary,
       max_salary,
-      source_slug,
-      source_name,
       source_created_at,
       last_synced_at,
       description,
@@ -84,7 +80,6 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   }
 
   const detail = job as JobDetail;
-  const sourceName = detail.source_name || detail.source_slug || "Job Source";
   const tags = normalizeTags(detail.tags);
   const sections = [
     { title: "岗位描述", content: detail.description },
@@ -113,9 +108,6 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                 <CompanyLogo logo={detail.company_logo} company={detail.company_name} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-[#75c0f7]/12 px-3 py-1 text-xs font-bold text-[#75c0f7]">
-                      {sourceName}
-                    </span>
                     {detail.work_type_name && (
                       <span className="rounded-full bg-white/[0.08] px-3 py-1 text-xs font-bold text-slate-200">
                         {detail.work_type_name}

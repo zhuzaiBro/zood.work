@@ -9,16 +9,17 @@ type JobContact = {
   id: string;
   title: string | null;
   company_name: string | null;
-  source_url: string | null;
   email: string | null;
   phone: string | null;
   wechat: string | null;
   telegram: string | null;
 };
 
-export async function GET(_request: NextRequest, { params }: { params: Params }) {
+export async function GET(request: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
+    const mode = request.nextUrl.searchParams.get("mode");
+    const isStatusOnly = mode === "status";
     const supabase = await createClient();
     const {
       data: { user },
@@ -50,7 +51,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     const isMember = (profile?.vip_level ?? 0) > 0;
     const { data: jobData, error: jobError } = await (admin as any)
       .from("job_listings")
-      .select("id, title, company_name, source_url, email, phone, wechat, telegram")
+      .select("id, title, company_name, email, phone, wechat, telegram")
       .eq("id", id)
       .maybeSingle();
 
@@ -81,6 +82,28 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
       !isMember;
     const hasExistingUnlock = Boolean(existingUnlock) && !hasInvalidMemberUnlock;
     let remaining = Math.max(0, MONTHLY_FREE_UNLOCK_LIMIT - quotaUsed);
+
+    if (isStatusOnly) {
+      const shouldReveal = isMember || hasExistingUnlock;
+      return NextResponse.json({
+        job: {
+          id: job.id,
+          title: job.title,
+          companyName: job.company_name,
+        },
+        contacts: shouldReveal ? normalizeContacts(job) : undefined,
+        isMember,
+        unlocked: shouldReveal,
+        limit: MONTHLY_FREE_UNLOCK_LIMIT,
+        used: quotaUsed,
+        remaining: isMember ? null : remaining,
+        message: isMember
+          ? "已解锁岗位联系方式"
+          : hasExistingUnlock
+            ? "该岗位已解锁，本月额度不会重复扣除"
+            : undefined,
+      });
+    }
 
     if (!isMember && !hasExistingUnlock && remaining <= 0) {
       return NextResponse.json(
@@ -141,7 +164,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
           : quotaUsed + 1,
       remaining: isMember ? null : remaining,
       message: isMember
-        ? "会员已解锁岗位联系方式"
+        ? "已解锁岗位联系方式"
         : hasExistingUnlock
           ? "该岗位已解锁，本月额度不会重复扣除"
           : `已使用 1 次免费查看机会，本月剩余 ${remaining} 次`,
@@ -172,7 +195,6 @@ async function countMonthlyQuotaUnlocks(
 
 function normalizeContacts(job: JobContact) {
   return {
-    applyUrl: job.source_url,
     email: job.email,
     phone: job.phone,
     wechat: job.wechat,

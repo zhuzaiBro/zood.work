@@ -1,6 +1,8 @@
 package listing
 
 import (
+	"regexp"
+	"strings"
 	"time"
 
 	"zood.work/workers/job-sync/internal/store"
@@ -46,6 +48,8 @@ type NormalizedJob struct {
 }
 
 func ToRow(source store.JobSource, job NormalizedJob) map[string]interface{} {
+	job = enrichContactInfo(job)
+
 	return map[string]interface{}{
 		"source_id":           source.ID,
 		"source_slug":         nullableString(source.Slug),
@@ -93,6 +97,61 @@ func ToRow(source store.JobSource, job NormalizedJob) map[string]interface{} {
 func nullableString(value string) interface{} {
 	if value == "" {
 		return nil
+	}
+	return value
+}
+
+var (
+	emailPattern    = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
+	phonePattern    = regexp.MustCompile(`(?:\+?\d[\d\s().-]{7,}\d)`)
+	telegramPattern = regexp.MustCompile(`(?i)(?:telegram|tg|t\.me)\s*[:：/]?\s*(@?[a-z0-9_]{5,}|https?://t\.me/[a-z0-9_]{5,})`)
+	wechatPattern   = regexp.MustCompile(`(?i)(?:微信|wechat|weixin|wx)\s*[:：]?\s*([a-z][a-z0-9_-]{4,19})`)
+)
+
+func enrichContactInfo(job NormalizedJob) NormalizedJob {
+	text := strings.Join([]string{
+		job.Description,
+		job.Requirements,
+		job.Benefits,
+		job.ExtraContent,
+		job.CompanyIntro,
+	}, "\n")
+
+	if strings.TrimSpace(job.Email) == "" {
+		job.Email = firstMatch(emailPattern, text)
+	}
+	if strings.TrimSpace(job.Phone) == "" {
+		job.Phone = cleanPhone(firstMatch(phonePattern, text))
+	}
+	if strings.TrimSpace(job.Telegram) == "" {
+		job.Telegram = firstSubmatch(telegramPattern, text)
+	}
+	if strings.TrimSpace(job.Wechat) == "" {
+		job.Wechat = firstSubmatch(wechatPattern, text)
+	}
+	return job
+}
+
+func firstMatch(pattern *regexp.Regexp, text string) string {
+	return strings.TrimSpace(pattern.FindString(text))
+}
+
+func firstSubmatch(pattern *regexp.Regexp, text string) string {
+	matches := pattern.FindStringSubmatch(text)
+	if len(matches) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(matches[1])
+}
+
+func cleanPhone(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	digits := regexp.MustCompile(`\d`).FindAllString(value, -1)
+	if len(digits) < 8 {
+		return ""
 	}
 	return value
 }

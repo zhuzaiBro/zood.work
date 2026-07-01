@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ContactResponse = {
   contacts?: {
-    applyUrl?: string | null;
     email?: string | null;
     phone?: string | null;
     wechat?: string | null;
@@ -25,11 +24,15 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
   const [data, setData] = useState<ContactResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const loadContacts = async () => {
+  const loadContacts = async (mode?: "status") => {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/jobs/${jobId}/contact`, {
+      const url =
+        mode === "status"
+          ? `/api/jobs/${jobId}/contact?mode=status`
+          : `/api/jobs/${jobId}/contact`;
+      const response = await fetch(url, {
         method: "GET",
         headers: { Accept: "application/json" },
       });
@@ -42,9 +45,13 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
     }
   };
 
+  useEffect(() => {
+    void loadContacts("status");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
   const contacts = data?.contacts;
   const hasContact =
-    contacts?.applyUrl ||
     contacts?.email ||
     contacts?.phone ||
     contacts?.wechat ||
@@ -59,24 +66,10 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
             普通用户每月可免费查看 3 个岗位联系方式；会员可无限查看。
           </p>
         </div>
-        <span className="rounded-full bg-[#75c0f7]/12 px-3 py-1 text-xs font-bold text-[#75c0f7]">
-          {data?.isMember ? "会员直看" : "3 次/月"}
-        </span>
       </div>
 
       {data?.unlocked && contacts ? (
         <div className="mt-4 space-y-3">
-          {contacts.applyUrl && (
-            <a
-              href={contacts.applyUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between rounded-2xl bg-[#75c0f7] px-4 py-3 text-sm font-black text-[#041020] transition hover:bg-sky-200"
-            >
-              去来源站投递
-              <span>↗</span>
-            </a>
-          )}
           <ContactRow label="邮箱" value={contacts.email} />
           <ContactRow label="手机" value={contacts.phone} />
           <ContactRow label="微信" value={contacts.wechat} />
@@ -96,17 +89,17 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
         <div className="mt-4 space-y-3">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4">
             <div className="space-y-2 text-sm text-slate-300">
-              <SkeletonLine label="来源投递链接" />
-              <SkeletonLine label="邮箱 / 微信 / Telegram" />
+              <SkeletonLine label="邮箱 / 手机" />
+              <SkeletonLine label="微信 / Telegram" />
             </div>
           </div>
           <button
             type="button"
-            onClick={loadContacts}
+            onClick={() => loadContacts()}
             disabled={isLoading}
             className="w-full rounded-2xl bg-[#75c0f7] px-5 py-3 text-sm font-black text-[#041020] transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isLoading ? "正在解锁..." : "查看联系方式"}
+            {isLoading ? "正在确认..." : "查看联系方式"}
           </button>
           {data?.error && (
             <div className="rounded-2xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">

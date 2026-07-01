@@ -20,17 +20,10 @@ type JobListing = {
   work_type_name: string | null;
   min_salary: number | null;
   max_salary: number | null;
-  source_slug?: string | null;
-  source_name?: string | null;
   source_created_at: string | null;
   last_synced_at: string;
   description: string | null;
   tags: unknown;
-};
-
-type JobSource = {
-  slug: string;
-  name: string;
 };
 
 const PAGE_SIZE = 24;
@@ -42,18 +35,11 @@ export default async function JobsPage({
 }) {
   const params = await searchParams;
   const keyword = valueOf(params.q);
-  const source = valueOf(params.source);
   const remoteOnly = valueOf(params.remote) === "1";
   const page = Math.max(1, Number(valueOf(params.page) || "1") || 1);
 
   const supabase = await createClient();
   const db = supabase as any;
-
-  const sourcesPromise = db
-    .from("job_sources")
-    .select("slug, name")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
 
   let query = db
     .from("job_listings")
@@ -68,8 +54,6 @@ export default async function JobsPage({
       work_type_name,
       min_salary,
       max_salary,
-      source_slug,
-      source_name,
       source_created_at,
       last_synced_at,
       description,
@@ -87,10 +71,6 @@ export default async function JobsPage({
     );
   }
 
-  if (source && source !== "all") {
-    query = query.eq("source_slug", source);
-  }
-
   if (remoteOnly) {
     query = query.or(
       "office_mode_name.ilike.%remote%,location.ilike.%remote%,location.ilike.%Anywhere%"
@@ -99,14 +79,10 @@ export default async function JobsPage({
 
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
-  const [{ data: jobs, count, error }, { data: sources }] = await Promise.all([
-    query.range(from, to),
-    sourcesPromise,
-  ]);
+  const { data: jobs, count, error } = await query.range(from, to);
 
   const total = count ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const sourceOptions = (sources ?? []) as JobSource[];
   const rows = (jobs ?? []) as JobListing[];
 
   return (
@@ -126,30 +102,18 @@ export default async function JobsPage({
                 找到下一份能让你升级的技术岗位
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                聚合 DeJob、Cake.me、Web3.career 等来源，统一清洗成适合社区浏览的岗位库。先看岗位，再用简历 Agent 和面试题库做定向准备。
+                聚合多个精选渠道，统一清洗成适合社区浏览的岗位库。先看岗位，再用简历 Agent 和面试题库做定向准备。
               </p>
             </div>
 
             <div className="rounded-[32px] border border-sky-200/15 bg-white/[0.06] p-5 shadow-[0_30px_120px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-              <form className="grid gap-3 md:grid-cols-[1fr_170px_130px_auto]">
+              <form className="grid gap-3 md:grid-cols-[1fr_130px_auto]">
                 <input
                   name="q"
                   defaultValue={keyword}
                   placeholder="搜索 Solidity、React、AI Agent、Remote..."
                   className="rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-[#75c0f7]/70"
                 />
-                <select
-                  name="source"
-                  defaultValue={source || "all"}
-                  className="rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm text-white outline-none transition focus:border-[#75c0f7]/70"
-                >
-                  <option value="all">全部来源</option>
-                  {sourceOptions.map((item) => (
-                    <option key={item.slug} value={item.slug}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
                 <label className="flex items-center justify-center gap-2 rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm font-semibold text-slate-200">
                   <input
                     type="checkbox"
@@ -217,7 +181,6 @@ export default async function JobsPage({
 function JobCard({ job }: { job: JobListing }) {
   const tags = normalizeTags(job.tags).slice(0, 4);
   const salary = formatSalary(job.min_salary, job.max_salary);
-  const sourceName = job.source_name || job.source_slug || "Job Source";
 
   return (
     <Link
@@ -228,9 +191,6 @@ function JobCard({ job }: { job: JobListing }) {
         <CompanyLogo logo={job.company_logo} company={job.company_name} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#75c0f7]/12 px-2.5 py-1 text-xs font-bold text-[#75c0f7]">
-              {sourceName}
-            </span>
             {job.office_mode_name && (
               <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-bold text-emerald-200">
                 {job.office_mode_name}
@@ -247,7 +207,7 @@ function JobCard({ job }: { job: JobListing }) {
       </div>
 
       <p className="mt-5 line-clamp-3 flex-1 text-sm leading-7 text-slate-400">
-        {job.description || "暂无岗位描述，点击查看来源详情。"}
+        {job.description || "暂无岗位描述，点击查看岗位详情。"}
       </p>
 
       <div className="mt-5 space-y-3 text-sm text-slate-300">
@@ -331,7 +291,7 @@ function buildPageHref(
   const next = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     const item = valueOf(value);
-    if (item && key !== "page") {
+    if (item && key !== "page" && key !== "source") {
       next.set(key, item);
     }
   }
