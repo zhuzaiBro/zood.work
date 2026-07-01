@@ -2,10 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { getPublishedCoursesWithStats } from '@/lib/courses/getPublishedCoursesWithStats'
 import { formatDuration } from '@/lib/formatDuration'
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: '课程列表 - zood的小破站',
-  description: '浏览所有在线课程',
+export const metadata: Metadata = {
+  title: 'Web3学习课程 - Agent学习路线与 CEX 项目实战',
+  description: '油条TV 课程覆盖 web3学习、agent学习路线、AI 应用开发、CEX项目和交易所业务实战，适合想系统转型的开发者。',
+  keywords: ['web3学习', 'agent学习路线', 'cex项目', '交易所攻略', '油条TV', 'AI应用开发', 'Web3课程'],
+  alternates: {
+    canonical: '/courses',
+  },
 }
 
 export const revalidate = 60
@@ -42,7 +47,7 @@ export default async function CoursesPage() {
       console.error('获取课程列表失败:', coursesError)
     }
 
-    coursesWithStats = (courses ?? []).map((course) => ({
+    coursesWithStats = ((courses ?? []) as Course[]).map((course) => ({
       ...course,
       lessonCount: 0,
       totalDuration: 0,
@@ -55,7 +60,7 @@ export default async function CoursesPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">所有课程</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            探索我们的在线课程，开始你的学习之旅
+            从 Web3 学习、Agent 学习路线到 CEX 项目和交易所业务实战，开始你的系统学习之旅。
           </p>
         </div>
 

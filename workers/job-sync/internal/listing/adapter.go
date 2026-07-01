@@ -104,8 +104,8 @@ func nullableString(value string) interface{} {
 var (
 	emailPattern    = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
 	phonePattern    = regexp.MustCompile(`(?:\+?\d[\d\s().-]{7,}\d)`)
-	telegramPattern = regexp.MustCompile(`(?i)(?:telegram|tg|t\.me)\s*[:：/]?\s*(@?[a-z0-9_]{5,}|https?://t\.me/[a-z0-9_]{5,})`)
-	wechatPattern   = regexp.MustCompile(`(?i)(?:微信|wechat|weixin|wx)\s*[:：]?\s*([a-z][a-z0-9_-]{4,19})`)
+	telegramPattern = regexp.MustCompile(`(?i)(?:^|[\s,，;；(（])(?:telegram|tg|t\.me)\s*[:：/]?\s*(@?[a-z0-9_]{5,}|https?://t\.me/[a-z0-9_]{5,})`)
+	wechatPattern   = regexp.MustCompile(`(?i)(?:^|[\s,，;；(（])(?:微信|wechat|weixin|wx)\s*[:：]?\s*([a-z][a-z0-9_-]{4,19})`)
 )
 
 func enrichContactInfo(job NormalizedJob) NormalizedJob {

@@ -14,27 +14,47 @@ const siteLogoLatin = Micro_5({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://zood.work'),
+  applicationName: '油条TV',
   title: {
-    template: '%s | 水煮油条(Zood) - Web3前后端转型',
-    default: '水煮油条(Zood) - Web3面试 | 前后端转型 | 技术分享',
+    template: '%s | 油条TV - Web3 与 AI 开发社区',
+    default: '油条TV - Web3学习、Agent学习路线与远程工作攻略',
   },
-  description: '水煮油条(Zood)的小破站，专注于 Web3 面试经验分享、前后端开发技术教程、Web3前后端转型指导。提供最新的 Web3 面试题库、区块链技术资讯、在线课程和全栈开发心得。zood技术社区。',
-  keywords: ['水煮油条', 'zood', 'zood的小破站', '油条TV', 'Web3前后端转型', 'web3面试', '前端面试', 'Web3开发', '区块链', '技术博客', '全栈开发'],
+  description: '油条TV（水煮油条）是面向开发者的 Web3 与 AI 学习社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作和远程攻略。',
+  keywords: ['agent学习路线', '油条TV', 'web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', '水煮油条', 'zood', 'Web3前后端转型', 'web3面试', 'Web3开发', 'AI Agent', '区块链', '全栈开发'],
   authors: [{ name: '水煮油条(Zood)' }],
   creator: '水煮油条(Zood)',
   publisher: '水煮油条(Zood)',
+  alternates: {
+    canonical: '/',
+  },
+  category: 'technology',
   openGraph: {
-    title: '水煮油条(Zood) - Web3面试 | 前端技术分享',
-    description: '专注于 Web3 面试经验分享、前端开发技术教程、Web3前后端转型指导。提供最新的 Web3 面试题库、区块链技术资讯、在线课程。',
-    siteName: '水煮油条(Zood) - zood的小破站',
+    title: '油条TV - Web3学习、Agent学习路线与远程工作攻略',
+    description: '面向开发者的 Web3 与 AI 学习社区，覆盖 agent学习路线、cex项目复盘、交易所攻略、远程工作和面试题库。',
+    url: 'https://zood.work',
+    siteName: '油条TV - 水煮油条',
     locale: 'zh_CN',
     type: 'website',
+    images: [
+      {
+        url: '/zood.jpg',
+        width: 1200,
+        height: 630,
+        alt: '油条TV - Web3 与 AI 开发社区',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: '水煮油条(Zood) - Web3前后端转型',
-    description: 'Web3面试、前端技术分享、zood技术社区',
+    title: '油条TV - Web3学习、Agent学习路线与远程工作攻略',
+    description: 'Web3学习、CEX项目、交易所攻略、远程工作和简历优化 Agent。',
     creator: '@zood_shuizhu',
+    images: ['/zood.jpg'],
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 }
 
@@ -52,31 +72,32 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "WebSite",
-              "name": "水煮油条(Zood) - zood的小破站",
-              "alternateName": ["zood的小破站", "水煮油条", "油条TV"],
-              "description": "水煮油条(Zood)的小破站，专注于 Web3 面试经验分享、前后端开发技术教程、Web3前后端转型指导。提供最新的 Web3 面试题库、区块链技术资讯和全栈开发心得。",
+              "name": "油条TV - 水煮油条",
+              "alternateName": ["zood的小破站", "水煮油条", "油条TV", "油条TV Web3"],
+              "description": "油条TV（水煮油条）是面向开发者的 Web3 与 AI 学习社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作和远程攻略。",
               "url": "https://zood.work",
               "author": {
                 "@type": "Person",
                 "name": "水煮油条(Zood)",
                 "alternateName": "zood",
                 "jobTitle": "Web3开发者",
-                "knowsAbout": ["Web3开发", "前端开发", "区块链技术", "Web3前后端转型"]
+                "knowsAbout": ["agent学习路线", "web3学习", "cex项目", "交易所攻略", "远程工作", "远程攻略", "Web3开发", "AI Agent", "区块链技术", "Web3前后端转型"]
               },
               "publisher": {
                 "@type": "Organization",
-                "name": "水煮油条(Zood)",
+                "name": "油条TV",
                 "url": "https://zood.work"
               },
-              "potentialAction": {
-                "@type": "SearchAction",
-                "target": "https://zood.work/search?q={search_term_string}",
-                "query-input": "required name=search_term_string"
-              },
+              "hasPart": [
+                { "@type": "WebPage", "name": "Web3学习课程", "url": "https://zood.work/courses" },
+                { "@type": "WebPage", "name": "远程工作岗位广场", "url": "https://zood.work/jobs" },
+                { "@type": "WebPage", "name": "简历优化 Agent", "url": "https://zood.work/resume-agent" },
+                { "@type": "WebPage", "name": "Web3 面试题库", "url": "https://zood.work/interview" }
+              ],
               "sameAs": [
                 "https://github.com/zood"
               ],
-              "keywords": ["水煮油条", "zood", "zood的小破站", "油条TV", "Web3前后端转型", "web3面试", "前端面试", "Web3开发", "区块链", "技术博客"]
+              "keywords": ["agent学习路线", "油条TV", "web3学习", "cex项目", "交易所攻略", "远程工作", "远程攻略", "Web3开发", "AI Agent", "web3面试"]
             })
           }}
         />

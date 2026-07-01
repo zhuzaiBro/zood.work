@@ -1,5 +1,16 @@
 import Faucet from "@/components/Faucet";
 import Web3Provider from "@/components/Web3Provider";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Web3 测试币水龙头 - DApp 学习与合约调试",
+  description:
+    "油条TV Web3 测试币水龙头，帮助开发者在 web3学习、合约练习和 DApp 调试时一键领取测试网 Gas。",
+  keywords: ["web3学习", "Web3测试币", "测试网Gas", "DApp调试", "油条TV"],
+  alternates: {
+    canonical: "/faucet",
+  },
+};
 
 export default function FaucetPage() {
   return (

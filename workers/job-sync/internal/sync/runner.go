@@ -185,6 +185,7 @@ func (r *Runner) runSource(ctx context.Context, source store.JobSource) (result 
 		runErr = err
 		return result, runErr
 	}
+	companyCache := map[int]*dejob.Company{}
 
 	for _, item := range list {
 		select {
@@ -205,6 +206,20 @@ func (r *Runner) runSource(ctx context.Context, source store.JobSource) (result 
 			result.JobsFailed++
 			log.Printf("failed to sync job %s: %v", externalID, err)
 			continue
+		}
+
+		if detail.CompanyID > 0 {
+			company, ok := companyCache[detail.CompanyID]
+			if !ok {
+				company, err = r.DejobClient.FetchCompany(baseURL, detail.CompanyID)
+				if err != nil {
+					result.JobsFailed++
+					log.Printf("failed to fetch dejob company %d for job %s: %v", detail.CompanyID, externalID, err)
+					continue
+				}
+				companyCache[detail.CompanyID] = company
+			}
+			dejob.MergeCompanyContact(detail, company)
 		}
 
 		row := dejob.MapToListingRow(source, *detail)

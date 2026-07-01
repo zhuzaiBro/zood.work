@@ -2,8 +2,19 @@ import { createClient } from '@/lib/supabase/server'
 import PostCard from '@/components/PostCard'
 import Link from 'next/link'
 import TronHeroSection from '@/components/TronHeroSection'
+import type { Metadata } from 'next'
 
 export const revalidate = 60 // 每60秒重新验证
+
+export const metadata: Metadata = {
+  title: '油条TV - Web3学习、Agent学习路线与交易所攻略',
+  description:
+    '油条TV（水煮油条）的 Web3 与 AI 开发学习社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作与远程攻略。',
+  keywords: ['agent学习路线', '油条TV', 'web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', 'Web3开发', 'AI Agent'],
+  alternates: {
+    canonical: '/',
+  },
+}
 
 export default async function Home() {
   const supabase = await createClient()
@@ -111,6 +122,32 @@ export default async function Home() {
                 >
                   去优化简历
                 </Link>
+              </div>
+
+              <div className="mb-6 rounded-2xl border border-[#75c0f7]/20 bg-[#07101f]/82 p-6 shadow-[0_18px_45px_rgba(14,165,233,0.10)] backdrop-blur-sm">
+                <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#75c0f7]">
+                  Learning Maps
+                </p>
+                <h2 className="mt-2 text-xl font-bold text-[#f5f8ff]">
+                  热门学习与职业路线
+                </h2>
+                <div className="mt-4 space-y-3 text-sm leading-6">
+                  {[
+                    ['Agent 学习路线', '/courses', '从模型调用、工具链到 LangGraph Agent 实战。'],
+                    ['Web3 学习', '/courses', '合约、钱包、DApp、全栈项目一步步补齐。'],
+                    ['CEX 项目与交易所攻略', '/interview', '沉淀交易所业务、面试题和项目复盘。'],
+                    ['远程工作与远程攻略', '/jobs', '筛选 Web3 / AI 远程岗位，再用简历 Agent 做准备。'],
+                  ].map(([title, href, desc]) => (
+                    <Link
+                      key={title}
+                      href={href}
+                      className="block rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[#9fb2d1] transition hover:border-[#75c0f7]/45 hover:bg-[#75c0f7]/10 hover:text-[#f5f8ff]"
+                    >
+                      <span className="block font-bold text-[#d9f4ff]">{title}</span>
+                      <span className="mt-1 block text-xs text-[#8093b2]">{desc}</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
 
               {categories && categories.length > 0 && (

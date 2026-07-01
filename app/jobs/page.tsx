@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "岗位广场 - Web3 / AI 远程岗位",
-  description: "浏览社区同步的 Web3、AI、区块链和远程开发岗位。",
+export const metadata: Metadata = {
+  title: "远程工作岗位广场 - Web3 / AI / CEX 项目招聘",
+  description:
+    "油条TV 岗位广场聚合 Web3、AI、CEX项目和交易所远程工作机会，配合远程攻略、简历优化 Agent 与面试题库做求职准备。",
+  keywords: ["远程工作", "远程攻略", "web3学习", "cex项目", "交易所攻略", "Web3岗位", "AI岗位", "油条TV"],
+  alternates: {
+    canonical: "/jobs",
+  },
 };
 
 export const revalidate = 60;
@@ -102,7 +108,8 @@ export default async function JobsPage({
                 找到下一份能让你升级的技术岗位
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                聚合多个精选渠道，统一清洗成适合社区浏览的岗位库。先看岗位，再用简历 Agent 和面试题库做定向准备。
+                聚合多个精选渠道，统一清洗成适合社区浏览的 Web3、AI、CEX项目与交易所岗位库。
+                先筛选远程工作，再用简历 Agent、远程攻略和面试题库做定向准备。
               </p>
             </div>
 

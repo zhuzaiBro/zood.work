@@ -4,11 +4,27 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useProfile, useUser, useIsAuthenticated, useUserStore } from '@/store/userStore'
-import type { Database } from '@/types/database.types'
 import QiniuUploader from '@/components/QiniuUploader'
 import MembershipConsultationModal from '@/components/MembershipConsultationModal'
+
+type ProfileDashboardData = {
+  enrollments: any[]
+  purchaseRequests: any[]
+  progress: any[]
+  favorites: any[]
+  submissions: any[]
+  resumeRecords: any[]
+}
+
+const emptyDashboardData: ProfileDashboardData = {
+  enrollments: [],
+  purchaseRequests: [],
+  progress: [],
+  favorites: [],
+  submissions: [],
+  resumeRecords: [],
+}
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -16,11 +32,14 @@ export default function ProfilePage() {
   const profile = useProfile()
   const isAuthenticated = useIsAuthenticated()
   const setProfile = useUserStore((state) => state.setProfile)
-  const [activeTab, setActiveTab] = useState('favorites')
+  const [activeTab, setActiveTab] = useState('courses')
   const [copiedId, setCopiedId] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [membershipConsultationOpen, setMembershipConsultationOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [dashboardData, setDashboardData] = useState<ProfileDashboardData>(emptyDashboardData)
+  const [isDashboardLoading, setIsDashboardLoading] = useState(true)
+  const [dashboardError, setDashboardError] = useState('')
   const [formData, setFormData] = useState({
     username: '',
     display_name: '',
@@ -34,6 +53,139 @@ export default function ProfilePage() {
       router.push('/login')
     }
   }, [isAuthenticated, user, router])
+
+  useEffect(() => {
+    const userId = user?.id
+    if (!userId) return
+
+    let cancelled = false
+
+    async function loadDashboardData() {
+      setIsDashboardLoading(true)
+      setDashboardError('')
+
+      const supabase = createClient() as any
+      const [
+        enrollmentsResult,
+        purchaseRequestsResult,
+        progressResult,
+        favoritesResult,
+        submissionsResult,
+        resumeRecordsResult,
+      ] = await Promise.all([
+        supabase
+          .from('course_enrollments')
+          .select(`
+            id,
+            course_id,
+            status,
+            source,
+            granted_at,
+            expires_at,
+            note,
+            courses (
+              id,
+              title,
+              description,
+              cover_image_url,
+              price,
+              is_free
+            )
+          `)
+          .eq('user_id', userId)
+          .order('granted_at', { ascending: false }),
+        supabase
+          .from('course_purchase_requests')
+          .select('id, course_id, course_title, course_price, status, admin_note, contacted_at, paid_at, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('lesson_progress')
+          .select(`
+            id,
+            course_id,
+            lesson_id,
+            current_seconds,
+            duration_seconds,
+            progress_percent,
+            is_completed,
+            last_watched_at,
+            lessons (
+              id,
+              title
+            ),
+            courses (
+              id,
+              title
+            )
+          `)
+          .eq('user_id', userId)
+          .order('last_watched_at', { ascending: false }),
+        supabase
+          .from('interview_question_favorites')
+          .select(`
+            id,
+            created_at,
+            interview_question (
+              id,
+              title,
+              content,
+              difficulty,
+              collection_id
+            )
+          `)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('interview_question_submissions')
+          .select('id, title, content, tags, status, admin_note, created_at, updated_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('resume_optimization_records')
+          .select('id, target_role, score, positioning, rewritten_summary, keywords, resume_html, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+      ])
+
+      if (cancelled) return
+
+      const errors = [
+        enrollmentsResult.error,
+        purchaseRequestsResult.error,
+        progressResult.error,
+        favoritesResult.error,
+        submissionsResult.error,
+        resumeRecordsResult.error,
+      ].filter(Boolean)
+
+      if (errors.length > 0) {
+        setDashboardError(
+          `部分数据加载失败：${errors
+            .map((error: { message?: string }) => error.message)
+            .filter(Boolean)
+            .slice(0, 2)
+            .join('；')}`
+        )
+      }
+
+      setDashboardData({
+        enrollments: enrollmentsResult.data ?? [],
+        purchaseRequests: purchaseRequestsResult.data ?? [],
+        progress: progressResult.data ?? [],
+        favorites: favoritesResult.data ?? [],
+        submissions: submissionsResult.data ?? [],
+        resumeRecords: resumeRecordsResult.data ?? [],
+      })
+      setIsDashboardLoading(false)
+    }
+
+    void loadDashboardData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const displayName = profile?.display_name || profile?.username || '用户'
   const vipLevel = profile?.vip_level || 0
@@ -125,12 +277,222 @@ export default function ProfilePage() {
   }
 
   const tabs = [
+    { id: 'courses', label: '我的课程' },
     { id: 'favorites', label: '题目收藏' },
-    { id: 'answers', label: '回答收藏' },
-    { id: 'records', label: '刷题记录' },
-    { id: 'my-answers', label: '我的回答' },
-    { id: 'created', label: '创建题目' },
+    { id: 'submissions', label: '投稿记录' },
+    { id: 'resumes', label: '简历优化' },
   ]
+
+  const courseProgress = buildCourseProgress(dashboardData.progress)
+  const averageProgress = calculateAverageProgress(courseProgress)
+  const recentProgress = dashboardData.progress[0]
+  const renderTabContent = () => {
+    if (isDashboardLoading) {
+      return <LoadingState />
+    }
+
+    if (activeTab === 'courses') {
+      return (
+        <div className="space-y-5">
+          <SectionTitle
+            title="学习与购买的课程"
+            description="这里汇总平台给你开通的课程、购买意向，以及每个课程最近的学习进度。"
+          />
+          {dashboardData.enrollments.length === 0 && dashboardData.purchaseRequests.length === 0 ? (
+            <EmptyState
+              title="还没有课程记录"
+              description="去课程页选择感兴趣的 Web3 / AI 课程，免费课可直接学习，付费课提交购买意向后平台会联系你。"
+              href="/courses"
+              action="去看课程"
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {dashboardData.enrollments.map((enrollment) => {
+                const course = relationOne(enrollment.courses)
+                const progress = courseProgress.get(enrollment.course_id)
+
+                return (
+                  <Link
+                    key={`enrollment-${enrollment.id}`}
+                    href={`/learn?courseId=${enrollment.course_id}`}
+                    className="group rounded-2xl border border-sky-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                          {enrollment.status === 'active' ? '已开通' : '已关闭'}
+                        </span>
+                        <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950 group-hover:text-sky-600">
+                          {course?.title || '未命名课程'}
+                        </h3>
+                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                          {course?.description || enrollment.note || '继续学习，保持节奏。'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
+                        {course?.is_free ? '免费' : `¥${Number(course?.price ?? 0)}`}
+                      </span>
+                    </div>
+
+                    <ProgressBar value={progress?.averagePercent ?? 0} />
+                    <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                      <span>
+                        已完成 {progress?.completedLessons ?? 0}/{progress?.totalLessons ?? 0} 节
+                      </span>
+                      <span>{progress ? `${Math.round(progress.averagePercent)}%` : '未开始'}</span>
+                    </div>
+                  </Link>
+                )
+              })}
+
+              {dashboardData.purchaseRequests.map((request) => (
+                <div
+                  key={`purchase-${request.id}`}
+                  className="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm"
+                >
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                    {formatPurchaseStatus(request.status)}
+                  </span>
+                  <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950">
+                    {request.course_title || '课程购买意向'}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {request.admin_note || '平台还在处理中，管理员会根据你提交的手机号和微信联系你。'}
+                  </p>
+                  <p className="mt-4 text-xs text-slate-500">
+                    提交时间：{formatDate(request.created_at)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (activeTab === 'favorites') {
+      return (
+        <div className="space-y-5">
+          <SectionTitle title="收藏的面试题" description="把值得反复刷的题目先收藏，复盘时从这里直接进入。" />
+          {dashboardData.favorites.length === 0 ? (
+            <EmptyState title="还没有收藏题目" description="打开面试题详情页，点击收藏后会出现在这里。" href="/interview" action="去刷题库" />
+          ) : (
+            <div className="space-y-3">
+              {dashboardData.favorites.map((favorite) => {
+                const question = relationOne(favorite.interview_question)
+
+                return (
+                  <Link
+                    key={favorite.id}
+                    href={question?.id ? `/question/${question.id}` : '/interview'}
+                    className="block rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">
+                        {question?.difficulty || '面试题'}
+                      </span>
+                      <span className="text-xs text-slate-400">收藏于 {formatDate(favorite.created_at)}</span>
+                    </div>
+                    <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950">
+                      {question?.title || '题目已不存在'}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                      {question?.content || '点击查看题目详情。'}
+                    </p>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (activeTab === 'submissions') {
+      return (
+        <div className="space-y-5">
+          <SectionTitle title="我的面试题投稿" description="查看你提交的问题、审核状态，以及平台管理员给你的答复。" />
+          {dashboardData.submissions.length === 0 ? (
+            <EmptyState title="还没有投稿记录" description="遇到真实面试题、学习卡点或项目坑，可以快速投递给社区整理。" href="/interview" action="去投稿" />
+          ) : (
+            <div className="space-y-3">
+              {dashboardData.submissions.map((submission) => (
+                <div key={submission.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${submissionStatusClass(submission.status)}`}>
+                      {formatSubmissionStatus(submission.status)}
+                    </span>
+                    <span className="text-xs text-slate-400">提交于 {formatDate(submission.created_at)}</span>
+                  </div>
+                  <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950">{submission.title}</h3>
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">{submission.content}</p>
+                  {Array.isArray(submission.tags) && submission.tags.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {submission.tags.map((tag: string) => (
+                        <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                    <span className="font-bold text-slate-900">平台答复：</span>
+                    {submission.admin_note || '暂未答复，审核后会在这里展示。'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-5">
+        <SectionTitle title="简历优化历史" description="每次使用简历优化 Agent 生成的结果都会沉淀在这里，方便回看、复制和导出。" />
+        {dashboardData.resumeRecords.length === 0 ? (
+          <EmptyState title="还没有简历优化记录" description="去简历优化 Agent 填入简历和目标岗位，生成后会自动保存历史。" href="/resume-agent" action="去优化简历" />
+        ) : (
+          <div className="space-y-3">
+            {dashboardData.resumeRecords.map((record) => (
+              <div key={record.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
+                      匹配分 {record.score ?? '-'}
+                    </span>
+                    <h3 className="mt-3 text-lg font-black text-slate-950">{record.target_role}</h3>
+                  </div>
+                  <span className="text-xs text-slate-400">{formatDate(record.created_at)}</span>
+                </div>
+                <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">
+                  {record.positioning || record.rewritten_summary || '暂无定位摘要'}
+                </p>
+                {Array.isArray(record.keywords) && record.keywords.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {record.keywords.slice(0, 8).map((keyword: string) => (
+                      <span key={keyword} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {record.resume_html && (
+                  <button
+                    type="button"
+                    onClick={() => downloadHtml(record.resume_html, record.target_role)}
+                    className="mt-4 rounded-full border border-sky-200 px-4 py-2 text-sm font-bold text-sky-700 transition hover:bg-sky-50"
+                  >
+                    下载 HTML 简历
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // 如果还在检查登录状态或未登录，不渲染
   if (!user) {
@@ -289,45 +651,36 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 
-                <div className="flex gap-4 text-xs">
-                  <span className="opacity-80">还需 {100 - (vipLevel * 100 % 100)} 经验升级</span>
-                  <span className="opacity-80">可申请进入专属群</span>
+                <div className="flex flex-wrap gap-4 text-xs">
+                  <span className="opacity-80">已开通课程 {dashboardData.enrollments.filter((item) => item.status === 'active').length} 门</span>
+                  <span className="opacity-80">收藏题目 {dashboardData.favorites.length} 道</span>
+                  <span className="opacity-80">简历优化 {dashboardData.resumeRecords.length} 次</span>
                 </div>
               </div>
             </div>
 
-            {/* 活跃度日历 */}
-            <div className="bg-white rounded-2xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">
-                    2025 年共发布题解 <span className="text-blue-600">0</span> 次，累计天数：<span className="text-blue-600">0</span> 天
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>不活跃</span>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="w-3 h-3 bg-blue-400 rounded-sm" style={{ opacity: i * 0.25 }} />
-                    ))}
-                  </div>
-                  <span>活跃</span>
-                </div>
-              </div>
-
-              {/* 简化的日历热力图 */}
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'].map((month) => (
-                  <div key={month} className="flex-shrink-0">
-                    <div className="text-xs text-gray-400 mb-2">{month}</div>
-                    <div className="grid grid-rows-7 gap-1">
-                      {Array.from({ length: 7 }).map((_, i) => (
-                        <div key={i} className="w-3 h-3 bg-gray-100 rounded-sm" />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {/* 学习概览 */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <StatCard
+                label="已开通课程"
+                value={dashboardData.enrollments.filter((item) => item.status === 'active').length}
+                hint="管理员开通 / 已购买"
+              />
+              <StatCard
+                label="平均学习进度"
+                value={`${Math.round(averageProgress)}%`}
+                hint={recentProgress ? `最近：${relationOne(recentProgress.lessons)?.title || '课程学习'}` : '还没有学习记录'}
+              />
+              <StatCard
+                label="收藏面试题"
+                value={dashboardData.favorites.length}
+                hint="复盘高频题"
+              />
+              <StatCard
+                label="简历优化"
+                value={dashboardData.resumeRecords.length}
+                hint="历史生成记录"
+              />
             </div>
 
             {/* Tab 切换和内容区域 */}
@@ -351,49 +704,14 @@ export default function ProfilePage() {
                 </nav>
               </div>
 
-              {/* 筛选区域 */}
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex gap-4 items-center flex-wrap">
-                  <select className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500">
-                    <option>搜索题目</option>
-                  </select>
-                  <select className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500">
-                    <option>标记</option>
-                  </select>
-                  <select className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500">
-                    <option>会员专属</option>
-                  </select>
-                  <input 
-                    type="text" 
-                    placeholder="可选 10 个标签，支持搜索" 
-                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
               {/* 内容区域 */}
-              <div className="p-12 text-center">
-                <div className="text-6xl mb-4 opacity-20">📝</div>
-                <p className="text-gray-400 text-sm">暂无收藏列表，快去收藏吧~</p>
-              </div>
-
-              {/* 分页 */}
-              <div className="p-6 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-500">总共 0 条</div>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1 border border-gray-200 rounded text-sm text-gray-400 cursor-not-allowed" disabled>
-                    &lt;
-                  </button>
-                  <span className="px-3 py-1 text-sm text-gray-600">1</span>
-                  <button className="px-3 py-1 border border-gray-200 rounded text-sm text-gray-400 cursor-not-allowed" disabled>
-                    &gt;
-                  </button>
-                  <select className="ml-2 px-3 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500">
-                    <option>20 条/页</option>
-                    <option>50 条/页</option>
-                    <option>100 条/页</option>
-                  </select>
-                </div>
+              <div className="p-6">
+                {dashboardError && (
+                  <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                    {dashboardError}。如果刚新增表，请先执行对应 `.sql` 脚本并刷新页面。
+                  </div>
+                )}
+                {renderTabContent()}
               </div>
             </div>
           </div>
@@ -573,6 +891,189 @@ export default function ProfilePage() {
         onClose={() => setMembershipConsultationOpen(false)}
         source="profile"
       />
+    </div>
+  )
+}
+
+function relationOne<T = any>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+function buildCourseProgress(progressRows: any[]) {
+  const result = new Map<
+    string,
+    {
+      totalLessons: number
+      completedLessons: number
+      averagePercent: number
+      lastWatchedAt: string | null
+    }
+  >()
+
+  progressRows.forEach((row) => {
+    if (!row.course_id) return
+
+    const current = result.get(row.course_id) ?? {
+      totalLessons: 0,
+      completedLessons: 0,
+      averagePercent: 0,
+      lastWatchedAt: null,
+    }
+
+    current.totalLessons += 1
+    current.completedLessons += row.is_completed ? 1 : 0
+    current.averagePercent += Number(row.progress_percent ?? 0)
+
+    if (!current.lastWatchedAt || new Date(row.last_watched_at).getTime() > new Date(current.lastWatchedAt).getTime()) {
+      current.lastWatchedAt = row.last_watched_at
+    }
+
+    result.set(row.course_id, current)
+  })
+
+  result.forEach((value) => {
+    value.averagePercent = value.totalLessons > 0 ? value.averagePercent / value.totalLessons : 0
+  })
+
+  return result
+}
+
+function calculateAverageProgress(
+  courseProgress: Map<string, { averagePercent: number }>
+) {
+  const rows = Array.from(courseProgress.values())
+  if (rows.length === 0) return 0
+  return rows.reduce((sum, item) => sum + item.averagePercent, 0) / rows.length
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function formatPurchaseStatus(status: string | null | undefined) {
+  const map: Record<string, string> = {
+    pending: '待联系',
+    contacted: '已联系',
+    paid: '已支付',
+    closed: '已关闭',
+  }
+  return map[status || ''] || '处理中'
+}
+
+function formatSubmissionStatus(status: string | null | undefined) {
+  const map: Record<string, string> = {
+    pending: '待审核',
+    accepted: '已采纳',
+    rejected: '未采纳',
+  }
+  return map[status || ''] || '待审核'
+}
+
+function submissionStatusClass(status: string | null | undefined) {
+  if (status === 'accepted') return 'bg-emerald-50 text-emerald-700'
+  if (status === 'rejected') return 'bg-rose-50 text-rose-700'
+  return 'bg-amber-50 text-amber-700'
+}
+
+function downloadHtml(html: string, targetRole: string) {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${targetRole || 'optimized-resume'}.html`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function ProgressBar({ value }: { value: number }) {
+  const safeValue = Math.max(0, Math.min(100, Number(value) || 0))
+
+  return (
+    <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100">
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-300"
+        style={{ width: `${safeValue}%` }}
+      />
+    </div>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string | number
+  hint: string
+}) {
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
+      <p className="text-sm font-bold text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-black text-slate-950">{value}</p>
+      <p className="mt-2 line-clamp-1 text-xs text-slate-400">{hint}</p>
+    </div>
+  )
+}
+
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <div>
+      <h2 className="text-xl font-black text-slate-950">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+    </div>
+  )
+}
+
+function LoadingState() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {[0, 1, 2, 3].map((item) => (
+        <div key={item} className="h-40 animate-pulse rounded-2xl bg-slate-100" />
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({
+  title,
+  description,
+  href,
+  action,
+}: {
+  title: string
+  description: string
+  href: string
+  action: string
+}) {
+  return (
+    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+        📝
+      </div>
+      <h3 className="text-lg font-black text-slate-950">{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{description}</p>
+      <Link
+        href={href}
+        className="mt-5 inline-flex rounded-full bg-sky-500 px-5 py-2.5 text-sm font-black text-white transition hover:bg-sky-600"
+      >
+        {action}
+      </Link>
     </div>
   )
 }

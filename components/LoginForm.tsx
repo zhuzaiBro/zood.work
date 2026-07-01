@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Web3LoginButton from './Web3LoginButton'
 import { useUserStore } from '@/store/userStore'
 
 export default function LoginForm() {
@@ -181,9 +180,6 @@ export default function LoginForm() {
           </svg>
           使用 GitHub 登录
         </button>
-
-        {/* Web3 钱包登录 */}
-        <Web3LoginButton />
       </div>
     </div>
   )

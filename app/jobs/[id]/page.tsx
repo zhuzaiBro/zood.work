@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import JobContactPanel from "@/components/jobs/JobContactPanel";
+import type { Metadata } from "next";
 
 export const revalidate = 60;
 
@@ -27,19 +28,29 @@ type JobDetail = {
   tags: unknown;
 };
 
-export async function generateMetadata({ params }: { params: Params }) {
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
   const { data } = await (supabase as any)
     .from("job_listings")
-    .select("title, company_name")
+    .select("title, company_name, location, office_mode_name, description")
     .eq("id", id)
     .maybeSingle();
 
+  const title = data?.title
+    ? `${data.title} - ${data.company_name || "岗位详情"}`
+    : "岗位详情";
+  const description = data?.description
+    ? `${data.description.slice(0, 110)}${data.description.length > 110 ? "..." : ""}`
+    : "油条TV 岗位详情，覆盖 Web3、AI、CEX项目、交易所岗位和远程工作机会。";
+
   return {
-    title: data?.title
-      ? `${data.title} - ${data.company_name || "岗位详情"}`
-      : "岗位详情",
+    title,
+    description,
+    keywords: ["远程工作", "远程攻略", "web3学习", "cex项目", "交易所攻略", data?.company_name, data?.office_mode_name, data?.location].filter(Boolean) as string[],
+    alternates: {
+      canonical: `/jobs/${id}`,
+    },
   };
 }
 

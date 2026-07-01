@@ -54,6 +54,23 @@ func (c *Client) FetchDetail(baseURL, detailTemplate, externalID string) (*Job, 
 	return payload.Data, nil
 }
 
+func (c *Client) FetchCompany(baseURL string, companyID int) (*Company, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("company id is required")
+	}
+	url := fmt.Sprintf("%s/api/company/%d", trimSlash(baseURL), companyID)
+	referer := trimSlash(baseURL) + "/job"
+
+	var payload CompanyResponse
+	if err := c.getJSON(url, referer, &payload); err != nil {
+		return nil, err
+	}
+	if payload.ErrorCode != 0 || payload.Data == nil {
+		return nil, fmt.Errorf("dejob company error: %s", fallbackMessage(payload.Message, "invalid company response"))
+	}
+	return payload.Data, nil
+}
+
 func (c *Client) getJSON(url, referer string, target interface{}) error {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {

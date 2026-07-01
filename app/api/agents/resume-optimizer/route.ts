@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { runResumeOptimizationAgent } from '@/lib/agents/resumeOptimizationAgent';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -36,12 +37,50 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await runResumeOptimizationAgent(parsed.data);
+    const generatedAt = new Date().toISOString();
+
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user?.id) {
+        const { error: recordError } = await (supabase as any)
+          .from('resume_optimization_records')
+          .insert({
+            user_id: user.id,
+            target_role: parsed.data.targetRole,
+            experience_level: parsed.data.experienceLevel,
+            job_description: parsed.data.jobDescription || null,
+            resume_excerpt: parsed.data.resumeText.slice(0, 800),
+            score: result.score,
+            positioning: result.positioning,
+            rewritten_summary: result.rewrittenSummary,
+            optimized_bullets: result.optimizedBullets,
+            keywords: result.keywords,
+            action_plan: result.actionPlan,
+            interview_stories: result.interviewStories,
+            resume_html: result.resumeHtml,
+            meta: {
+              framework: 'LangChain.js + LangGraph.js + 通义千问',
+              generatedAt,
+            },
+          });
+
+        if (recordError) {
+          console.error('Save resume optimization record failed:', recordError);
+        }
+      }
+    } catch (recordError) {
+      console.error('Save resume optimization record crashed:', recordError);
+    }
 
     return NextResponse.json({
       result,
       meta: {
         framework: 'LangChain.js + LangGraph.js + 通义千问',
-        generatedAt: new Date().toISOString(),
+        generatedAt,
       },
     });
   } catch (error) {

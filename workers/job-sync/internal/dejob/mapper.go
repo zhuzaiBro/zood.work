@@ -1,6 +1,7 @@
 package dejob
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -47,6 +48,43 @@ func MapToListingRow(source store.JobSource, job Job) map[string]interface{} {
 		RawData:           job,
 		SourceCreatedAt:   msToISO(job.CreateTime),
 	})
+}
+
+func MergeCompanyContact(job *Job, company *Company) {
+	if job == nil || company == nil {
+		return
+	}
+	if job.Email == "" {
+		job.Email = company.Email
+	}
+	if job.Phone == "" {
+		job.Phone = company.Phone
+	}
+	if job.Wechat == "" {
+		job.Wechat = company.Wechat
+	}
+	if job.Telegram == "" {
+		job.Telegram = company.Telegram
+	}
+	if job.CompanyIntroduction == "" {
+		job.CompanyIntroduction = company.Introduction
+	}
+	if job.CompanyWebsite == "" {
+		job.CompanyWebsite = company.Website
+	}
+	if job.CompanyLogo == "" {
+		job.CompanyLogo = company.Logo
+	}
+	if job.CompanySizeName == "" {
+		job.CompanySizeName = stringify(company.Size)
+	}
+}
+
+func stringify(value any) string {
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprint(value)
 }
 
 func msToISO(ms int64) interface{} {

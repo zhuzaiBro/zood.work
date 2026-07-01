@@ -1,9 +1,14 @@
 import ResumeOptimizerClient from "@/components/resume/ResumeOptimizerClient";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "AI 简历优化 Agent - 水煮油条君",
+export const metadata: Metadata = {
+  title: "简历优化 Agent - Web3 / AI 远程工作求职助手",
   description:
-    "基于 LangChain.js、LangGraph.js 与通义千问的技术简历优化 Agent，帮助 Web3、AI、全栈开发者优化简历表达。",
+    "基于 LangChain.js、LangGraph.js 与通义千问的简历优化 Agent，帮助 Web3、AI、CEX项目和远程工作求职者优化简历表达。",
+  keywords: ["agent学习路线", "远程工作", "远程攻略", "web3学习", "cex项目", "简历优化 Agent", "油条TV"],
+  alternates: {
+    canonical: "/resume-agent",
+  },
 };
 
 export default function ResumeAgentPage() {
@@ -22,7 +27,7 @@ export default function ResumeAgentPage() {
           </h1>
 
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-300">
-            面向 Web3、AI 应用开发、全栈工程和转型开发者。把简历和目标岗位交给 Agent，
+            面向 Web3、AI 应用开发、CEX 项目、交易所业务和远程工作求职者。把简历和目标岗位交给 Agent，
             它会拆解匹配度、规划改写策略，并产出能直接复制的摘要、项目 bullet 和关键词清单。
           </p>
         </section>

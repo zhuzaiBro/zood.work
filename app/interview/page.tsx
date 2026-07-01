@@ -5,9 +5,20 @@ import CollectionCard from '@/components/interview/CollectionCard';
 import InterviewQuestionSearch from '@/components/interview/InterviewQuestionSearch';
 import QuestionContributionForm from '@/components/interview/QuestionContributionForm';
 import { Database } from '@/types/database.types';
+import type { Metadata } from 'next';
 
 type Collection = Database['public']['Tables']['interview_collections']['Row'];
 type Tag = Database['public']['Tables']['interview_tags']['Row'];
+
+export const metadata: Metadata = {
+  title: 'Web3 面试题库 - CEX 项目与交易所攻略',
+  description:
+    '油条TV 面试题库整理 Web3、AI、CEX项目、交易所业务和远程工作面试问题，支持普通用户快速投稿和社区共建。',
+  keywords: ['web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', 'Web3面试', '油条TV'],
+  alternates: {
+    canonical: '/interview',
+  },
+};
 
 export default async function InterviewPage({
   searchParams,
@@ -78,6 +89,9 @@ export default async function InterviewPage({
             <span className="text-2xl">🔥</span>
             <h1 className="text-2xl font-bold text-gray-900">热门面试题库</h1>
           </div>
+          <p className="mb-5 max-w-3xl text-sm leading-7 text-slate-600">
+            围绕 Web3 学习、CEX 项目、交易所攻略和远程工作面试沉淀题库；你也可以把真实面试题、学习问题和踩坑记录快速投稿给社区。
+          </p>
 
           <Suspense fallback={<div className="mb-4 h-11 rounded-xl bg-white/70" />}>
             <InterviewQuestionSearch initialQuery={searchQuery} />

@@ -14,6 +14,7 @@ type CourseSitemapRow = { id: string; updated_at: string }
 type CollectionSitemapRow = { id: string; updated_at: string }
 type QuestionSitemapRow = { id: string; updated_at: string }
 type TagSitemapRow = { slug: string; created_at: string }
+type JobSitemapRow = { id: string; updated_at: string | null; last_synced_at: string | null }
 
 async function fetchAllPages<T>(
   query: (
@@ -61,6 +62,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: `${BASE_URL}/jobs`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.9,
+    },
+    {
+      url: `${BASE_URL}/jobs/agent`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.82,
+    },
+    {
+      url: `${BASE_URL}/resume-agent`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.82,
+    },
+    {
       url: `${BASE_URL}/categories`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
@@ -90,6 +109,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       collections,
       questions,
       tags,
+      jobs,
     ] = await Promise.all([
       fetchAllPages<PostSitemapRow>((from, to) =>
         supabase
@@ -137,6 +157,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           .order('created_at', { ascending: true })
           .range(from, to)
       ),
+      fetchAllPages<JobSitemapRow>((from, to) =>
+        supabase
+          .from('job_listings')
+          .select('id, updated_at, last_synced_at')
+          .order('updated_at', { ascending: false, nullsFirst: false })
+          .range(from, to)
+      ),
     ])
 
     const postPages: SitemapEntry[] = posts.map((post) => ({
@@ -181,10 +208,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.75,
     }))
 
+    const jobPages: SitemapEntry[] = jobs.map((job) => ({
+      url: `${BASE_URL}/jobs/${job.id}`,
+      lastModified: toLastModified(job.updated_at ?? job.last_synced_at),
+      changeFrequency: 'weekly',
+      priority: 0.75,
+    }))
+
     return [
       ...staticPages,
       ...postPages,
       ...coursePages,
+      ...jobPages,
       ...collectionPages,
       ...questionPages,
       ...tagPages,
