@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import {
   App,
   Button,
+  Collapse,
   Form,
   Input,
   InputNumber,
@@ -12,6 +13,7 @@ import {
   Progress,
   Radio,
   Switch,
+  Space,
   Table,
   Tabs,
   Tag,
@@ -96,6 +98,7 @@ export default function LessonUploadModal({
   const [coursewareFile, setCoursewareFile] = useState<File | null>(null);
   const [contentHtml, setContentHtml] = useState('');
   const [contentMarkdown, setContentMarkdown] = useState('');
+  const [extraOpen, setExtraOpen] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const loadVideos = useCallback(
@@ -147,6 +150,12 @@ export default function LessonUploadModal({
     setChunkProgress({ uploaded: 0, total: 0, percent: 0 });
     setContentHtml(lesson?.contentHtml ?? lesson?.contentMarkdown ?? '');
     setContentMarkdown(lesson?.contentMarkdown ?? '');
+    const isDoc =
+      mode === 'edit' &&
+      lesson &&
+      !hasLessonVideo(lesson) &&
+      hasLessonDocument(lesson);
+    setExtraOpen(isDoc || lesson?.description || lesson?.coursewareUrl ? ['extra'] : []);
   }, [open, defaultSortOrder, form, lesson, mode]);
 
   useEffect(() => {
@@ -381,69 +390,23 @@ export default function LessonUploadModal({
       okText={okText}
       cancelText="取消"
       confirmLoading={loading}
-      width={720}
+      width={640}
       destroyOnClose
+      styles={{ body: { maxHeight: '70vh', overflowY: 'auto', paddingTop: 12 } }}
     >
-      <Form form={form} layout="vertical">
+      <Form form={form} layout="vertical" size="small">
         <Form.Item
           name="title"
           label="课时标题"
           rules={[{ required: true, message: '请输入课时标题' }]}
+          style={{ marginBottom: 12 }}
         >
           <Input placeholder="请输入课时标题" disabled={loading} />
         </Form.Item>
-        <Form.Item name="description" label="课时描述">
-          <Input.TextArea rows={3} placeholder="可选" disabled={loading} />
-        </Form.Item>
-        <Form.Item name="coursewareName" label="课件名称">
-          <Input placeholder="例如：第一课讲义.pdf" disabled={loading} />
-        </Form.Item>
-        <Form.Item name="coursewareUrl" label="课件链接">
-          <Input placeholder="可直接粘贴外部 URL，或下方上传课件文件" disabled={loading || Boolean(coursewareFile)} />
-        </Form.Item>
-        <Form.Item label="上传课件">
-          <Upload
-            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,application/pdf"
-            maxCount={1}
-            fileList={coursewareFileList}
-            beforeUpload={(file) => {
-              setCoursewareFile(file);
-              if (!form.getFieldValue('coursewareName')) {
-                form.setFieldValue('coursewareName', file.name);
-              }
-              return false;
-            }}
-            onRemove={() => {
-              setCoursewareFile(null);
-              return true;
-            }}
-            disabled={loading}
-          >
-            <Button disabled={loading}>选择课件文件</Button>
-          </Upload>
-        </Form.Item>
-        <Form.Item
-          label="课时讲义 / 富文本"
-          required={lessonMode === 'document'}
-          extra={
-            lessonMode === 'document'
-              ? '纯文档课时必须填写讲义，学员将在学习页以文档形式阅读。'
-              : '可选。填写后学员可在视频下方查看讲义，或配合代码学习 Tab。'
-          }
-        >
-          <Editor
-            value={contentHtml || contentMarkdown}
-            onChange={(html, markdown) => {
-              setContentHtml(html);
-              setContentMarkdown(markdown);
-            }}
-          />
-        </Form.Item>
-        <Form.Item
-          label="课时类型"
-          required={lessonMode !== 'document'}
-        >
+
+        <Form.Item label="课时类型" required={lessonMode !== 'document'} style={{ marginBottom: 12 }}>
           <Tabs
+            size="small"
             activeKey={lessonMode}
             onChange={(key) => {
               const nextMode = key as LessonSourceMode;
@@ -457,25 +420,14 @@ export default function LessonUploadModal({
               if (nextMode !== 'upload') {
                 setVideoFile(null);
               }
+              if (nextMode === 'document') {
+                setExtraOpen(['extra']);
+              }
             }}
             items={[
               {
-                key: 'document',
-                label: '纯文档课时',
-                children: (
-                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-sm leading-6 text-slate-600">
-                    不需要上传视频。填写上方「课时讲义」即可，学员在学习页会以文档阅读模式查看本课时。
-                    {mode === 'edit' && lesson?.videoId ? (
-                      <p className="mt-2 text-amber-700">
-                        保存后将会移除当前课时绑定的视频，改为纯文档课时。
-                      </p>
-                    ) : null}
-                  </div>
-                ),
-              },
-              {
                 key: 'upload',
-                label: mode === 'edit' ? '替换为新视频' : '上传新视频',
+                label: mode === 'edit' ? '替换视频' : '上传视频',
                 children: (
                   <Upload.Dragger
                     accept="video/mp4,video/*"
@@ -494,23 +446,24 @@ export default function LessonUploadModal({
                       return true;
                     }}
                     disabled={loading}
+                    style={{ padding: '8px 0' }}
                   >
-                    <p className="ant-upload-drag-icon">
+                    <p className="ant-upload-drag-icon" style={{ marginBottom: 4 }}>
                       <CloudUploadOutlined />
                     </p>
-                    <p className="ant-upload-text">点击或拖拽 MP4 到此处</p>
-                    <p className="ant-upload-hint">通过 Video Manager API 分片上传</p>
+                    <p className="ant-upload-text" style={{ margin: 0 }}>点击或拖拽 MP4 到此处</p>
                   </Upload.Dragger>
                 ),
               },
               {
                 key: 'reuse',
-                label: mode === 'edit' ? '切换已有视频' : '复用已有视频',
+                label: mode === 'edit' ? '切换视频' : '复用视频',
                 children: (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <Input.Search
-                      placeholder="按标题筛选当前页"
+                      placeholder="按标题筛选"
                       allowClear
+                      size="small"
                       value={videoSearch}
                       onChange={(event) => setVideoSearch(event.target.value)}
                       disabled={loading}
@@ -526,7 +479,8 @@ export default function LessonUploadModal({
                         pageSize: VIDEO_PAGE_SIZE,
                         total: videoTotal,
                         showSizeChanger: false,
-                        showTotal: (total) => `共 ${total} 个视频`,
+                        size: 'small',
+                        showTotal: (total) => `共 ${total} 个`,
                         onChange: (page) => loadVideos(page),
                       }}
                       onRow={(record) => ({
@@ -535,20 +489,106 @@ export default function LessonUploadModal({
                         },
                         style: { cursor: loading ? 'not-allowed' : 'pointer' },
                       })}
-                      scroll={{ y: 240 }}
+                      scroll={{ y: 160 }}
                     />
+                  </div>
+                ),
+              },
+              {
+                key: 'document',
+                label: '纯文档',
+                children: (
+                  <div className="rounded border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs leading-5 text-slate-600">
+                    不需要视频，在下方「更多选项」中填写讲义即可。
+                    {mode === 'edit' && lesson?.videoId ? (
+                      <span className="text-amber-700"> 保存后将移除已绑定的视频。</span>
+                    ) : null}
                   </div>
                 ),
               },
             ]}
           />
         </Form.Item>
-        <Form.Item name="sortOrder" label="排序号">
-          <InputNumber min={0} style={{ width: '100%' }} disabled={loading} />
-        </Form.Item>
-        <Form.Item name="isFree" label="免费课时" valuePropName="checked">
-          <Switch disabled={loading} />
-        </Form.Item>
+
+        <Space size={16} style={{ width: '100%' }}>
+          <Form.Item name="sortOrder" label="排序" style={{ marginBottom: 0, flex: 1 }}>
+            <InputNumber min={0} style={{ width: '100%' }} disabled={loading} />
+          </Form.Item>
+          <Form.Item name="isFree" label="免费课时" valuePropName="checked" style={{ marginBottom: 0 }}>
+            <Switch disabled={loading} size="small" />
+          </Form.Item>
+        </Space>
+
+        <Collapse
+          ghost
+          size="small"
+          style={{ marginTop: 8 }}
+          activeKey={extraOpen}
+          onChange={(keys) => setExtraOpen(Array.isArray(keys) ? keys : [keys])}
+          items={[
+            {
+              key: 'extra',
+              label: '更多选项（描述、课件、讲义）',
+              children: (
+                <>
+                  <Form.Item name="description" label="课时描述" style={{ marginBottom: 12 }}>
+                    <Input.TextArea rows={2} placeholder="可选" disabled={loading} />
+                  </Form.Item>
+                  <Form.Item name="coursewareName" label="课件名称" style={{ marginBottom: 12 }}>
+                    <Input placeholder="例如：第一课讲义.pdf" disabled={loading} />
+                  </Form.Item>
+                  <Form.Item name="coursewareUrl" label="课件链接" style={{ marginBottom: 12 }}>
+                    <Input
+                      placeholder="粘贴 URL 或下方上传文件"
+                      disabled={loading || Boolean(coursewareFile)}
+                    />
+                  </Form.Item>
+                  <Form.Item label="上传课件" style={{ marginBottom: 12 }}>
+                    <Upload
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,application/pdf"
+                      maxCount={1}
+                      fileList={coursewareFileList}
+                      beforeUpload={(file) => {
+                        setCoursewareFile(file);
+                        if (!form.getFieldValue('coursewareName')) {
+                          form.setFieldValue('coursewareName', file.name);
+                        }
+                        return false;
+                      }}
+                      onRemove={() => {
+                        setCoursewareFile(null);
+                        return true;
+                      }}
+                      disabled={loading}
+                    >
+                      <Button size="small" disabled={loading}>
+                        选择课件
+                      </Button>
+                    </Upload>
+                  </Form.Item>
+                  <Form.Item
+                    label="课时讲义"
+                    required={lessonMode === 'document'}
+                    extra={
+                      lessonMode === 'document'
+                        ? '纯文档课时必须填写讲义'
+                        : '可选，学员可在视频下方查看'
+                    }
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Editor
+                      value={contentHtml || contentMarkdown}
+                      onChange={(html, markdown) => {
+                        setContentHtml(html);
+                        setContentMarkdown(markdown);
+                      }}
+                    />
+                  </Form.Item>
+                </>
+              ),
+            },
+          ]}
+        />
       </Form>
 
       {loading && lessonMode === 'upload' && uploadProgress > 0 && (

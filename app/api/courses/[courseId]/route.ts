@@ -225,7 +225,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { status, price, isFree, title, description } = body;
+    const { status, price, isFree, title, description, coverImageUrl } = body;
 
     const updates: Record<string, unknown> = {};
 
@@ -238,6 +238,13 @@ export async function PATCH(
 
     if (description !== undefined) {
       updates.description = description?.trim() || null;
+    }
+
+    if (coverImageUrl !== undefined) {
+      updates.cover_image_url =
+        typeof coverImageUrl === 'string' && coverImageUrl.trim()
+          ? coverImageUrl.trim()
+          : null;
     }
 
     if (status !== undefined) {

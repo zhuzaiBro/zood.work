@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS courses (
   price DECIMAL(10, 2) DEFAULT 0,
   is_free BOOLEAN DEFAULT false,
   status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+  sort_order INTEGER DEFAULT 0,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

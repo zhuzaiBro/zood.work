@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     const { data, error } = await adminClient
       .from('courses')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error('获取课程列表失败:', error);
@@ -45,11 +46,22 @@ export async function POST(request: NextRequest) {
 
     // 使用管理员客户端创建课程（绕过 RLS）
     const adminClient = createAdminClient();
+
+    const { count, error: countError } = await adminClient
+      .from('courses')
+      .select('*', { count: 'exact', head: true });
+
+    if (countError) {
+      console.error('查询课程数量失败:', countError);
+      return NextResponse.json({ error: countError.message }, { status: 500 });
+    }
+
     const { data, error } = await adminClient
       .from('courses')
       .insert({
         title: title.trim(),
         description: description?.trim() || null,
+        sort_order: count ?? 0,
         // created_by: user.id,
       })
       .select()

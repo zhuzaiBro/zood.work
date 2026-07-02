@@ -67,7 +67,8 @@ export async function getPublishedCoursesWithStats(): Promise<PublishedCourseWit
     .from('courses')
     .select('*')
     .eq('status', 'published')
-    .order('created_at', { ascending: false });
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
 
   if (coursesError) {
     throw new Error(coursesError.message);

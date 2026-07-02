@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
     
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error('获取课程列表失败:', error);

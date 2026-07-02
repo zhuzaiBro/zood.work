@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '@/types/user';
 import CourseFormModal, { CourseFormValues } from '@/components/admin/CourseFormModal';
+import CourseListTable, { type CourseRow } from '@/components/admin/CourseListTable';
 import {
   App,
   Button,
@@ -14,32 +14,11 @@ import {
   Result,
   Space,
   Spin,
-  Table,
-  Tag,
   Typography,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 
-interface Course {
-  id: string;
-  title: string;
-  description: string | null;
-  cover_image_url: string | null;
-  price: number;
-  is_free: boolean;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
 const { Title, Text } = Typography;
-
-const statusMap: Record<string, { color: string; label: string }> = {
-  draft: { color: 'default', label: '草稿' },
-  published: { color: 'green', label: '已发布' },
-  archived: { color: 'orange', label: '已归档' },
-};
 
 export default function VideoManagePage() {
   const router = useRouter();
@@ -48,7 +27,7 @@ export default function VideoManagePage() {
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [hasPermission, setHasPermission] = useState(false);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<CourseRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -95,7 +74,12 @@ export default function VideoManagePage() {
         throw new Error(errorData.error || '加载课程失败');
       }
       const { courses: data } = await response.json();
-      setCourses(data || []);
+      setCourses(
+        (data || []).map((course: CourseRow) => ({
+          ...course,
+          sort_order: course.sort_order ?? 0,
+        })),
+      );
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载课程失败');
     } finally {
@@ -131,47 +115,6 @@ export default function VideoManagePage() {
     }
   };
 
-  const columns: ColumnsType<Course> = [
-    {
-      title: '课程名称',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: string) => {
-        const item = statusMap[status] || { color: 'default', label: status };
-        return <Tag color={item.color}>{item.label}</Tag>;
-      },
-    },
-    {
-      title: '免费',
-      dataIndex: 'is_free',
-      key: 'is_free',
-      width: 80,
-      render: (isFree: boolean) => (isFree ? <Tag color="blue">免费</Tag> : '-'),
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 120,
-      render: (value: string) => new Date(value).toLocaleDateString('zh-CN'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 100,
-      render: (_, record) => (
-        <Link href={`/admin/videoManage/${record.id}`}>管理</Link>
-      ),
-    },
-  ];
-
   if (isCheckingAuth) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 120 }}>
@@ -202,7 +145,7 @@ export default function VideoManagePage() {
           <Title level={3} style={{ marginBottom: 4 }}>
             视频课程管理
           </Title>
-          <Text type="secondary">管理课程列表，进入详情编辑章节与课时</Text>
+          <Text type="secondary">拖拽或修改排序号调整课程顺序，前台列表按此顺序展示</Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadCourses} loading={loading}>
@@ -215,14 +158,24 @@ export default function VideoManagePage() {
       </div>
 
       <Card>
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={courses}
-          loading={loading}
-          locale={{ emptyText: <Empty description="暂无课程" /> }}
-          pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 门课程` }}
-        />
+        {courses.length === 0 && !loading ? (
+          <Empty description="暂无课程">
+            <Button type="primary" onClick={() => setCreateModalOpen(true)}>
+              创建课程
+            </Button>
+          </Empty>
+        ) : (
+          <>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              拖拽左侧 ⋮⋮ 调整顺序，或直接修改排序号后回车
+            </Text>
+            <CourseListTable
+              courses={courses}
+              loading={loading}
+              onCoursesChange={setCourses}
+            />
+          </>
+        )}
       </Card>
 
       <CourseFormModal

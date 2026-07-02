@@ -742,6 +742,7 @@ export type Database = {
           price: number
           is_free: boolean
           status: string
+          sort_order: number
           created_by: string | null
           created_at: string
           updated_at: string
@@ -754,6 +755,7 @@ export type Database = {
           price?: number
           is_free?: boolean
           status?: string
+          sort_order?: number
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -766,6 +768,7 @@ export type Database = {
           price?: number
           is_free?: boolean
           status?: string
+          sort_order?: number
           created_by?: string | null
           created_at?: string
           updated_at?: string
