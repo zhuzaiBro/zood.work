@@ -258,7 +258,10 @@ export default function CoursePlayer({
 
   // 视频播放器相关状态
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerAnchorRef = useRef<HTMLDivElement>(null);
   const streamContainerRef = useRef<HTMLDivElement>(null);
+  const [isMiniPlayer, setIsMiniPlayer] = useState(false);
+  const [miniPlayerDismissed, setMiniPlayerDismissed] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -1256,6 +1259,50 @@ export default function CoursePlayer({
     }
   }, [learningWorkspaceTab, learningWorkspaceTabs]);
 
+  const canUseMiniPlayer =
+    Boolean(currentLesson?.hasVideo) &&
+    !isCurrentDocumentOnly &&
+    !requiresLoginToWatch &&
+    currentLesson?.accessReason !== "purchase";
+
+  const showMiniPlayer = canUseMiniPlayer && isMiniPlayer && !miniPlayerDismissed;
+
+  useEffect(() => {
+    setIsMiniPlayer(false);
+    setMiniPlayerDismissed(false);
+  }, [currentLesson?.id]);
+
+  useEffect(() => {
+    const anchor = playerAnchorRef.current;
+    if (!anchor || !canUseMiniPlayer) {
+      setIsMiniPlayer(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsMiniPlayer(false);
+          setMiniPlayerDismissed(false);
+        } else {
+          setIsMiniPlayer(true);
+        }
+      },
+      {
+        threshold: 0.12,
+        rootMargin: "-72px 0px 0px 0px",
+      },
+    );
+
+    observer.observe(anchor);
+    return () => observer.disconnect();
+  }, [canUseMiniPlayer, currentLesson?.id]);
+
+  const scrollToMainPlayer = () => {
+    setMiniPlayerDismissed(false);
+    playerAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   const filteredChapters =
     selectedChapter === "all"
       ? chapters
@@ -1626,16 +1673,60 @@ export default function CoursePlayer({
                   </div>
                 ) : (
                 <div>
-                  <div
-                    ref={streamContainerRef}
-                    className="aspect-video bg-black relative overflow-hidden group"
-                    onMouseMove={() => setShowControls(true)}
-                    onMouseLeave={() => {
-                      if (isPlaying) {
-                        setShowControls(false);
-                      }
-                    }}
-                  >
+                  <div ref={playerAnchorRef} className="relative w-full">
+                    {showMiniPlayer && (
+                      <div
+                        className="aspect-video w-full bg-slate-950"
+                        aria-hidden
+                      />
+                    )}
+                    <div
+                      ref={streamContainerRef}
+                      className={`aspect-video bg-black relative overflow-hidden group ${
+                        showMiniPlayer
+                          ? "fixed bottom-20 right-4 z-[55] w-[min(360px,calc(100vw-2rem))] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] ring-1 ring-white/10 sm:right-6 animate-in fade-in slide-in-from-bottom-4 duration-300"
+                          : "w-full"
+                      }`}
+                      onMouseMove={() => setShowControls(true)}
+                      onMouseLeave={() => {
+                        if (isPlaying) {
+                          setShowControls(false);
+                        }
+                      }}
+                    >
+                    {showMiniPlayer && (
+                      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent px-2.5 pb-6 pt-2">
+                        <button
+                          type="button"
+                          onClick={scrollToMainPlayer}
+                          className="min-w-0 flex-1 truncate text-left text-xs font-medium text-white/90 transition hover:text-white"
+                          title={currentLesson.title}
+                        >
+                          {currentLesson.title}
+                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={scrollToMainPlayer}
+                            className="rounded-md bg-white/15 px-2 py-1 text-[11px] font-medium text-white backdrop-blur transition hover:bg-white/25"
+                            title="回到播放器"
+                          >
+                            回顶部
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMiniPlayerDismissed(true)}
+                            className="rounded-md bg-white/15 p-1 text-white backdrop-blur transition hover:bg-white/25"
+                            aria-label="关闭小窗"
+                            title="关闭小窗"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="relative h-full w-full">
                       <video
                         ref={videoRef}
@@ -1699,6 +1790,7 @@ export default function CoursePlayer({
                         </div>
                       )}
                     </div>
+                  </div>
                   </div>
                   <div className="border-t border-gray-200 p-6 lg:p-8">
                     <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#fbfdff_0%,#f7faff_100%)] px-5 py-5 shadow-sm sm:px-6">
