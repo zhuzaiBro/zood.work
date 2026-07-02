@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import Link from 'next/link'
+import LazyLink from '@/components/LazyLink'
 import { getPublishedCoursesWithStats } from '@/lib/courses/getPublishedCoursesWithStats'
 import { formatDuration } from '@/lib/formatDuration'
 import type { Metadata } from 'next'
@@ -67,7 +67,7 @@ export default async function CoursesPage() {
         {coursesWithStats && coursesWithStats.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {coursesWithStats.map((course: Course) => (
-              <Link
+              <LazyLink
                 key={course.id}
                 href={`/learn?courseId=${course.id}`}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
@@ -196,7 +196,7 @@ export default async function CoursesPage() {
                     </span>
                   </div>
                 </div>
-              </Link>
+              </LazyLink>
             ))}
           </div>
         ) : (

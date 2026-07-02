@@ -1,7 +1,7 @@
 'use client'
 
 import { useProfile, useIsAuthenticated, useIsAdmin } from '@/store/userStore'
-import Link from 'next/link'
+import LazyLink from '@/components/LazyLink'
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -39,12 +39,12 @@ export default function UserAvatar() {
 
   if (!isAuthenticated) {
     return (
-      <Link
+      <LazyLink
         href="/login"
         className="rounded-full border border-sky-200/80 bg-white/88 px-5 py-2.5 text-sm font-semibold text-header-sky shadow-[0_12px_28px_rgba(148,163,184,0.14)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:bg-white hover:text-sky-800"
       >
         登录
-      </Link>
+      </LazyLink>
     )
   }
 
@@ -61,7 +61,7 @@ export default function UserAvatar() {
       onMouseLeave={handleMouseLeave}
     >
       {/* 头像触发区 */}
-      <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity py-2">
+      <LazyLink href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity py-2">
         {displayProfile.avatar_url ? (
           <img
             src={displayProfile.avatar_url}
@@ -76,14 +76,14 @@ export default function UserAvatar() {
         <span className="hidden text-sm font-medium text-header-sky sm:inline">
           {displayProfile.display_name || displayProfile.username}
         </span>
-      </Link>
+      </LazyLink>
 
       {/* 下拉菜单 */}
       {isOpen && (
         <div className="absolute right-0 top-full pt-1 w-48 z-50 animate-in fade-in zoom-in-95 duration-100">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 text-sm overflow-hidden ring-1 ring-black/5">
             {/* 用户信息摘要 */}
-            <Link 
+            <LazyLink 
               href="/profile" 
               className="flex items-center gap-2 px-4 py-2.5 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
@@ -91,9 +91,9 @@ export default function UserAvatar() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               个人中心
-            </Link>
+            </LazyLink>
 
-            <Link 
+            <LazyLink 
               href="/interview" 
               className="flex items-center gap-2 px-4 py-2.5 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
@@ -101,9 +101,9 @@ export default function UserAvatar() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               面试记录
-            </Link>
+            </LazyLink>
 
-            <Link 
+            <LazyLink 
               href="/posts/create" 
               className="flex items-center gap-2 px-4 py-2.5 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
@@ -111,11 +111,11 @@ export default function UserAvatar() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               写文章
-            </Link>
+            </LazyLink>
 
             {/* 管理员专属入口 */}
             {isAdmin && (
-              <Link 
+              <LazyLink 
                 href="/admin/questions" 
                 className="flex items-center gap-2 px-4 py-2.5 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
               >
@@ -126,7 +126,7 @@ export default function UserAvatar() {
                 <span className="ml-auto text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
                   Admin
                 </span>
-              </Link>
+              </LazyLink>
             )}
 
             <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import LazyLink from "@/components/LazyLink";
 import Image from "next/image";
 import UserAvatar from "./UserAvatar";
 import {
@@ -90,21 +91,21 @@ export default function Header() {
             {/* <Link href="/" className={linkClass}>
               首页
             </Link> */}
-            <Link href="/courses" className={linkClass}>
+            <LazyLink href="/courses" className={linkClass}>
               学 Web3 / AI
-            </Link>
-            <Link href="/interview" className={linkClass}>
+            </LazyLink>
+            <LazyLink href="/interview" className={linkClass}>
               面试题库
-            </Link>
-            <Link href="/jobs" className={linkClass}>
+            </LazyLink>
+            <LazyLink href="/jobs" className={linkClass}>
               岗位广场
-            </Link>
-            <Link href="/resume-agent" className={linkClass}>
+            </LazyLink>
+            <LazyLink href="/resume-agent" className={linkClass}>
               简历优化
-            </Link>
-            <Link href="/faucet" className={linkClass}>
+            </LazyLink>
+            <LazyLink href="/faucet" className={linkClass}>
               测试币
-            </Link>
+            </LazyLink>
 
             {/* 用户信息或登录按钮 */}
             {isLoading ? (
@@ -155,41 +156,41 @@ export default function Header() {
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-full left-0 right-0 bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
-            <Link
+            <LazyLink
               href="/courses"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
               学 Web3 / AI
-            </Link>
-            <Link
+            </LazyLink>
+            <LazyLink
               href="/interview"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
               面试题库
-            </Link>
-            <Link
+            </LazyLink>
+            <LazyLink
               href="/jobs"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
               岗位广场
-            </Link>
-            <Link
+            </LazyLink>
+            <LazyLink
               href="/resume-agent"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
               简历优化
-            </Link>
-            <Link
+            </LazyLink>
+            <LazyLink
               href="/faucet"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
               测试币
-            </Link>
+            </LazyLink>
             {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
               分类
             </Link> */}
@@ -246,7 +247,7 @@ export default function Header() {
                   {/* 折叠菜单内容 */}
                   {isMobileUserMenuOpen && (
                     <div className="pl-2 space-y-1 animate-in slide-in-from-top-2 fade-in duration-200">
-                      <Link
+                      <LazyLink
                         href="/profile"
                         className="flex items-center gap-3 rounded-lg p-3 text-slate-700 transition-colors hover:bg-white"
                         onClick={closeMobileMenu}
@@ -265,9 +266,9 @@ export default function Header() {
                           />
                         </svg>
                         个人中心
-                      </Link>
+                      </LazyLink>
 
-                      <Link
+                      <LazyLink
                         href="/interview"
                         className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors"
                         onClick={closeMobileMenu}
@@ -286,9 +287,9 @@ export default function Header() {
                           />
                         </svg>
                         面试记录
-                      </Link>
+                      </LazyLink>
 
-                      <Link
+                      <LazyLink
                         href="/posts/create"
                         className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors"
                         onClick={closeMobileMenu}
@@ -307,7 +308,7 @@ export default function Header() {
                           />
                         </svg>
                         写文章
-                      </Link>
+                      </LazyLink>
 
                       <form action="/auth/signout" method="post">
                         <button
