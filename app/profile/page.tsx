@@ -341,29 +341,62 @@ export default function ProfilePage() {
                       </span>
                       <span>{progress ? `${Math.round(progress.averagePercent)}%` : '未开始'}</span>
                     </div>
+                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+                      <span className="text-xs text-slate-400">
+                        {progress?.lastWatchedAt ? `最近学习：${formatDate(progress.lastWatchedAt)}` : '点击进入课程页'}
+                      </span>
+                      <span className="font-bold text-sky-600 transition group-hover:translate-x-0.5">
+                        继续学习 →
+                      </span>
+                    </div>
                   </Link>
                 )
               })}
 
-              {dashboardData.purchaseRequests.map((request) => (
-                <div
-                  key={`purchase-${request.id}`}
-                  className="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm"
-                >
-                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
-                    {formatPurchaseStatus(request.status)}
-                  </span>
-                  <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950">
-                    {request.course_title || '课程购买意向'}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {request.admin_note || '平台还在处理中，管理员会根据你提交的手机号和微信联系你。'}
-                  </p>
-                  <p className="mt-4 text-xs text-slate-500">
-                    提交时间：{formatDate(request.created_at)}
-                  </p>
-                </div>
-              ))}
+              {dashboardData.purchaseRequests.map((request) => {
+                const content = (
+                  <>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                      {formatPurchaseStatus(request.status)}
+                    </span>
+                    <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950 group-hover:text-amber-700">
+                      {request.course_title || '课程购买意向'}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {request.admin_note || '平台还在处理中，管理员会根据你提交的手机号和微信联系你。'}
+                    </p>
+                    <div className="mt-4 flex items-center justify-between border-t border-amber-100 pt-3 text-xs text-slate-500">
+                      <span>提交时间：{formatDate(request.created_at)}</span>
+                      {request.course_id && (
+                        <span className="text-sm font-bold text-amber-700 transition group-hover:translate-x-0.5">
+                          查看课程 →
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )
+
+                if (request.course_id) {
+                  return (
+                    <Link
+                      key={`purchase-${request.id}`}
+                      href={`/learn?courseId=${request.course_id}`}
+                      className="group rounded-2xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-lg"
+                    >
+                      {content}
+                    </Link>
+                  )
+                }
+
+                return (
+                  <div
+                    key={`purchase-${request.id}`}
+                    className="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm"
+                  >
+                    {content}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
