@@ -269,6 +269,7 @@ export default function CoursePlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [playerStatus, setPlayerStatus] = useState("");
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const pendingResumeTimeRef = useRef(0);
@@ -358,6 +359,7 @@ export default function CoursePlayer({
 
   const clearVideoPlayer = () => {
     const video = videoRef.current;
+    setIsVideoReady(false);
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
@@ -543,6 +545,7 @@ export default function CoursePlayer({
       resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
       setIsPlaying(false);
+      setIsVideoReady(false);
       setCurrentTime(0);
       setDuration(0);
       setPlayerStatus("登录后即可观看当前课程视频");
@@ -559,6 +562,7 @@ export default function CoursePlayer({
       resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
       setIsPlaying(false);
+      setIsVideoReady(false);
       setCurrentTime(0);
       setDuration(0);
       setPlayerStatus("当前课时需要先开通课程权限");
@@ -599,6 +603,7 @@ export default function CoursePlayer({
       }
       // 重置播放状态
       setIsPlaying(false);
+      setIsVideoReady(false);
       setCurrentTime(0);
       setDuration(0);
     } else if (shouldShowPurchaseButton) {
@@ -609,6 +614,7 @@ export default function CoursePlayer({
       resumeAppliedLessonRef.current = null;
       setCurrentLesson(lesson);
       setIsPlaying(false);
+      setIsVideoReady(false);
       setCurrentTime(0);
       setDuration(0);
       setPlayerStatus("当前课时需要先开通课程权限");
@@ -1077,6 +1083,7 @@ export default function CoursePlayer({
 
     const setupPlayer = async () => {
       destroyHls();
+      setIsVideoReady(false);
       setPlayerStatus("正在获取播放授权...");
 
       const supabase = createClient();
@@ -1125,12 +1132,8 @@ export default function CoursePlayer({
 
         if (video.canPlayType("application/vnd.apple.mpegurl")) {
           video.src = playUrl;
-          try {
-            await video.play();
-            setPlayerStatus("");
-          } catch {
-            setPlayerStatus("已就绪，请点击播放");
-          }
+          setIsVideoReady(true);
+          setPlayerStatus("已就绪，请点击播放");
           return;
         }
 
@@ -1145,8 +1148,8 @@ export default function CoursePlayer({
         hls.attachMedia(video);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setPlayerStatus("已就绪");
-          video.play().catch(() => setPlayerStatus("已就绪，请点击播放"));
+          setIsVideoReady(true);
+          setPlayerStatus("已就绪，请点击播放");
         });
 
         hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
@@ -1236,6 +1239,19 @@ export default function CoursePlayer({
     if (video) {
       video.playbackRate = rate;
       setPlaybackRate(rate);
+    }
+  };
+
+  const handleStartPlayback = async () => {
+    const video = videoRef.current;
+    if (!video || !currentLesson?.hasVideo || !isVideoReady) return;
+
+    setShowControls(true);
+    setPlayerStatus("");
+    try {
+      await video.play();
+    } catch {
+      setPlayerStatus("播放失败，请再点一次");
     }
   };
 
@@ -1799,6 +1815,37 @@ export default function CoursePlayer({
                           {playerStatus}
                         </div>
                       )}
+                      {!requiresLoginToWatch &&
+                        currentLesson.hasVideo &&
+                        currentLesson.accessReason !== "purchase" &&
+                        isVideoReady &&
+                        !isPlaying && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/25 px-6 text-center">
+                            <button
+                              type="button"
+                              onClick={handleStartPlayback}
+                              className="group inline-flex items-center gap-4 rounded-full bg-white/95 px-6 py-4 text-left text-slate-950 shadow-[0_18px_60px_rgba(0,0,0,0.35)] ring-1 ring-white/70 backdrop-blur transition hover:scale-[1.02] hover:bg-white"
+                              aria-label="播放当前视频"
+                            >
+                              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm transition group-hover:bg-blue-500">
+                                <svg
+                                  className="ml-1 h-6 w-6"
+                                  fill="currentColor"
+                                  viewBox="0 0 24 24"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </span>
+                              <span>
+                                <span className="block text-sm font-black">点击播放</span>
+                                <span className="mt-1 block text-xs font-medium text-slate-500">
+                                  视频已加载完成
+                                </span>
+                              </span>
+                            </button>
+                          </div>
+                        )}
                       {requiresLoginToWatch && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center">
                           <div className="max-w-md">
