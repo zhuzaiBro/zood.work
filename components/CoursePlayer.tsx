@@ -379,6 +379,13 @@ export default function CoursePlayer({
     setExpandedChapters(newExpanded);
   };
 
+  const handleChapterFilterChange = (chapterId: string) => {
+    setSelectedChapter(chapterId);
+    if (chapterId !== "all") {
+      setExpandedChapters(new Set([chapterId]));
+    }
+  };
+
   const flattenLessons = (chapterList: Chapter[]) =>
     chapterList.flatMap((chapter) => chapter.lessons);
 
@@ -1266,6 +1273,8 @@ export default function CoursePlayer({
     currentLesson?.accessReason !== "purchase";
 
   const showMiniPlayer = canUseMiniPlayer && isMiniPlayer && !miniPlayerDismissed;
+  const miniPlayerClassName =
+    "fixed bottom-4 right-4 z-[55] w-[min(520px,calc(100vw-2rem))] rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.5)] ring-1 ring-white/10 sm:bottom-6 sm:right-6 lg:bottom-8 lg:right-8 animate-in fade-in slide-in-from-bottom-4 duration-300";
 
   useEffect(() => {
     setIsMiniPlayer(false);
@@ -1285,12 +1294,13 @@ export default function CoursePlayer({
           setIsMiniPlayer(false);
           setMiniPlayerDismissed(false);
         } else {
-          setIsMiniPlayer(true);
+          const hasScrolledPastPlayer = entry.boundingClientRect.bottom <= 88;
+          setIsMiniPlayer(hasScrolledPastPlayer);
         }
       },
       {
-        threshold: 0.12,
-        rootMargin: "-72px 0px 0px 0px",
+        threshold: 0,
+        rootMargin: "-88px 0px 0px 0px",
       },
     );
 
@@ -1308,6 +1318,10 @@ export default function CoursePlayer({
       ? chapters
       : chapters.filter((ch) => ch.id === selectedChapter);
   const filteredLessons = flattenLessons(filteredChapters);
+  const currentChapterId = currentLesson
+    ? findChapterIdByLessonId(chapters, currentLesson.id)
+    : null;
+  const totalLessonCount = flattenLessons(chapters).length;
 
   if (isLoading || isAuthLoading) {
     return (
@@ -1454,34 +1468,69 @@ export default function CoursePlayer({
                 </button>
               </div>
 
-              {/* 章节选择下拉框 */}
+              {/* 章节筛选 */}
               {!isSidebarCollapsed && activeTab === "catalog" && (
-                <div className="border-b border-slate-200 px-5 py-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-500">
-                        Course Map
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">
-                        按章节浏览本课程
+                <div className="border-b border-slate-200 bg-white px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-950">课程章节</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {chapters.length} 个章节 / {totalLessonCount} 节课
                       </p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                      {flattenLessons(filteredChapters).length} 节课
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleChapterFilterChange("all")}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                        selectedChapter === "all"
+                          ? "bg-slate-950 text-white ring-slate-950"
+                          : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 hover:text-slate-950"
+                      }`}
+                    >
+                      全部
+                    </button>
                   </div>
-                  <select
-                    value={selectedChapter}
-                    onChange={(e) => setSelectedChapter(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  >
-                    <option value="all">全部章节</option>
-                    {chapters.map((chapter) => (
-                      <option key={chapter.id} value={chapter.id}>
-                        {chapter.title}
-                      </option>
-                    ))}
-                  </select>
+
+                  <div className="mt-4 grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                    {chapters.map((chapter, index) => {
+                      const isSelected = selectedChapter === chapter.id;
+                      const isCurrent = currentChapterId === chapter.id;
+
+                      return (
+                        <button
+                          key={chapter.id}
+                          type="button"
+                          onClick={() => handleChapterFilterChange(chapter.id)}
+                          className={`group flex min-h-[108px] flex-col rounded-2xl px-3 py-3 text-left ring-1 transition ${
+                            isSelected
+                              ? "bg-blue-600 text-white ring-blue-600 shadow-sm"
+                              : isCurrent
+                              ? "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"
+                              : "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-white hover:text-slate-950"
+                          }`}
+                        >
+                          <span
+                            className={`text-[11px] font-bold ${
+                              isSelected ? "text-blue-100" : "text-slate-400"
+                            }`}
+                          >
+                            CH {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="mt-1 line-clamp-2 text-sm font-semibold leading-5">
+                            {chapter.title}
+                          </span>
+                          <span
+                            className={`mt-2 text-xs ${
+                              isSelected ? "text-blue-100" : "text-slate-500"
+                            }`}
+                          >
+                            {chapter.lessons.length} 节课
+                            {isCurrent ? " / 正在学习" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1495,10 +1544,20 @@ export default function CoursePlayer({
                     >
                       <button
                         onClick={() => toggleChapter(chapter.id)}
-                        className="group flex w-full items-center justify-between px-5 py-4 transition-colors hover:bg-slate-50"
+                        className={`group flex w-full items-center justify-between gap-3 px-5 py-4 transition-colors ${
+                          currentChapterId === chapter.id
+                            ? "bg-blue-50/70"
+                            : "hover:bg-slate-50"
+                        }`}
                       >
-                        <span className="flex-1 text-left text-sm font-semibold text-slate-900">
-                          {chapter.title}
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="line-clamp-2 text-sm font-semibold text-slate-900">
+                            {chapter.title}
+                          </span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {chapter.lessons.length} 节课
+                            {currentChapterId === chapter.id ? " / 正在学习" : ""}
+                          </span>
                         </span>
                         <svg
                           className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform group-hover:text-slate-600 ${
@@ -1684,7 +1743,7 @@ export default function CoursePlayer({
                       ref={streamContainerRef}
                       className={`aspect-video bg-black relative overflow-hidden group ${
                         showMiniPlayer
-                          ? "fixed bottom-20 right-4 z-[55] w-[min(360px,calc(100vw-2rem))] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] ring-1 ring-white/10 sm:right-6 animate-in fade-in slide-in-from-bottom-4 duration-300"
+                          ? miniPlayerClassName
                           : "w-full"
                       }`}
                       onMouseMove={() => setShowControls(true)}
