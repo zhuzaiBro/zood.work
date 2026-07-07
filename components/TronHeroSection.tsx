@@ -565,10 +565,23 @@ export default function TronHeroSection({
 
     const clock = new THREE.Clock()
     let animationFrame = 0
+    let animationTime = 0
+    const maxFrameDelta = 1 / 30
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        clock.getDelta()
+        pointerVelocity.set(0, 0)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     const animate = () => {
       animationFrame = window.requestAnimationFrame(animate)
-      const elapsed = clock.getElapsedTime()
+      const delta = document.hidden ? 0 : Math.min(clock.getDelta(), maxFrameDelta)
+      animationTime += delta
+      const elapsed = animationTime
       const hoverEnergy = THREE.MathUtils.clamp(
         Math.abs(pointer.x) * 0.34 + Math.abs(pointer.y) * 0.28 + pointerVelocity.length() * 9,
         0,
@@ -589,9 +602,9 @@ export default function TronHeroSection({
       hoverGlow.intensity += (hoverEnergy * 4.5 - hoverGlow.intensity) * 0.12
       hoverGlow.position.set(pointer.x * 2.5, pointer.y * 1.9, 3.2)
 
-      dustPoints.rotation.y -= 0.0012
+      dustPoints.rotation.y -= delta * 0.072
       dustPoints.rotation.x = Math.sin(elapsed * 0.35) * 0.03
-      markerGroup.rotation.y -= 0.0018
+      markerGroup.rotation.y -= delta * 0.108
       markerGroup.rotation.x = Math.sin(elapsed * 0.5) * 0.04
       ringGroup.rotation.z = Math.sin(elapsed * 0.8) * 0.02
 
@@ -613,6 +626,7 @@ export default function TronHeroSection({
       resizeObserver.disconnect()
       container.removeEventListener('pointermove', handlePointerMove)
       container.removeEventListener('pointerleave', handlePointerLeave)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
 
       root.traverse((object) => {
         const mesh = object as THREE.Mesh & {

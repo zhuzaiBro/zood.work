@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useProfile, useUser, useIsAuthenticated, useUserStore } from '@/store/userStore'
 import QiniuUploader from '@/components/QiniuUploader'
 import MembershipConsultationModal from '@/components/MembershipConsultationModal'
@@ -12,6 +13,8 @@ type ProfileDashboardData = {
   enrollments: any[]
   purchaseRequests: any[]
   progress: any[]
+  courses: any[]
+  lessonCountsByCourse: Record<string, number>
   favorites: any[]
   submissions: any[]
   resumeRecords: any[]
@@ -21,6 +24,8 @@ const emptyDashboardData: ProfileDashboardData = {
   enrollments: [],
   purchaseRequests: [],
   progress: [],
+  courses: [],
+  lessonCountsByCourse: {},
   favorites: [],
   submissions: [],
   resumeRecords: [],
@@ -169,10 +174,79 @@ export default function ProfilePage() {
         )
       }
 
+      const enrollments = enrollmentsResult.data ?? []
+      const purchaseRequests = purchaseRequestsResult.data ?? []
+      const progressRows = progressResult.data ?? []
+      const courseIds = Array.from(
+        new Set(
+          [
+            ...enrollments.map((item: any) => item.course_id),
+            ...purchaseRequests.map((item: any) => item.course_id),
+            ...progressRows.map((item: any) => item.course_id),
+          ].filter(Boolean)
+        )
+      )
+
+      let courses: any[] = []
+      let lessonCountsByCourse: Record<string, number> = {}
+
+      if (courseIds.length > 0) {
+        const [coursesResult, chaptersResult] = await Promise.all([
+          supabase
+            .from('courses')
+            .select('id, title, description, cover_image_url, price, is_free, status')
+            .in('id', courseIds),
+          supabase
+            .from('chapters')
+            .select('id, course_id')
+            .in('course_id', courseIds),
+        ])
+
+        if (cancelled) return
+
+        if (coursesResult.error || chaptersResult.error) {
+          setDashboardError((current) =>
+            [current, coursesResult.error?.message, chaptersResult.error?.message]
+              .filter(Boolean)
+              .join('；')
+          )
+        }
+
+        courses = coursesResult.data ?? []
+        const chapters = chaptersResult.data ?? []
+        const chapterToCourse = new Map(
+          chapters.map((chapter: any) => [chapter.id, chapter.course_id])
+        )
+        const chapterIds = chapters.map((chapter: any) => chapter.id)
+
+        if (chapterIds.length > 0) {
+          const lessonsResult = await supabase
+            .from('lessons')
+            .select('id, chapter_id')
+            .in('chapter_id', chapterIds)
+
+          if (cancelled) return
+
+          if (lessonsResult.error) {
+            setDashboardError((current) =>
+              [current, lessonsResult.error?.message].filter(Boolean).join('；')
+            )
+          }
+
+          ;(lessonsResult.data ?? []).forEach((lesson: any) => {
+            const courseId = chapterToCourse.get(lesson.chapter_id)
+            if (!courseId) return
+            lessonCountsByCourse[courseId] = (lessonCountsByCourse[courseId] ?? 0) + 1
+          })
+        }
+      }
+
       setDashboardData({
-        enrollments: enrollmentsResult.data ?? [],
-        purchaseRequests: purchaseRequestsResult.data ?? [],
-        progress: progressResult.data ?? [],
+        enrollments,
+        purchaseRequests,
+        progress: progressRows,
+        courses,
+        lessonCountsByCourse,
         favorites: favoritesResult.data ?? [],
         submissions: submissionsResult.data ?? [],
         resumeRecords: resumeRecordsResult.data ?? [],
@@ -283,7 +357,11 @@ export default function ProfilePage() {
     { id: 'resumes', label: '简历优化' },
   ]
 
-  const courseProgress = buildCourseProgress(dashboardData.progress)
+  const courseProgress = buildCourseProgress(
+    dashboardData.progress,
+    dashboardData.lessonCountsByCourse
+  )
+  const participatedCourses = buildParticipatedCourses(dashboardData, courseProgress)
   const averageProgress = calculateAverageProgress(courseProgress)
   const recentProgress = dashboardData.progress[0]
   const renderTabContent = () => {
@@ -298,7 +376,7 @@ export default function ProfilePage() {
             title="学习与购买的课程"
             description="这里汇总平台给你开通的课程、购买意向，以及每个课程最近的学习进度。"
           />
-          {dashboardData.enrollments.length === 0 && dashboardData.purchaseRequests.length === 0 ? (
+          {participatedCourses.length === 0 ? (
             <EmptyState
               title="还没有课程记录"
               description="去课程页选择感兴趣的 Web3 / AI 课程，免费课可直接学习，付费课提交购买意向后平台会联系你。"
@@ -307,94 +385,86 @@ export default function ProfilePage() {
             />
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {dashboardData.enrollments.map((enrollment) => {
-                const course = relationOne(enrollment.courses)
-                const progress = courseProgress.get(enrollment.course_id)
-
+              {participatedCourses.map((item) => {
                 return (
                   <Link
-                    key={`enrollment-${enrollment.id}`}
-                    href={`/learn?courseId=${enrollment.course_id}`}
-                    className="group rounded-2xl border border-sky-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg"
+                    key={item.key}
+                    href={item.href}
+                    className={`group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${item.borderClass}`}
                   >
+                    <div className="relative aspect-[16/7] overflow-hidden bg-slate-950">
+                      {item.coverImageUrl ? (
+                        <Image
+                          src={item.coverImageUrl}
+                          alt={item.title}
+                          fill
+                          sizes="(min-width: 768px) 50vw, 100vw"
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,#0f172a_0%,#075985_55%,#22d3ee_100%)] px-6 text-center">
+                          <span className="line-clamp-2 text-xl font-black text-white/95">
+                            {item.title}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-950/65 to-transparent" />
+                      <span className="absolute right-4 top-4 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-slate-700 shadow-sm backdrop-blur">
+                        {item.priceLabel}
+                      </span>
+                    </div>
+
+                    <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                          {enrollment.status === 'active' ? '已开通' : '已关闭'}
-                        </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap gap-2">
+                          <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.statusClass}`}>
+                            {item.statusLabel}
+                          </span>
+                          {item.sourceLabel && (
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                              {item.sourceLabel}
+                            </span>
+                          )}
+                        </div>
                         <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950 group-hover:text-sky-600">
-                          {course?.title || '未命名课程'}
+                          {item.title}
                         </h3>
                         <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
-                          {course?.description || enrollment.note || '继续学习，保持节奏。'}
+                          {item.description}
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
-                        {course?.is_free ? '免费' : `¥${Number(course?.price ?? 0)}`}
-                      </span>
                     </div>
 
-                    <ProgressBar value={progress?.averagePercent ?? 0} />
+                    <ProgressBar value={item.progress.averagePercent} />
                     <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
                       <span>
-                        已完成 {progress?.completedLessons ?? 0}/{progress?.totalLessons ?? 0} 节
+                        已学习 {item.progress.watchedLessons}/{item.progress.totalLessons} 节
+                        {item.progress.completedLessons > 0 ? ` / 完成 ${item.progress.completedLessons}` : ''}
                       </span>
-                      <span>{progress ? `${Math.round(progress.averagePercent)}%` : '未开始'}</span>
+                      <span>{item.progress.totalLessons > 0 ? `${Math.round(item.progress.averagePercent)}%` : '暂无课时'}</span>
                     </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
-                      <span className="text-xs text-slate-400">
-                        {progress?.lastWatchedAt ? `最近学习：${formatDate(progress.lastWatchedAt)}` : '点击进入课程页'}
-                      </span>
-                      <span className="font-bold text-sky-600 transition group-hover:translate-x-0.5">
-                        继续学习 →
-                      </span>
-                    </div>
-                  </Link>
-                )
-              })}
-
-              {dashboardData.purchaseRequests.map((request) => {
-                const content = (
-                  <>
-                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
-                      {formatPurchaseStatus(request.status)}
-                    </span>
-                    <h3 className="mt-3 line-clamp-2 text-lg font-black text-slate-950 group-hover:text-amber-700">
-                      {request.course_title || '课程购买意向'}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {request.admin_note || '平台还在处理中，管理员会根据你提交的手机号和微信联系你。'}
-                    </p>
-                    <div className="mt-4 flex items-center justify-between border-t border-amber-100 pt-3 text-xs text-slate-500">
-                      <span>提交时间：{formatDate(request.created_at)}</span>
-                      {request.course_id && (
-                        <span className="text-sm font-bold text-amber-700 transition group-hover:translate-x-0.5">
-                          查看课程 →
+                    <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="line-clamp-1">
+                          {item.progress.lastLessonTitle
+                            ? `最近：${item.progress.lastLessonTitle}`
+                            : item.progress.lastWatchedAt
+                              ? `最近学习：${formatDate(item.progress.lastWatchedAt)}`
+                              : item.footerHint}
+                        </span>
+                        <span className="shrink-0 text-sm font-bold text-sky-600 transition group-hover:translate-x-0.5">
+                          {item.actionLabel} →
+                        </span>
+                      </div>
+                      {item.progress.lastWatchedAt && (
+                        <span className="text-slate-400">
+                          更新时间：{formatDate(item.progress.lastWatchedAt)}
                         </span>
                       )}
                     </div>
-                  </>
-                )
-
-                if (request.course_id) {
-                  return (
-                    <Link
-                      key={`purchase-${request.id}`}
-                      href={`/learn?courseId=${request.course_id}`}
-                      className="group rounded-2xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-lg"
-                    >
-                      {content}
-                    </Link>
-                  )
-                }
-
-                return (
-                  <div
-                    key={`purchase-${request.id}`}
-                    className="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm"
-                  >
-                    {content}
-                  </div>
+                    </div>
+                  </Link>
                 )
               })}
             </div>
@@ -685,7 +755,7 @@ export default function ProfilePage() {
                 </div>
                 
                 <div className="flex flex-wrap gap-4 text-xs">
-                  <span className="opacity-80">已开通课程 {dashboardData.enrollments.filter((item) => item.status === 'active').length} 门</span>
+                  <span className="opacity-80">参与课程 {participatedCourses.length} 门</span>
                   <span className="opacity-80">收藏题目 {dashboardData.favorites.length} 道</span>
                   <span className="opacity-80">简历优化 {dashboardData.resumeRecords.length} 次</span>
                 </div>
@@ -695,9 +765,9 @@ export default function ProfilePage() {
             {/* 学习概览 */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <StatCard
-                label="已开通课程"
-                value={dashboardData.enrollments.filter((item) => item.status === 'active').length}
-                hint="管理员开通 / 已购买"
+                label="参与课程"
+                value={participatedCourses.length}
+                hint="已学习 / 已购买 / 已开通"
               />
               <StatCard
                 label="平均学习进度"
@@ -933,14 +1003,19 @@ function relationOne<T = any>(value: T | T[] | null | undefined): T | null {
   return value ?? null
 }
 
-function buildCourseProgress(progressRows: any[]) {
+function buildCourseProgress(
+  progressRows: any[],
+  lessonCountsByCourse: Record<string, number> = {}
+) {
   const result = new Map<
     string,
     {
       totalLessons: number
+      watchedLessons: number
       completedLessons: number
       averagePercent: number
       lastWatchedAt: string | null
+      lastLessonTitle: string | null
     }
   >()
 
@@ -948,28 +1023,164 @@ function buildCourseProgress(progressRows: any[]) {
     if (!row.course_id) return
 
     const current = result.get(row.course_id) ?? {
-      totalLessons: 0,
+      totalLessons: lessonCountsByCourse[row.course_id] ?? 0,
+      watchedLessons: 0,
       completedLessons: 0,
       averagePercent: 0,
       lastWatchedAt: null,
+      lastLessonTitle: null,
     }
 
-    current.totalLessons += 1
+    current.watchedLessons += 1
     current.completedLessons += row.is_completed ? 1 : 0
     current.averagePercent += Number(row.progress_percent ?? 0)
 
     if (!current.lastWatchedAt || new Date(row.last_watched_at).getTime() > new Date(current.lastWatchedAt).getTime()) {
       current.lastWatchedAt = row.last_watched_at
+      current.lastLessonTitle = relationOne(row.lessons)?.title || null
     }
 
     result.set(row.course_id, current)
   })
 
   result.forEach((value) => {
-    value.averagePercent = value.totalLessons > 0 ? value.averagePercent / value.totalLessons : 0
+    const totalLessons = value.totalLessons || value.watchedLessons
+    value.totalLessons = totalLessons
+    value.averagePercent = totalLessons > 0 ? value.averagePercent / totalLessons : 0
   })
 
   return result
+}
+
+function buildParticipatedCourses(
+  dashboardData: ProfileDashboardData,
+  courseProgress: Map<
+    string,
+    {
+      totalLessons: number
+      watchedLessons: number
+      completedLessons: number
+      averagePercent: number
+      lastWatchedAt: string | null
+      lastLessonTitle: string | null
+    }
+  >
+) {
+  const coursesById = new Map<string, any>()
+  dashboardData.courses.forEach((course) => {
+    if (course?.id) coursesById.set(course.id, course)
+  })
+  dashboardData.enrollments.forEach((enrollment) => {
+    const course = relationOne(enrollment.courses)
+    if (course?.id) coursesById.set(course.id, { ...coursesById.get(course.id), ...course })
+  })
+  dashboardData.progress.forEach((row) => {
+    const course = relationOne(row.courses)
+    if (row.course_id && course) {
+      coursesById.set(row.course_id, { ...coursesById.get(row.course_id), ...course })
+    }
+  })
+
+  const rows = new Map<string, any>()
+
+  dashboardData.progress.forEach((row) => {
+    if (!row.course_id || rows.has(row.course_id)) return
+    const course = coursesById.get(row.course_id)
+    rows.set(row.course_id, {
+      key: `progress-${row.course_id}`,
+      courseId: row.course_id,
+      course,
+      statusLabel: '学习中',
+      statusClass: 'bg-sky-50 text-sky-700',
+      borderClass: 'border-sky-100 hover:border-sky-300',
+      sourceLabel: '有学习记录',
+      footerHint: '点击进入课程页',
+      actionLabel: '继续学习',
+      sortTime: row.last_watched_at,
+    })
+  })
+
+  dashboardData.enrollments.forEach((enrollment) => {
+    if (!enrollment.course_id) return
+    const course = coursesById.get(enrollment.course_id)
+    const existing = rows.get(enrollment.course_id)
+    rows.set(enrollment.course_id, {
+      ...existing,
+      key: `course-${enrollment.course_id}`,
+      courseId: enrollment.course_id,
+      course,
+      statusLabel: enrollment.status === 'active' ? '已开通' : '已关闭',
+      statusClass:
+        enrollment.status === 'active'
+          ? 'bg-emerald-50 text-emerald-700'
+          : 'bg-slate-100 text-slate-500',
+      borderClass:
+        enrollment.status === 'active'
+          ? 'border-sky-100 hover:border-sky-300'
+          : 'border-slate-100 hover:border-slate-300',
+      sourceLabel: enrollment.source === 'purchase' ? '已购买' : '管理员开通',
+      footerHint: enrollment.note || '点击进入课程页',
+      actionLabel: '继续学习',
+      sortTime: existing?.sortTime || enrollment.granted_at,
+    })
+  })
+
+  dashboardData.purchaseRequests.forEach((request) => {
+    if (!request.course_id) return
+    const existing = rows.get(request.course_id)
+    if (existing?.statusLabel === '已开通') return
+
+    const course = coursesById.get(request.course_id)
+    rows.set(request.course_id, {
+      ...existing,
+      key: `course-${request.course_id}`,
+      courseId: request.course_id,
+      course,
+      fallbackTitle: request.course_title,
+      fallbackPrice: request.course_price,
+      statusLabel: formatPurchaseStatus(request.status),
+      statusClass:
+        request.status === 'paid'
+          ? 'bg-emerald-50 text-emerald-700'
+          : request.status === 'closed'
+            ? 'bg-slate-100 text-slate-500'
+            : 'bg-amber-100 text-amber-700',
+      borderClass: 'border-amber-100 hover:border-amber-300',
+      sourceLabel: '购买意向',
+      footerHint: request.admin_note || '平台正在处理中',
+      actionLabel: '查看课程',
+      sortTime: existing?.sortTime || request.paid_at || request.contacted_at || request.created_at,
+    })
+  })
+
+  return Array.from(rows.values())
+    .map((item) => {
+      const progress = courseProgress.get(item.courseId) ?? {
+        totalLessons: dashboardData.lessonCountsByCourse[item.courseId] ?? 0,
+        watchedLessons: 0,
+        completedLessons: 0,
+        averagePercent: 0,
+        lastWatchedAt: null,
+        lastLessonTitle: null,
+      }
+      const course = item.course
+      const price = Number(course?.price ?? item.fallbackPrice ?? 0)
+
+      return {
+        ...item,
+        href: `/learn?courseId=${item.courseId}`,
+        title: course?.title || item.fallbackTitle || '未命名课程',
+        description: course?.description || item.footerHint || '继续学习，保持节奏。',
+        coverImageUrl: course?.cover_image_url || null,
+        priceLabel: course?.is_free ? '免费' : price > 0 ? `¥${price}` : '待确认',
+        progress,
+      }
+    })
+    .sort((a, b) => {
+      const timeA = a.sortTime ? new Date(a.sortTime).getTime() : 0
+      const timeB = b.sortTime ? new Date(b.sortTime).getTime() : 0
+      return timeB - timeA
+    })
 }
 
 function calculateAverageProgress(

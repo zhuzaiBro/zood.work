@@ -238,6 +238,7 @@ export default function CoursePlayer({
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [activeTab, setActiveTab] = useState("catalog");
   const [selectedChapter, setSelectedChapter] = useState<string>("all");
+  const [isChapterMenuOpen, setIsChapterMenuOpen] = useState(false);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
     new Set()
   );
@@ -383,6 +384,7 @@ export default function CoursePlayer({
 
   const handleChapterFilterChange = (chapterId: string) => {
     setSelectedChapter(chapterId);
+    setIsChapterMenuOpen(false);
     if (chapterId !== "all") {
       setExpandedChapters(new Set([chapterId]));
     }
@@ -1282,15 +1284,19 @@ export default function CoursePlayer({
     }
   }, [learningWorkspaceTab, learningWorkspaceTabs]);
 
-  const canUseMiniPlayer =
-    Boolean(currentLesson?.hasVideo) &&
+  const canUseFloatingPlayer =
+    Boolean(currentLesson) &&
     !isCurrentDocumentOnly &&
     !requiresLoginToWatch &&
     currentLesson?.accessReason !== "purchase";
 
-  const showMiniPlayer = canUseMiniPlayer && isMiniPlayer && !miniPlayerDismissed;
+  const showFloatingPlayer =
+    canUseFloatingPlayer && isMiniPlayer && !miniPlayerDismissed;
+  const showMiniPlayer = showFloatingPlayer && Boolean(currentLesson?.hasVideo);
+  const showFloatingLessonShortcut =
+    showFloatingPlayer && !currentLesson?.hasVideo;
   const miniPlayerClassName =
-    "fixed bottom-4 right-4 z-[55] w-[min(520px,calc(100vw-2rem))] rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.5)] ring-1 ring-white/10 sm:bottom-6 sm:right-6 lg:bottom-8 lg:right-8 animate-in fade-in slide-in-from-bottom-4 duration-300";
+    "sticky bottom-24 z-30 ml-auto mt-4 w-[min(420px,100%)] rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.42)] ring-1 ring-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300";
 
   useEffect(() => {
     setIsMiniPlayer(false);
@@ -1299,18 +1305,33 @@ export default function CoursePlayer({
 
   useEffect(() => {
     const anchor = playerAnchorRef.current;
-    if (!anchor || !canUseMiniPlayer) {
+    if (!anchor || !canUseFloatingPlayer) {
       setIsMiniPlayer(false);
       return;
     }
 
+    const floatingTriggerOffset = 140;
+    const updateFloatingState = () => {
+      const rect = anchor.getBoundingClientRect();
+      if (window.scrollY > 120 && rect.top <= floatingTriggerOffset) {
+        setIsMiniPlayer(true);
+        return;
+      }
+
+      if (rect.top > floatingTriggerOffset) {
+        setIsMiniPlayer(false);
+        setMiniPlayerDismissed(false);
+      }
+    };
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setIsMiniPlayer(false);
-          setMiniPlayerDismissed(false);
+          updateFloatingState();
         } else {
-          const hasScrolledPastPlayer = entry.boundingClientRect.bottom <= 88;
+          const hasScrolledPastPlayer =
+            window.scrollY > 120 &&
+            entry.boundingClientRect.top <= floatingTriggerOffset;
           setIsMiniPlayer(hasScrolledPastPlayer);
         }
       },
@@ -1321,14 +1342,23 @@ export default function CoursePlayer({
     );
 
     observer.observe(anchor);
-    return () => observer.disconnect();
-  }, [canUseMiniPlayer, currentLesson?.id]);
+    updateFloatingState();
+    window.addEventListener("scroll", updateFloatingState, { passive: true });
+    window.addEventListener("resize", updateFloatingState);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", updateFloatingState);
+      window.removeEventListener("resize", updateFloatingState);
+    };
+  }, [canUseFloatingPlayer, currentLesson?.id]);
 
   const scrollToMainPlayer = () => {
     setMiniPlayerDismissed(false);
     playerAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
+  const allLessons = flattenLessons(chapters);
   const filteredChapters =
     selectedChapter === "all"
       ? chapters
@@ -1337,7 +1367,40 @@ export default function CoursePlayer({
   const currentChapterId = currentLesson
     ? findChapterIdByLessonId(chapters, currentLesson.id)
     : null;
-  const totalLessonCount = flattenLessons(chapters).length;
+  const currentChapter = currentChapterId
+    ? chapters.find((chapter) => chapter.id === currentChapterId) ?? null
+    : null;
+  const currentLessonIndex = currentLesson
+    ? allLessons.findIndex((lesson) => lesson.id === currentLesson.id)
+    : -1;
+  const currentLessonPosition =
+    currentLessonIndex >= 0 ? currentLessonIndex + 1 : null;
+  const previousLesson =
+    currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1] : null;
+  const nextLesson =
+    currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1
+      ? allLessons[currentLessonIndex + 1]
+      : null;
+  const totalLessonCount = allLessons.length;
+  const selectedChapterMeta =
+    selectedChapter === "all"
+      ? {
+          eyebrow: "全部章节",
+          title: "浏览完整课程目录",
+          count: totalLessonCount,
+          isCurrent: false,
+        }
+      : (() => {
+          const chapterIndex = chapters.findIndex((chapter) => chapter.id === selectedChapter);
+          const chapter = chapterIndex >= 0 ? chapters[chapterIndex] : null;
+
+          return {
+            eyebrow: chapterIndex >= 0 ? `CH ${String(chapterIndex + 1).padStart(2, "0")}` : "章节",
+            title: chapter?.title ?? "选择章节",
+            count: chapter?.lessons.length ?? 0,
+            isCurrent: currentChapterId === selectedChapter,
+          };
+        })();
 
   if (isLoading || isAuthLoading) {
     return (
@@ -1367,13 +1430,15 @@ export default function CoursePlayer({
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)]">
-      <div className="sticky top-[var(--site-header-height)] z-40 border-b border-slate-200/70 bg-[#f7fafe]/88 backdrop-blur-xl">
-        <div className="mx-auto max-w-[1680px] px-4 py-3 sm:px-6 xl:px-8">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbff_0%,#eef5fb_44%,#f8fafc_100%)]">
+      <div className="sticky top-[var(--site-header-height)] z-40 border-b border-white/70 bg-white/78 shadow-[0_12px_40px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+        <div className="mx-auto max-w-[1680px] px-4 pb-4 pt-5 sm:px-6 xl:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Link
               href="/courses"
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-white hover:text-slate-950"
+              aria-label="返回课程列表"
+              title="返回课程列表"
             >
               <svg
                 className="w-5 h-5"
@@ -1388,14 +1453,26 @@ export default function CoursePlayer({
                   d="M15 19l-7-7 7-7"
                 />
               </svg>
-              <span>返回</span>
             </Link>
 
-            <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="min-w-0 flex-1">
               {course && (
-                <h1 className="text-lg font-semibold text-gray-900">
-                  {course.title}
-                </h1>
+                <>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-500">
+                    Zood Learning
+                  </p>
+                  <h1 className="mt-0.5 truncate text-base font-black text-slate-950 sm:text-lg">
+                    {course.title}
+                  </h1>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+              {currentLessonPosition && (
+                <span className="hidden rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 ring-1 ring-slate-200 sm:inline-flex">
+                  {currentLessonPosition}/{totalLessonCount}
+                </span>
               )}
               {!isAuthenticated && (
                 <Link
@@ -1424,7 +1501,6 @@ export default function CoursePlayer({
                   立即购买{coursePrice > 0 ? ` ¥${coursePrice}` : ""}
                 </button>
               )}
-            
             </div>
           </div>
         </div>
@@ -1441,18 +1517,21 @@ export default function CoursePlayer({
           {/* 左侧：课程目录 */}
           <div className="w-full xl:sticky xl:top-[calc(var(--site-header-height)+88px)] xl:self-start">
             {/* 标签页 */}
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(148,163,184,0.12)]">
-              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
+            <div className="flex flex-col overflow-hidden rounded-[30px] border border-white/80 bg-white/[0.92] shadow-[0_24px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 xl:max-h-[calc(100vh-var(--site-header-height)-120px)]">
+              <div className="shrink-0 flex items-center justify-between border-b border-slate-200/80 bg-white px-4 py-3">
                 {!isSidebarCollapsed ? (
-                  <div className="grid flex-1 grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="grid flex-1 grid-cols-2 overflow-hidden rounded-2xl bg-slate-100 p-1">
                     {tabs.map((tab) => (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`px-3 py-3 text-sm font-semibold transition-colors ${
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setIsChapterMenuOpen(false);
+                        }}
+                        className={`rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                           activeTab === tab.id
-                            ? "bg-blue-50 text-blue-600 shadow-[inset_0_-2px_0_0_#2563eb]"
-                            : "text-gray-600 hover:text-gray-900 hover:bg-white/80"
+                            ? "bg-white text-slate-950 shadow-sm"
+                            : "text-slate-500 hover:text-slate-900"
                         }`}
                       >
                         {tab.label}
@@ -1468,8 +1547,11 @@ export default function CoursePlayer({
                 )}
                 <button
                   type="button"
-                  onClick={() => setIsSidebarCollapsed((value) => !value)}
-                  className="ml-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-500 ring-1 ring-slate-200 transition hover:text-slate-900"
+                  onClick={() => {
+                    setIsSidebarCollapsed((value) => !value);
+                    setIsChapterMenuOpen(false);
+                  }}
+                  className="ml-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900"
                   aria-label={isSidebarCollapsed ? "展开学习栏" : "最小化学习栏"}
                   title={isSidebarCollapsed ? "展开学习栏" : "最小化学习栏"}
                 >
@@ -1486,73 +1568,122 @@ export default function CoursePlayer({
 
               {/* 章节筛选 */}
               {!isSidebarCollapsed && activeTab === "catalog" && (
-                <div className="border-b border-slate-200 bg-white px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
+                <div className="shrink-0 border-b border-slate-200/80 bg-white px-4 py-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-950">课程章节</p>
                       <p className="mt-1 text-xs text-slate-500">
                         {chapters.length} 个章节 / {totalLessonCount} 节课
                       </p>
                     </div>
+                  </div>
+                  <div className="relative">
                     <button
                       type="button"
-                      onClick={() => handleChapterFilterChange("all")}
-                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
-                        selectedChapter === "all"
-                          ? "bg-slate-950 text-white ring-slate-950"
-                          : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 hover:text-slate-950"
+                      onClick={() => setIsChapterMenuOpen((value) => !value)}
+                      className={`flex min-h-16 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left shadow-sm transition ${
+                        isChapterMenuOpen
+                          ? "border-sky-300 bg-white ring-4 ring-sky-100"
+                          : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
                       }`}
+                      aria-haspopup="listbox"
+                      aria-expanded={isChapterMenuOpen}
                     >
-                      全部
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                    {chapters.map((chapter, index) => {
-                      const isSelected = selectedChapter === chapter.id;
-                      const isCurrent = currentChapterId === chapter.id;
-
-                      return (
-                        <button
-                          key={chapter.id}
-                          type="button"
-                          onClick={() => handleChapterFilterChange(chapter.id)}
-                          className={`group flex min-h-[108px] flex-col rounded-2xl px-3 py-3 text-left ring-1 transition ${
-                            isSelected
-                              ? "bg-blue-600 text-white ring-blue-600 shadow-sm"
-                              : isCurrent
-                              ? "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"
-                              : "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-white hover:text-slate-950"
-                          }`}
+                      <span className="min-w-0">
+                        <span className="block text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+                          {selectedChapterMeta.eyebrow}
+                          {selectedChapterMeta.isCurrent ? " / 正在学习" : ""}
+                        </span>
+                        <span className="mt-1 line-clamp-1 block text-sm font-bold text-slate-950">
+                          {selectedChapterMeta.title}
+                        </span>
+                        <span className="mt-1 block text-xs font-medium text-slate-500">
+                          {selectedChapterMeta.count} 节课
+                        </span>
+                      </span>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200">
+                        <svg
+                          className={`h-4 w-4 transition-transform ${isChapterMenuOpen ? "rotate-180" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
                         >
-                          <span
-                            className={`text-[11px] font-bold ${
-                              isSelected ? "text-blue-100" : "text-slate-400"
-                            }`}
-                          >
-                            CH {String(index + 1).padStart(2, "0")}
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </span>
+                    </button>
+
+                    {isChapterMenuOpen && (
+                      <div
+                        className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]"
+                        role="listbox"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleChapterFilterChange("all")}
+                          className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                            selectedChapter === "all"
+                              ? "bg-slate-950 text-white"
+                              : "text-slate-700 hover:bg-slate-50"
+                          }`}
+                          role="option"
+                          aria-selected={selectedChapter === "all"}
+                        >
+                          <span>
+                            <span className={`block text-xs font-black ${selectedChapter === "all" ? "text-slate-300" : "text-slate-400"}`}>
+                              ALL
+                            </span>
+                            <span className="mt-1 block text-sm font-bold">全部章节</span>
                           </span>
-                          <span className="mt-1 line-clamp-2 text-sm font-semibold leading-5">
-                            {chapter.title}
-                          </span>
-                          <span
-                            className={`mt-2 text-xs ${
-                              isSelected ? "text-blue-100" : "text-slate-500"
-                            }`}
-                          >
-                            {chapter.lessons.length} 节课
-                            {isCurrent ? " / 正在学习" : ""}
+                          <span className={`text-xs font-semibold ${selectedChapter === "all" ? "text-slate-300" : "text-slate-500"}`}>
+                            {totalLessonCount} 节课
                           </span>
                         </button>
-                      );
-                    })}
+
+                        <div className="max-h-72 overflow-y-auto border-t border-slate-100">
+                          {chapters.map((chapter, index) => {
+                            const isSelected = selectedChapter === chapter.id;
+                            const isCurrent = currentChapterId === chapter.id;
+
+                            return (
+                              <button
+                                key={chapter.id}
+                                type="button"
+                                onClick={() => handleChapterFilterChange(chapter.id)}
+                                className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                                  isSelected
+                                    ? "bg-sky-50 text-sky-700"
+                                    : "text-slate-700 hover:bg-slate-50"
+                                }`}
+                                role="option"
+                                aria-selected={isSelected}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-xs font-black text-slate-400">
+                                    CH {String(index + 1).padStart(2, "0")}
+                                    {isCurrent ? " / 正在学习" : ""}
+                                  </span>
+                                  <span className="mt-1 line-clamp-1 block text-sm font-bold">
+                                    {chapter.title}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
+                                  {chapter.lessons.length} 节课
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* 章节列表 */}
               {!isSidebarCollapsed && activeTab === "catalog" && (
-                <div className="max-h-[calc(100vh-260px)] overflow-y-auto">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain xl:max-h-none [scrollbar-color:#94a3b8_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
                   {filteredChapters.map((chapter) => (
                     <div
                       key={chapter.id}
@@ -1730,7 +1861,7 @@ export default function CoursePlayer({
 
           {/* 右侧：视频播放器 */}
           <div className="flex-1 min-w-0">
-            <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(148,163,184,0.14)]">
+            <div className="overflow-hidden rounded-[34px] border border-white/80 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/70">
               {currentLesson ? (
                 isCurrentDocumentOnly ? (
                   <div className="p-0">
@@ -1757,7 +1888,7 @@ export default function CoursePlayer({
                     )}
                     <div
                       ref={streamContainerRef}
-                      className={`aspect-video bg-black relative overflow-hidden group ${
+                      className={`aspect-video relative overflow-hidden bg-[linear-gradient(135deg,#020617_0%,#0f172a_52%,#111827_100%)] group shadow-inner ${
                         showMiniPlayer
                           ? miniPlayerClassName
                           : "w-full"
@@ -1805,13 +1936,13 @@ export default function CoursePlayer({
                     <div className="relative h-full w-full">
                       <video
                         ref={videoRef}
-                        className="h-full w-full bg-black"
+                        className="h-full w-full bg-black object-contain"
                         controls={!requiresLoginToWatch}
                         playsInline
                         preload="metadata"
                       />
                       {playerStatus && !requiresLoginToWatch && (
-                        <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+                        <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white shadow-lg ring-1 ring-white/10 backdrop-blur">
                           {playerStatus}
                         </div>
                       )}
@@ -1891,18 +2022,39 @@ export default function CoursePlayer({
                         </div>
                       )}
                       {!currentLesson.hasVideo && !currentLesson.accessReason && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black text-sm text-white/70">
-                          当前课时暂无视频，请查看下方讲义或文档
+                        <div className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(135deg,#020617_0%,#0f172a_100%)] px-6 text-center">
+                          <div className="max-w-md">
+                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
+                              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <p className="mt-4 text-base font-semibold text-white">当前课时暂无视频</p>
+                            <p className="mt-2 text-sm leading-6 text-white/65">
+                              可以继续查看下方讲义、课件或代码内容。
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
                   </div>
-                  <div className="border-t border-gray-200 p-6 lg:p-8">
-                    <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#fbfdff_0%,#f7faff_100%)] px-5 py-5 shadow-sm sm:px-6">
+                  <div className="border-t border-slate-200/70 bg-slate-50/60 p-5 lg:p-7">
+                    <div className="rounded-[30px] border border-slate-200 bg-white px-5 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] sm:px-6">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="max-w-3xl">
-                          <p className="text-sm font-semibold text-sky-600">当前课时</p>
+                          <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                            {currentLessonPosition && (
+                              <span className="rounded-full bg-slate-950 px-3 py-1.5 text-white">
+                                第 {currentLessonPosition} / {totalLessonCount} 节
+                              </span>
+                            )}
+                            {currentChapter && (
+                              <span className="rounded-full bg-sky-50 px-3 py-1.5 text-sky-700 ring-1 ring-sky-100">
+                                {currentChapter.title}
+                              </span>
+                            )}
+                          </div>
                           <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 lg:text-[2rem]">
                             {currentLesson.title}
                           </h2>
@@ -1932,6 +2084,30 @@ export default function CoursePlayer({
                             </span>
                           )}
                         </div>
+                      </div>
+                      <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-4">
+                        <button
+                          type="button"
+                          onClick={() => previousLesson && void handleLessonClick(previousLesson)}
+                          disabled={!previousLesson}
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                          上一节
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => nextLesson && void handleLessonClick(nextLesson)}
+                          disabled={!nextLesson}
+                          className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          下一节
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                     {currentLesson.description && (
@@ -2111,6 +2287,49 @@ export default function CoursePlayer({
                 </div>
               )}
             </div>
+            {showFloatingLessonShortcut && currentLesson && (
+              <div className="sticky bottom-24 z-30 ml-auto mt-4 w-[min(360px,100%)] animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="overflow-hidden rounded-2xl bg-slate-950 text-white shadow-[0_24px_80px_rgba(15,23,42,0.42)] ring-1 ring-white/10">
+                  <div className="flex items-start gap-3 p-3.5">
+                    <button
+                      type="button"
+                      onClick={scrollToMainPlayer}
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10 transition hover:bg-white/15"
+                      aria-label="回到播放器"
+                      title="回到播放器"
+                    >
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5v14l14-7L5 5z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={scrollToMainPlayer}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="text-xs font-semibold text-sky-200">当前课时</p>
+                      <p className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-white">
+                        {currentLesson.title}
+                      </p>
+                      <p className="mt-1 text-xs text-white/55">
+                        回到播放器区域
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMiniPlayerDismissed(true)}
+                      className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                      aria-label="关闭悬浮播放"
+                      title="关闭悬浮播放"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
