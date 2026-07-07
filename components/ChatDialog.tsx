@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getChatSessionId } from '@/lib/chatSession';
 import { useUser } from '@/store/userStore';
+import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
 
 type ChatMessage = Database['public']['Tables']['messages']['Row'];
@@ -150,7 +151,14 @@ export default function ChatDialog() {
             </div>
 
             {loading && (
-              <p className="text-center text-xs text-[#8da2c4]">加载中…</p>
+              <div className="space-y-3" aria-label="消息加载中">
+                <div className="flex justify-start">
+                  <Skeleton className="h-16 w-[78%] rounded-2xl bg-white/10" />
+                </div>
+                <div className="flex justify-end">
+                  <Skeleton className="h-12 w-[62%] rounded-2xl bg-sky-200/20" />
+                </div>
+              </div>
             )}
 
             {messages.map((message) => {

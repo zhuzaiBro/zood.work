@@ -23,6 +23,7 @@ import { CloudUploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload';
 import type { ColumnsType } from 'antd/es/table';
 import { createClient } from '@/lib/supabase/client';
+import Skeleton from '@/components/ui/Skeleton';
 import { uploadLessonVideo } from '@/lib/admin/uploadLessonVideo';
 import { uploadLessonCourseware } from '@/lib/uploadLessonCourseware';
 import {
@@ -387,9 +388,9 @@ export default function LessonUploadModal({
       open={open}
       onCancel={handleCancel}
       onOk={handleSubmit}
-      okText={okText}
+      okText={loading ? '保存中' : okText}
       cancelText="取消"
-      confirmLoading={loading}
+      okButtonProps={{ disabled: loading }}
       width={640}
       destroyOnClose
       styles={{ body: { maxHeight: '70vh', overflowY: 'auto', paddingTop: 12 } }}
@@ -468,29 +469,37 @@ export default function LessonUploadModal({
                       onChange={(event) => setVideoSearch(event.target.value)}
                       disabled={loading}
                     />
-                    <Table<VideoRecord>
-                      size="small"
-                      rowKey="id"
-                      columns={videoColumns}
-                      dataSource={filteredVideos}
-                      loading={videosLoading}
-                      pagination={{
-                        current: videoPage,
-                        pageSize: VIDEO_PAGE_SIZE,
-                        total: videoTotal,
-                        showSizeChanger: false,
-                        size: 'small',
-                        showTotal: (total) => `共 ${total} 个`,
-                        onChange: (page) => loadVideos(page),
-                      }}
-                      onRow={(record) => ({
-                        onClick: () => {
-                          if (!loading) setSelectedVideoId(record.id);
-                        },
-                        style: { cursor: loading ? 'not-allowed' : 'pointer' },
-                      })}
-                      scroll={{ y: 160 }}
-                    />
+                    {videosLoading && filteredVideos.length === 0 ? (
+                      <div className="space-y-2 rounded-lg border border-slate-100 p-3">
+                        {[0, 1, 2].map((item) => (
+                          <Skeleton key={item} className="h-10 w-full rounded-lg" />
+                        ))}
+                      </div>
+                    ) : (
+                      <Table<VideoRecord>
+                        size="small"
+                        rowKey="id"
+                        columns={videoColumns}
+                        dataSource={filteredVideos}
+                        loading={false}
+                        pagination={{
+                          current: videoPage,
+                          pageSize: VIDEO_PAGE_SIZE,
+                          total: videoTotal,
+                          showSizeChanger: false,
+                          size: 'small',
+                          showTotal: (total) => `共 ${total} 个`,
+                          onChange: (page) => loadVideos(page),
+                        }}
+                        onRow={(record) => ({
+                          onClick: () => {
+                            if (!loading) setSelectedVideoId(record.id);
+                          },
+                          style: { cursor: loading ? 'not-allowed' : 'pointer' },
+                        })}
+                        scroll={{ y: 160 }}
+                      />
+                    )}
                   </div>
                 ),
               },

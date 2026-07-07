@@ -152,7 +152,6 @@ function CourseCover({ url }: { url: string | null }) {
 
 export default function CourseListTable({
   courses,
-  loading,
   onCoursesChange,
 }: CourseListTableProps) {
   const { message } = App.useApp();
@@ -342,7 +341,7 @@ export default function CourseListTable({
       size="middle"
       columns={columns}
       dataSource={sortedCourses}
-      loading={loading || saving}
+      loading={false}
       pagination={false}
       components={tableComponents}
     />

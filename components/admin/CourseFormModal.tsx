@@ -37,9 +37,9 @@ export default function CourseFormModal({
         onCancel();
       }}
       onOk={handleOk}
-      okText="创建"
+      okText={loading ? '创建中' : '创建'}
       cancelText="取消"
-      confirmLoading={loading}
+      okButtonProps={{ disabled: loading }}
       destroyOnClose
     >
       <Form form={form} layout="vertical" preserve={false}>

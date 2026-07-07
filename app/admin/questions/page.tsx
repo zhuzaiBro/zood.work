@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { UserProfile } from '@/types/user';
+import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import Skeleton from '@/components/ui/Skeleton';
 import {
   Alert,
   App,
@@ -20,7 +22,6 @@ import {
   Row,
   Select,
   Space,
-  Spin,
   Table,
   Tag,
   Typography,
@@ -594,11 +595,7 @@ export default function QuestionsManagePage() {
     : [];
 
   if (isCheckingAuth) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 120 }}>
-        <Spin size="large" tip="验证权限中..." />
-      </div>
-    );
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {
@@ -641,8 +638,8 @@ export default function QuestionsManagePage() {
       <Card
         title="题目列表"
         extra={
-          <Button icon={<ReloadOutlined />} loading={isLoadingQuestions} onClick={loadQuestions}>
-            刷新
+          <Button icon={<ReloadOutlined />} disabled={isLoadingQuestions} onClick={loadQuestions}>
+            {isLoadingQuestions ? '刷新中' : '刷新'}
           </Button>
         }
       >
@@ -668,21 +665,29 @@ export default function QuestionsManagePage() {
           </Col>
         </Row>
 
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={questions}
-          loading={isLoadingQuestions}
-          scroll={{ x: 960 }}
-          locale={{ emptyText: <Empty description="暂无题目" /> }}
-          pagination={{
-            current: currentPage,
-            pageSize: questionsPerPage,
-            showSizeChanger: false,
-            showTotal: (total) => `共 ${total} 条`,
-            onChange: (page) => setCurrentPage(page),
-          }}
-        />
+        {isLoadingQuestions && questions.length === 0 ? (
+          <div className="space-y-3">
+            {[0, 1, 2, 3, 4].map((item) => (
+              <Skeleton key={item} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={questions}
+            loading={false}
+            scroll={{ x: 960 }}
+            locale={{ emptyText: <Empty description="暂无题目" /> }}
+            pagination={{
+              current: currentPage,
+              pageSize: questionsPerPage,
+              showSizeChanger: false,
+              showTotal: (total) => `共 ${total} 条`,
+              onChange: (page) => setCurrentPage(page),
+            }}
+          />
+        )}
       </Card>
 
       <Modal
@@ -697,19 +702,17 @@ export default function QuestionsManagePage() {
               取消
             </Button>
             <Button
-              loading={isLoading && parsedData.length === 0}
-              disabled={!csvFile || !selectedCollectionId}
+              disabled={isLoading || !csvFile || !selectedCollectionId}
               onClick={handleParseCSV}
             >
-              解析 CSV
+              {isLoading && parsedData.length === 0 ? '解析中' : '解析 CSV'}
             </Button>
             <Button
               type="primary"
-              loading={isLoading && parsedData.length > 0}
-              disabled={parsedData.length === 0}
+              disabled={isLoading || parsedData.length === 0}
               onClick={handleImport}
             >
-              开始导入
+              {isLoading && parsedData.length > 0 ? '导入中' : '开始导入'}
             </Button>
           </Space>
         }

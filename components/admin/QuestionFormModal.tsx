@@ -83,9 +83,9 @@ export default function QuestionFormModal({
       open={open}
       onCancel={onCancel}
       onOk={handleOk}
-      okText={mode === 'create' ? '创建' : '保存'}
+      okText={loading ? (mode === 'create' ? '创建中' : '保存中') : mode === 'create' ? '创建' : '保存'}
       cancelText="取消"
-      confirmLoading={loading}
+      okButtonProps={{ disabled: loading }}
       width={800}
       destroyOnClose
       afterOpenChange={handleAfterOpenChange}

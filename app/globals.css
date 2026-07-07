@@ -76,16 +76,6 @@ body {
     }
   }
 
-  @keyframes spin-slow {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .animate-spin-slow {
-    animation: spin-slow 1.2s linear infinite;
-  }
-
   .header-text-stroke {
     -webkit-text-stroke: 0.35px rgb(8 22 45 / 0.72);
     text-shadow:

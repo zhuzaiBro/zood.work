@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import {
   App,
   Button,
@@ -12,7 +13,6 @@ import {
   Result,
   Select,
   Space,
-  Spin,
   Table,
   Tabs,
   Tag,
@@ -462,10 +462,9 @@ export default function PurchaseRequestsPage() {
             <Button
               type="primary"
               size="small"
-              disabled={!record.user_id}
-              loading={grantingConsultationId === record.id}
+              disabled={!record.user_id || grantingConsultationId === record.id}
             >
-              开通会员
+              {grantingConsultationId === record.id ? '开通中' : '开通会员'}
             </Button>
           </Popconfirm>
         );
@@ -474,11 +473,7 @@ export default function PurchaseRequestsPage() {
   ];
 
   if (loading && requests.length === 0 && membershipRequests.length === 0) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 120 }}>
-        <Spin size="large" tip="加载咨询记录..." />
-      </div>
-    );
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {
@@ -505,8 +500,8 @@ export default function PurchaseRequestsPage() {
           </Title>
           <Text type="secondary">查看用户提交的课程购买与会员开通咨询，主动联系后可更新处理状态。</Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={loadRequests} loading={loading}>
-          刷新
+        <Button icon={<ReloadOutlined />} onClick={loadRequests} disabled={loading}>
+          {loading ? '刷新中' : '刷新'}
         </Button>
       </div>
 
@@ -534,7 +529,7 @@ export default function PurchaseRequestsPage() {
                   rowKey="id"
                   columns={courseColumns}
                   dataSource={filteredCourseRequests}
-                  loading={loading}
+                  loading={false}
                   locale={{ emptyText: <Empty description="暂无课程购买咨询" /> }}
                   pagination={{
                     pageSize: 12,
@@ -551,7 +546,7 @@ export default function PurchaseRequestsPage() {
                   rowKey="id"
                   columns={membershipColumns}
                   dataSource={filteredMembershipRequests}
-                  loading={loading}
+                  loading={false}
                   scroll={{ x: 1200 }}
                   locale={{ emptyText: <Empty description="暂无会员开通咨询" /> }}
                   pagination={{

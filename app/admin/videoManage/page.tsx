@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '@/types/user';
 import CourseFormModal, { CourseFormValues } from '@/components/admin/CourseFormModal';
 import CourseListTable, { type CourseRow } from '@/components/admin/CourseListTable';
+import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import {
   App,
   Button,
@@ -13,7 +14,6 @@ import {
   Empty,
   Result,
   Space,
-  Spin,
   Typography,
 } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -116,11 +116,7 @@ export default function VideoManagePage() {
   };
 
   if (isCheckingAuth) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 120 }}>
-        <Spin size="large" tip="验证权限中..." />
-      </div>
-    );
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {
@@ -148,8 +144,8 @@ export default function VideoManagePage() {
           <Text type="secondary">拖拽或修改排序号调整课程顺序，前台列表按此顺序展示</Text>
         </div>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={loadCourses} loading={loading}>
-            刷新
+          <Button icon={<ReloadOutlined />} onClick={loadCourses} disabled={loading}>
+            {loading ? '刷新中' : '刷新'}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
             创建课程
@@ -158,7 +154,9 @@ export default function VideoManagePage() {
       </div>
 
       <Card>
-        {courses.length === 0 && !loading ? (
+        {loading && courses.length === 0 ? (
+          <AdminListSkeleton rows={4} />
+        ) : courses.length === 0 ? (
           <Empty description="暂无课程">
             <Button type="primary" onClick={() => setCreateModalOpen(true)}>
               创建课程
@@ -171,7 +169,7 @@ export default function VideoManagePage() {
             </Text>
             <CourseListTable
               courses={courses}
-              loading={loading}
+              loading={false}
               onCoursesChange={setCourses}
             />
           </>

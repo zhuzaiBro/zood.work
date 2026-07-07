@@ -310,7 +310,7 @@ export default function LessonChapterTable({
       columns={columns}
       dataSource={sortedLessons}
       pagination={false}
-      loading={saving}
+      loading={false}
       locale={{ emptyText: '该章节暂无课时，点击「上传课时」添加' }}
       components={tableComponents}
     />

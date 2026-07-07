@@ -26,6 +26,10 @@ const nextConfig = {
       },
       {
         protocol: "https",
+        hostname: "*.cos.ap-shanghai.myqcloud.com",
+      },
+      {
+        protocol: "https",
         hostname: "t6opae36u.hd-bkt.clouddn.com",
       }
     ],

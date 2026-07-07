@@ -11,7 +11,6 @@ import {
   type FaucetNetworkId,
 } from "@/lib/faucet/networks";
 import Skeleton from "@/components/ui/Skeleton";
-import Spinner from "@/components/ui/Spinner";
 
 type Message = {
   type: "success" | "error";
@@ -458,9 +457,6 @@ export default function Faucet() {
           disabled={primaryDisabled}
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-300 to-blue-500 px-5 py-4 text-base font-black text-[#03111f] shadow-[0_18px_50px_rgba(56,189,248,0.24)] transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(56,189,248,0.34)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
         >
-          {(isClaiming || isSwitchingChain) && (
-            <Spinner size="sm" className="border-black/20 border-t-black" />
-          )}
           {primaryLabel}
         </button>
 

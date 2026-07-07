@@ -11,6 +11,7 @@ import CourseSettingsModal, {
 } from '@/components/admin/CourseSettingsModal';
 import CourseAccessModal from '@/components/admin/CourseAccessModal';
 import LessonChapterTable from '@/components/admin/LessonChapterTable';
+import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import {
   App,
   Breadcrumb,
@@ -24,7 +25,6 @@ import {
   Modal,
   Result,
   Space,
-  Spin,
   Tag,
   Typography,
 } from 'antd';
@@ -315,11 +315,7 @@ export default function CourseDetailPage() {
   };
 
   if (isCheckingAuth) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 120 }}>
-        <Spin size="large" tip="验证权限中..." />
-      </div>
-    );
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {
@@ -421,8 +417,8 @@ export default function CourseDetailPage() {
             </div>
           </Space>
           <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={loadCourseDetail} loading={loading}>
-              刷新
+            <Button icon={<ReloadOutlined />} onClick={loadCourseDetail} disabled={loading}>
+              {loading ? '刷新中' : '刷新'}
             </Button>
             <Button icon={<SettingOutlined />} onClick={() => setSettingsModalOpen(true)}>
               课程设置
@@ -502,9 +498,9 @@ export default function CourseDetailPage() {
         open={chapterModalOpen}
         onCancel={() => setChapterModalOpen(false)}
         onOk={handleSaveChapter}
-        okText="保存"
+        okText={chapterSaving ? '保存中' : '保存'}
         cancelText="取消"
-        confirmLoading={chapterSaving}
+        okButtonProps={{ disabled: chapterSaving }}
         destroyOnClose
       >
         <Form form={chapterForm} layout="vertical" preserve={false}>

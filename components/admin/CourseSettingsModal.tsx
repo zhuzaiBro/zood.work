@@ -81,9 +81,9 @@ export default function CourseSettingsModal({
       open={open}
       onCancel={onCancel}
       onOk={handleOk}
-      okText="保存"
+      okText={loading ? '保存中' : '保存'}
       cancelText="取消"
-      confirmLoading={loading}
+      okButtonProps={{ disabled: loading }}
       width={560}
       destroyOnClose
     >

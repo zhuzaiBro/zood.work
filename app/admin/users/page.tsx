@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import {
   App,
   Avatar,
@@ -13,7 +14,6 @@ import {
   Result,
   Select,
   Space,
-  Spin,
   Statistic,
   Table,
   Tag,
@@ -346,8 +346,8 @@ export default function AdminUsersPage() {
                 title="确认取消该用户会员？"
                 onConfirm={() => updateMembership(record.id, 0)}
               >
-                <Button size="small" danger loading={updatingUserId === record.id}>
-                  取消会员
+                <Button size="small" danger disabled={updatingUserId === record.id}>
+                  {updatingUserId === record.id ? '处理中' : '取消会员'}
                 </Button>
               </Popconfirm>
             </Space>
@@ -359,8 +359,8 @@ export default function AdminUsersPage() {
             title="确认为该用户开通永久会员？"
             onConfirm={() => updateMembership(record.id, 1)}
           >
-            <Button type="primary" size="small" loading={updatingUserId === record.id}>
-              开通会员
+            <Button type="primary" size="small" disabled={updatingUserId === record.id}>
+              {updatingUserId === record.id ? '开通中' : '开通会员'}
             </Button>
           </Popconfirm>
         );
@@ -369,11 +369,7 @@ export default function AdminUsersPage() {
   ];
 
   if (loading && !data) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 120 }}>
-        <Spin size="large" tip="加载用户学习统计..." />
-      </div>
-    );
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {
@@ -405,13 +401,12 @@ export default function AdminUsersPage() {
         <Space>
           <Button
             onClick={repairMissingProfiles}
-            loading={repairingProfiles}
-            disabled={(data?.summary.missingProfileCount ?? 0) === 0}
+            disabled={repairingProfiles || (data?.summary.missingProfileCount ?? 0) === 0}
           >
-            补齐缺失资料
+            {repairingProfiles ? '补齐中' : '补齐缺失资料'}
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={loadUsers} loading={loading}>
-            刷新
+          <Button icon={<ReloadOutlined />} onClick={loadUsers} disabled={loading}>
+            {loading ? '刷新中' : '刷新'}
           </Button>
         </Space>
       </div>
@@ -479,7 +474,7 @@ export default function AdminUsersPage() {
           rowKey="id"
           columns={columns}
           dataSource={filteredUsers}
-          loading={loading}
+          loading={false}
           scroll={{ x: 1400 }}
           locale={{ emptyText: <Empty description="暂无用户学习数据" /> }}
           pagination={{

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { UserProfile } from '@/types/user';
+import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import Skeleton from '@/components/ui/Skeleton';
 import {
   App,
   Avatar,
@@ -17,7 +19,6 @@ import {
   Result,
   Select,
   Space,
-  Spin,
   Statistic,
   Table,
   Tag,
@@ -297,10 +298,10 @@ export default function AdminSubmissionsPage() {
               size="small"
               icon={<PaperClipOutlined />}
               style={{ paddingInline: 0 }}
-              loading={openingAttachmentId === record.id}
+              disabled={openingAttachmentId === record.id}
               onClick={() => openAttachment(record)}
             >
-              {record.attachment_name}
+              {openingAttachmentId === record.id ? '打开中' : record.attachment_name}
             </Button>
           ) : (
             <Text type="secondary">无附件</Text>
@@ -333,11 +334,7 @@ export default function AdminSubmissionsPage() {
   ];
 
   if (isCheckingAuth) {
-    return (
-      <div style={{ minHeight: 320, display: 'grid', placeItems: 'center' }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {
@@ -398,26 +395,34 @@ export default function AdminSubmissionsPage() {
                 ]}
               />
             </Space>
-            <Button icon={<ReloadOutlined />} onClick={loadSubmissions} loading={loading}>
-              刷新
+            <Button icon={<ReloadOutlined />} onClick={loadSubmissions} disabled={loading}>
+              {loading ? '刷新中' : '刷新'}
             </Button>
           </Space>
 
-          <Table
-            rowKey="id"
-            loading={loading}
-            columns={columns}
-            dataSource={filteredSubmissions}
-            locale={{
-              emptyText: <Empty description="还没有用户投稿" />,
-            }}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条投稿`,
-            }}
-            scroll={{ x: 1320 }}
-          />
+          {loading && submissions.length === 0 ? (
+            <div className="space-y-3">
+              {[0, 1, 2, 3, 4].map((item) => (
+                <Skeleton key={item} className="h-12 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <Table
+              rowKey="id"
+              loading={false}
+              columns={columns}
+              dataSource={filteredSubmissions}
+              locale={{
+                emptyText: <Empty description="还没有用户投稿" />,
+              }}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条投稿`,
+              }}
+              scroll={{ x: 1320 }}
+            />
+          )}
         </Space>
       </Card>
 
@@ -433,10 +438,10 @@ export default function AdminSubmissionsPage() {
               key="attachment"
               type="primary"
               icon={<PaperClipOutlined />}
-              loading={openingAttachmentId === selectedSubmission.id}
+              disabled={openingAttachmentId === selectedSubmission.id}
               onClick={() => openAttachment(selectedSubmission)}
             >
-              打开附件
+              {openingAttachmentId === selectedSubmission.id ? '打开中' : '打开附件'}
             </Button>
           ) : null,
         ]}

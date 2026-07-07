@@ -8,7 +8,6 @@ import {
   Modal,
   Select,
   Space,
-  Spin,
   Table,
   Tag,
   Tooltip,
@@ -16,6 +15,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, StopOutlined, UserAddOutlined } from '@ant-design/icons';
+import Skeleton from '@/components/ui/Skeleton';
 
 interface CourseEnrollment {
   id: number;
@@ -231,8 +231,7 @@ export default function CourseAccessModal({
             type={isActive ? 'default' : 'link'}
             icon={isActive ? <StopOutlined /> : <UserAddOutlined />}
             danger={isActive}
-            disabled={!record.hasProfile}
-            loading={grantingUserId === record.id}
+            disabled={!record.hasProfile || grantingUserId === record.id}
             onClick={() => {
               if (isActive) {
                 handleRevoke(record);
@@ -278,7 +277,7 @@ export default function CourseAccessModal({
             value={selectedUserId}
             placeholder="搜索用户昵称、邮箱、手机号"
             optionFilterProp="label"
-            loading={loading}
+            disabled={loading}
             onChange={setSelectedUserId}
             style={{ flex: 1 }}
             options={grantableUsers.map((item) => {
@@ -290,29 +289,37 @@ export default function CourseAccessModal({
                 disabled: !item.hasProfile,
               };
             })}
-            notFoundContent={loading ? <Spin size="small" /> : '暂无可开通用户'}
+            notFoundContent={loading ? '加载中' : '暂无可开通用户'}
           />
           <Button
             type="primary"
             icon={<UserAddOutlined />}
-            loading={Boolean(selectedUserId && grantingUserId === selectedUserId)}
+            disabled={Boolean(selectedUserId && grantingUserId === selectedUserId)}
             onClick={() => handleGrant()}
           >
-            开通
+            {selectedUserId && grantingUserId === selectedUserId ? '开通中' : '开通'}
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={loadAccess} loading={loading} />
+          <Button icon={<ReloadOutlined />} onClick={loadAccess} disabled={loading} />
         </Space.Compact>
 
-        <Table
-          rowKey="id"
-          size="small"
-          loading={loading}
-          columns={columns}
-          dataSource={accessUsers}
-          pagination={{ pageSize: 6, showSizeChanger: false, size: 'small' }}
-          locale={{ emptyText: '暂无用户数据' }}
-          scroll={{ y: 280 }}
-        />
+        {loading && accessUsers.length === 0 ? (
+          <div className="space-y-2 rounded-lg border border-slate-100 p-3">
+            {[0, 1, 2, 3].map((item) => (
+              <Skeleton key={item} className="h-10 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            rowKey="id"
+            size="small"
+            loading={false}
+            columns={columns}
+            dataSource={accessUsers}
+            pagination={{ pageSize: 6, showSizeChanger: false, size: 'small' }}
+            locale={{ emptyText: '暂无用户数据' }}
+            scroll={{ y: 280 }}
+          />
+        )}
       </Space>
     </Modal>
   );

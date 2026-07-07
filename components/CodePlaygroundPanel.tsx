@@ -18,6 +18,8 @@ interface CodePlaygroundPanelProps {
   runToken: number
   onClose: () => void
   onDragHandlePointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void
+  isMaximized?: boolean
+  onToggleMaximize?: () => void
 }
 
 function MacTrafficLights({ onClose }: { onClose: () => void }) {
@@ -44,6 +46,8 @@ export default function CodePlaygroundPanel({
   runToken,
   onClose,
   onDragHandlePointerDown,
+  isMaximized = false,
+  onToggleMaximize,
 }: CodePlaygroundPanelProps) {
   if (!isRunnableLanguage(snippet.language)) {
     return null
@@ -67,7 +71,37 @@ export default function CodePlaygroundPanel({
           <p className="truncate text-[11px] text-slate-400">{playgroundTitle}</p>
         </div>
 
-        <div className="w-[88px]" />
+        <div className="flex w-[88px] justify-end" onPointerDown={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            title={isMaximized ? '还原窗口' : '放大窗口'}
+            aria-label={isMaximized ? '还原代码运行窗口' : '放大代码运行窗口'}
+            onClick={onToggleMaximize}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 transition hover:bg-black/5 hover:text-slate-800"
+          >
+            <svg viewBox="0 0 18 18" className="h-4 w-4" aria-hidden="true">
+              {isMaximized ? (
+                <path
+                  d="M6.5 3.5h8v8m-3-8h3v3M3.5 6.5h8v8m-8-3v3h3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : (
+                <path
+                  d="M3.5 7.5v-4h4m-4 0 5 5m6-5v4m0-4h-4m4 0-5 5M3.5 10.5v4h4m-4 0 5-5m6 5h-4m4 0v-4m0 4-5-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="relative min-h-0 flex-1 bg-white">
