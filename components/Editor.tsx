@@ -22,6 +22,9 @@ type BlockType =
   | 'todo'
   | 'quote'
   | 'code'
+  | 'table'
+  | 'image'
+  | 'divider'
 
 type Block = {
   id: string
@@ -30,6 +33,8 @@ type Block = {
   checked?: boolean
   language?: string
   wrap?: boolean
+  imageUrl?: string
+  alt?: string
 }
 
 type DropPlacement = 'before' | 'after'
@@ -94,6 +99,9 @@ const blockOptions: Array<{ type: BlockType; label: string; name: string }> = [
   { type: 'todo', label: '☑', name: '任务清单' },
   { type: 'code', label: '{}', name: '代码块' },
   { type: 'quote', label: '“', name: '引用' },
+  { type: 'table', label: '▦', name: '表格' },
+  { type: 'image', label: '▣', name: '图片' },
+  { type: 'divider', label: '—', name: '分割线' },
 ]
 
 function createId() {
@@ -112,6 +120,14 @@ function createBlock(type: BlockType = 'paragraph', text = ''): Block {
     checked: type === 'todo' ? false : undefined,
     language: type === 'code' ? 'text' : undefined,
     wrap: type === 'code' ? true : undefined,
+  }
+}
+
+function createImageBlock(imageUrl: string, alt = ''): Block {
+  return {
+    ...createBlock('image', alt),
+    imageUrl,
+    alt,
   }
 }
 
@@ -141,6 +157,224 @@ function htmlToPlainText(value: string) {
   return wrapper.textContent?.trim() ?? ''
 }
 
+function normalizeWhitespace(text: string) {
+  return text
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\t ]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function escapeMarkdownCell(text: string) {
+  return normalizeWhitespace(text).replace(/\|/g, '\\|').replace(/\n/g, '<br />')
+}
+
+function escapeMarkdownInline(text: string) {
+  return text.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]')
+}
+
+function getElementStyle(element: HTMLElement) {
+  try {
+    return window.getComputedStyle(element)
+  } catch {
+    return null
+  }
+}
+
+function isBoldElement(element: HTMLElement) {
+  const tag = element.tagName.toLowerCase()
+  if (tag === 'strong' || tag === 'b') return true
+  const style = getElementStyle(element)
+  const weight = style?.fontWeight ?? element.style.fontWeight
+  return weight === 'bold' || Number.parseInt(weight, 10) >= 600
+}
+
+function isItalicElement(element: HTMLElement) {
+  const tag = element.tagName.toLowerCase()
+  if (tag === 'em' || tag === 'i') return true
+  const style = getElementStyle(element)
+  return (style?.fontStyle ?? element.style.fontStyle) === 'italic'
+}
+
+function inlineNodeToMarkdown(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent ?? ''
+  }
+
+  if (!(node instanceof HTMLElement)) return ''
+
+  const tag = node.tagName.toLowerCase()
+
+  if (tag === 'br') return '\n'
+  if (tag === 'img') {
+    const src = node.getAttribute('src') ?? ''
+    const alt = node.getAttribute('alt') ?? ''
+    return src ? `![${escapeMarkdownInline(alt)}](${src})` : ''
+  }
+
+  const content = Array.from(node.childNodes).map(inlineNodeToMarkdown).join('')
+  const normalizedContent = content.trim()
+  if (!normalizedContent) return content
+
+  if (tag === 'code') return `\`${normalizedContent.replace(/`/g, '\\`')}\``
+  if (tag === 'a') {
+    const href = node.getAttribute('href')
+    return href ? `[${normalizedContent}](${href})` : normalizedContent
+  }
+
+  let result = content
+  if (isBoldElement(node)) result = `**${result.trim()}**`
+  if (isItalicElement(node)) result = `*${result.trim()}*`
+
+  return result
+}
+
+function elementInlineMarkdown(element: HTMLElement) {
+  return normalizeWhitespace(Array.from(element.childNodes).map(inlineNodeToMarkdown).join(''))
+}
+
+function tableElementToMarkdown(table: HTMLTableElement) {
+  const rows = Array.from(table.querySelectorAll('tr'))
+    .map((row) =>
+      Array.from(row.children)
+        .filter((cell) => cell instanceof HTMLTableCellElement)
+        .map((cell) => escapeMarkdownCell(elementInlineMarkdown(cell as HTMLElement)))
+    )
+    .filter((row) => row.length > 0)
+
+  if (!rows.length) return ''
+
+  const columnCount = Math.max(...rows.map((row) => row.length))
+  const normalizedRows = rows.map((row) => [
+    ...row,
+    ...Array.from({ length: columnCount - row.length }, () => ''),
+  ])
+  const header = normalizedRows[0]
+  const divider = Array.from({ length: columnCount }, () => '---')
+  const body = normalizedRows.slice(1)
+
+  return [header, divider, ...body].map((row) => `| ${row.join(' | ')} |`).join('\n')
+}
+
+function blockTypeFromHeading(tag: string): BlockType {
+  if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5') {
+    return tag
+  }
+  return 'paragraph'
+}
+
+function htmlToBlocks(value: string): Block[] {
+  if (typeof document === 'undefined') return []
+
+  const wrapper = document.createElement('div')
+  wrapper.innerHTML = value
+  wrapper.querySelectorAll('script, style, meta, link, noscript').forEach((node) => node.remove())
+
+  const blocks: Block[] = []
+  const visited = new WeakSet<Element>()
+
+  const appendTextBlock = (type: BlockType, text: string) => {
+    const normalized = normalizeWhitespace(text)
+    if (normalized) blocks.push(createBlock(type, normalized))
+  }
+
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendTextBlock('paragraph', node.textContent ?? '')
+      return
+    }
+
+    if (!(node instanceof HTMLElement) || visited.has(node)) return
+
+    const tag = node.tagName.toLowerCase()
+
+    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5') {
+      visited.add(node)
+      appendTextBlock(blockTypeFromHeading(tag), elementInlineMarkdown(node))
+      return
+    }
+
+    if (tag === 'blockquote') {
+      visited.add(node)
+      appendTextBlock('quote', elementInlineMarkdown(node))
+      return
+    }
+
+    if (tag === 'pre') {
+      visited.add(node)
+      if (node.dataset.type === 'table') {
+        appendTextBlock('table', node.textContent ?? '')
+        return
+      }
+
+      const codeElement = node.querySelector('code')
+      const codeBlock = createBlock('code', codeElement?.textContent ?? node.textContent ?? '')
+      const languageMatch = /language-([\w-]+)/.exec(codeElement?.className ?? '')
+      if (languageMatch) codeBlock.language = normalizeCodeLanguage(languageMatch[1])
+      blocks.push(codeBlock)
+      return
+    }
+
+    if (tag === 'ul' || tag === 'ol') {
+      visited.add(node)
+      Array.from(node.children).forEach((item) => {
+        if (!(item instanceof HTMLElement) || item.tagName.toLowerCase() !== 'li') return
+        const clone = item.cloneNode(true) as HTMLElement
+        clone.querySelectorAll('ul, ol').forEach((nested) => nested.remove())
+        appendTextBlock(tag === 'ul' ? 'bullet' : 'numbered', elementInlineMarkdown(clone))
+      })
+      return
+    }
+
+    if (tag === 'table') {
+      visited.add(node)
+      const markdown = tableElementToMarkdown(node as HTMLTableElement)
+      if (markdown) blocks.push(createBlock('table', markdown))
+      return
+    }
+
+    if (tag === 'img') {
+      visited.add(node)
+      const src =
+        node.getAttribute('src') ??
+        node.getAttribute('data-src') ??
+        node.getAttribute('data-original-src')
+      if (src) {
+        blocks.push(createImageBlock(src, node.getAttribute('alt') ?? ''))
+      }
+      return
+    }
+
+    if (tag === 'hr') {
+      visited.add(node)
+      blocks.push(createBlock('divider'))
+      return
+    }
+
+    if (tag === 'p' || tag === 'div' || tag === 'section' || tag === 'article') {
+      const directComplexChildren = Array.from(node.children).filter((child) =>
+        /^(h[1-5]|p|div|blockquote|pre|ul|ol|table|img|hr|section|article)$/i.test(child.tagName)
+      )
+
+      if (directComplexChildren.length) {
+        visited.add(node)
+        Array.from(node.childNodes).forEach(visit)
+        return
+      }
+
+      visited.add(node)
+      appendTextBlock('paragraph', elementInlineMarkdown(node))
+      return
+    }
+
+    Array.from(node.childNodes).forEach(visit)
+  }
+
+  Array.from(wrapper.childNodes).forEach(visit)
+
+  return blocks
+}
+
 function parseInitialBlocks(value: string): Block[] {
   if (!value.trim()) return [createBlock()]
 
@@ -149,58 +383,27 @@ function parseInitialBlocks(value: string): Block[] {
     return lines.length ? lines.map((line) => createBlock('paragraph', line.trim())) : [createBlock()]
   }
 
-  const wrapper = document.createElement('div')
-  wrapper.innerHTML = value
-  const blocks: Block[] = []
-
-  wrapper.childNodes.forEach((node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim()
-      if (text) blocks.push(createBlock('paragraph', text))
-      return
-    }
-
-    if (!(node instanceof HTMLElement)) return
-
-    const tag = node.tagName.toLowerCase()
-    const text = node.textContent?.replace(/\u00a0/g, ' ').trim() ?? ''
-    if (!text) return
-
-    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5') {
-      blocks.push(createBlock(tag as BlockType, text))
-      return
-    }
-
-    if (tag === 'blockquote') {
-      blocks.push(createBlock('quote', text))
-      return
-    }
-
-    if (tag === 'pre') {
-      const codeBlock = createBlock('code', node.textContent ?? '')
-      const codeElement = node.querySelector('code')
-      const languageMatch = /language-([\w-]+)/.exec(codeElement?.className ?? '')
-      if (languageMatch) {
-        codeBlock.language = normalizeCodeLanguage(languageMatch[1])
-      }
-      blocks.push(codeBlock)
-      return
-    }
-
-    if (tag === 'ul' || tag === 'ol') {
-      node.querySelectorAll('li').forEach((item) => {
-        blocks.push(createBlock(tag === 'ul' ? 'bullet' : 'numbered', item.textContent?.trim() ?? ''))
-      })
-      return
-    }
-
-    blocks.push(createBlock('paragraph', text))
-  })
+  const blocks = htmlToBlocks(value)
 
   if (blocks.length) return blocks
 
   const plainText = htmlToPlainText(value)
   return plainText ? [createBlock('paragraph', plainText)] : [createBlock()]
+}
+
+function markdownTableToRows(markdown: string) {
+  return markdown
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('|') && line.endsWith('|'))
+    .filter((line) => !/^\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line))
+    .map((line) =>
+      line
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split(/(?<!\\)\|/)
+        .map((cell) => cell.replace(/\\\|/g, '|').replace(/<br\s*\/?>/gi, '\n').trim())
+    )
 }
 
 function blockToHtml(block: Block) {
@@ -223,6 +426,14 @@ function blockToHtml(block: Block) {
       return `<blockquote>${text}</blockquote>`
     case 'code':
       return `<pre><code class="language-${escapeHtml(block.language ?? 'text')}">${escapeHtml(block.text)}</code></pre>`
+    case 'table':
+      return `<pre data-type="table">${escapeHtml(block.text)}</pre>`
+    case 'image':
+      return block.imageUrl
+        ? `<figure><img src="${escapeHtml(block.imageUrl)}" alt="${escapeHtml(block.alt ?? block.text)}" /></figure>`
+        : ''
+    case 'divider':
+      return '<hr />'
     default:
       return `<p>${text}</p>`
   }
@@ -270,6 +481,12 @@ function blocksToMarkdown(blocks: Block[]) {
             .join('\n')
         case 'code':
           return `\`\`\`${block.language && block.language !== 'text' ? block.language : ''}\n${block.text.trimEnd()}\n\`\`\``
+        case 'table':
+          return block.text.trim()
+        case 'image':
+          return block.imageUrl ? `![${block.alt ?? block.text}](${block.imageUrl})` : ''
+        case 'divider':
+          return '---'
         default:
           return text
       }
@@ -301,6 +518,10 @@ function getTextareaClass(type: BlockType) {
       return `${base} text-lg leading-8 text-slate-500`
     case 'code':
       return `${base} rounded-2xl bg-slate-950 px-4 py-3 font-mono text-sm leading-6 text-cyan-100`
+    case 'table':
+      return `${base} rounded-2xl bg-white px-4 py-3 font-mono text-sm leading-6 text-slate-600 ring-1 ring-slate-200`
+    case 'image':
+      return `${base} text-sm leading-6 text-slate-500`
     default:
       return `${base} text-[17px] leading-8 text-slate-700`
   }
@@ -340,6 +561,10 @@ function getBlockShortcut(text: string): BlockShortcut | null {
 
   if (text === '>') {
     return { type: 'quote', text: '' }
+  }
+
+  if (text === '---') {
+    return { type: 'divider', text: '' }
   }
 
   if (text === '-' || text === '*') {
@@ -445,6 +670,8 @@ export default function Editor({
               checked: type === 'todo' ? block.checked ?? false : undefined,
               language: type === 'code' ? block.language ?? 'text' : undefined,
               wrap: type === 'code' ? block.wrap ?? true : undefined,
+              imageUrl: type === 'image' ? block.imageUrl : undefined,
+              alt: type === 'image' ? block.alt ?? block.text : undefined,
             }
           : block
       )
@@ -481,6 +708,8 @@ export default function Editor({
               checked: shortcut.type === 'todo' ? false : undefined,
               language: shortcut.type === 'code' ? shortcut.language ?? 'text' : undefined,
               wrap: shortcut.type === 'code' ? true : undefined,
+              imageUrl: shortcut.type === 'image' ? block.imageUrl : undefined,
+              alt: shortcut.type === 'image' ? block.alt ?? block.text : undefined,
             }
           : block
       )
@@ -507,6 +736,20 @@ export default function Editor({
     blockId: string,
     patch: Partial<Pick<Block, 'language' | 'wrap'>>
   ) => {
+    commitBlocks(
+      blocks.map((block) =>
+        block.id === blockId
+          ? {
+              ...block,
+              ...patch,
+            }
+          : block
+      )
+    )
+    setActiveBlockId(blockId)
+  }
+
+  const updateBlockMeta = (blockId: string, patch: Partial<Pick<Block, 'text' | 'imageUrl' | 'alt'>>) => {
     commitBlocks(
       blocks.map((block) =>
         block.id === blockId
@@ -708,6 +951,50 @@ export default function Editor({
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>, block: Block) => {
     if (block.type === 'code') return
 
+    const pastedHtml = event.clipboardData.getData('text/html')
+    if (pastedHtml) {
+      const parsedBlocks = htmlToBlocks(pastedHtml)
+
+      if (parsedBlocks.length) {
+        const index = blocks.findIndex((item) => item.id === block.id)
+        if (index === -1) return
+
+        event.preventDefault()
+
+        const selectionStart = event.currentTarget.selectionStart ?? block.text.length
+        const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart
+        const before = block.text.slice(0, selectionStart)
+        const after = block.text.slice(selectionEnd)
+        const nextBlocks = [...blocks]
+        const replacementBlocks: Block[] = []
+
+        if (before.trim()) {
+          replacementBlocks.push({
+            ...block,
+            text: before,
+          })
+        }
+
+        replacementBlocks.push(...parsedBlocks)
+
+        if (after.trim()) {
+          replacementBlocks.push(createBlock('paragraph', after))
+        }
+
+        nextBlocks.splice(index, 1, ...replacementBlocks)
+        commitBlocks(nextBlocks)
+
+        const focusTarget =
+          [...replacementBlocks].reverse().find((item) => !['image', 'divider'].includes(item.type)) ??
+          replacementBlocks[replacementBlocks.length - 1]
+        setActiveBlockId(focusTarget.id)
+        setMenuBlockId(null)
+        setSlashBlockId(null)
+        focusBlock(focusTarget.id)
+        return
+      }
+    }
+
     const pastedText = event.clipboardData.getData('text/plain')
     const segments = splitPastedTextIntoSegments(pastedText)
 
@@ -835,7 +1122,90 @@ export default function Editor({
                   </button>
                 ) : null}
 
-                {block.type === 'code' ? (
+                {block.type === 'divider' ? (
+                  <button
+                    type="button"
+                    onFocus={() => setActiveBlockId(block.id)}
+                    onClick={() => setActiveBlockId(block.id)}
+                    className="my-4 block w-full rounded-xl px-2 py-4 outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-100"
+                    aria-label="分割线"
+                  >
+                    <span className="block h-px w-full bg-slate-200" />
+                  </button>
+                ) : block.type === 'image' ? (
+                  <div
+                    role="group"
+                    tabIndex={0}
+                    onFocus={() => setActiveBlockId(block.id)}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm outline-none focus-within:ring-2 focus-within:ring-blue-100"
+                  >
+                    {block.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- pasted remote/data images are user content
+                      <img
+                        src={block.imageUrl}
+                        alt={block.alt ?? block.text}
+                        className="max-h-[520px] w-full object-contain bg-slate-50"
+                      />
+                    ) : (
+                      <div className="grid min-h-36 place-items-center bg-slate-50 text-sm text-slate-400">
+                        图片地址为空
+                      </div>
+                    )}
+                    <div className="border-t border-slate-100 px-4 py-3">
+                      <input
+                        value={block.text}
+                        onFocus={() => setActiveBlockId(block.id)}
+                        onChange={(event) =>
+                          updateBlockMeta(block.id, {
+                            text: event.target.value,
+                            alt: event.target.value,
+                          })
+                        }
+                        placeholder="添加图片说明"
+                        className="w-full border-0 bg-transparent text-sm text-slate-500 outline-none placeholder:text-slate-300"
+                      />
+                    </div>
+                  </div>
+                ) : block.type === 'table' ? (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    {markdownTableToRows(block.text).length ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+                          <tbody>
+                            {markdownTableToRows(block.text).map((row, rowIndex) => (
+                              <tr
+                                key={`${block.id}-row-${rowIndex}`}
+                                className={rowIndex === 0 ? 'bg-slate-50 font-bold text-slate-700' : ''}
+                              >
+                                {row.map((cell, cellIndex) => (
+                                  <td
+                                    key={`${block.id}-cell-${rowIndex}-${cellIndex}`}
+                                    className="border border-slate-200 px-3 py-2 align-top text-slate-600"
+                                  >
+                                    {cell}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                    <textarea
+                      ref={(node) => {
+                        textareasRef.current[block.id] = node
+                      }}
+                      value={block.text}
+                      onFocus={() => setActiveBlockId(block.id)}
+                      onChange={(event) => updateBlockText(block.id, event.target.value)}
+                      onKeyDown={(event) => handleKeyDown(event, block)}
+                      onPaste={(event) => handlePaste(event, block)}
+                      placeholder="| 表头 | 表头 |\n| --- | --- |\n| 内容 | 内容 |"
+                      rows={3}
+                      className={`${getTextareaClass(block.type)} mt-3`}
+                    />
+                  </div>
+                ) : block.type === 'code' ? (
                   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-[#f7f8fa] shadow-sm">
                     <div className="flex min-h-12 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2 text-slate-500">
                       <div className="flex items-center gap-3">
@@ -981,7 +1351,7 @@ export default function Editor({
 
                 {menuBlockId === block.id ? (
                   <div className="absolute left-[-64px] top-[-66px] z-40 flex w-max max-w-[calc(100vw-120px)] items-center gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
-                    {blockOptions.slice(0, 11).map((option) => (
+                    {blockOptions.map((option) => (
                       <button
                         key={option.type}
                         type="button"
@@ -1026,6 +1396,10 @@ export default function Editor({
                                     type: option.type,
                                     text,
                                     checked: option.type === 'todo' ? false : undefined,
+                                    language: option.type === 'code' ? item.language ?? 'text' : undefined,
+                                    wrap: option.type === 'code' ? item.wrap ?? true : undefined,
+                                    imageUrl: option.type === 'image' ? item.imageUrl : undefined,
+                                    alt: option.type === 'image' ? item.alt ?? text : undefined,
                                   }
                                 : item
                             )
