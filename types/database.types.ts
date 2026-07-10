@@ -256,6 +256,64 @@ export type Database = {
           },
         ]
       }
+      interview_referral_rewards: {
+        Row: {
+          awarded_at: string
+          created_at: string
+          id: string
+          referred_user_id: string
+          referrer_user_id: string
+          reward_days: number
+          reward_vip_level: number
+          source_collection_id: string | null
+          source_url: string | null
+        }
+        Insert: {
+          awarded_at?: string
+          created_at?: string
+          id?: string
+          referred_user_id: string
+          referrer_user_id: string
+          reward_days?: number
+          reward_vip_level?: number
+          source_collection_id?: string | null
+          source_url?: string | null
+        }
+        Update: {
+          awarded_at?: string
+          created_at?: string
+          id?: string
+          referred_user_id?: string
+          referrer_user_id?: string
+          reward_days?: number
+          reward_vip_level?: number
+          source_collection_id?: string | null
+          source_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_referral_rewards_referred_user_id_fkey"
+            columns: ["referred_user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interview_referral_rewards_referrer_user_id_fkey"
+            columns: ["referrer_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interview_referral_rewards_source_collection_id_fkey"
+            columns: ["source_collection_id"]
+            isOneToOne: false
+            referencedRelation: "interview_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interview_tags: {
         Row: {
           created_at: string
@@ -707,6 +765,7 @@ export type Database = {
           is_admin: boolean | null
           updated_at: string | null
           username: string
+          vip_expires_at: string | null
           vip_level: number | null
         }
         Insert: {
@@ -718,6 +777,7 @@ export type Database = {
           is_admin?: boolean | null
           updated_at?: string | null
           username: string
+          vip_expires_at?: string | null
           vip_level?: number | null
         }
         Update: {
@@ -729,6 +789,7 @@ export type Database = {
           is_admin?: boolean | null
           updated_at?: string | null
           username?: string
+          vip_expires_at?: string | null
           vip_level?: number | null
         }
         Relationships: []

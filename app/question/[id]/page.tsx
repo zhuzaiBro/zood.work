@@ -8,6 +8,8 @@ import CodeBlock from '@/components/CodeBlock';
 import QuestionToc from '@/components/question/QuestionToc';
 import MarkdownHeading from '@/components/MarkdownHeading';
 import QuestionFavoriteButton from '@/components/interview/QuestionFavoriteButton';
+import ReferralShareButton from '@/components/interview/ReferralShareButton';
+import { getEffectiveVipLevel } from '@/lib/membership';
 
 type Question = Database['public']['Tables']['interview_question']['Row'] & {
   interview_question_tags: {
@@ -57,11 +59,11 @@ export default async function QuestionPage({
       // Get user VIP level
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('vip_level')
+        .select('vip_level, vip_expires_at')
         .eq('id', user.id)
         .single();
       
-      const userVipLevel = profile?.vip_level || 0;
+      const userVipLevel = getEffectiveVipLevel(profile);
       
       if (userVipLevel < question.vip_level_required) {
         hasAccess = false;
@@ -118,12 +120,12 @@ export default async function QuestionPage({
           <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-6 text-gray-500 text-sm">
               <QuestionFavoriteButton questionId={question.id} />
-              <button className="flex items-center gap-1.5 hover:text-gray-900 transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                分享
-              </button>
+              <ReferralShareButton
+                sharePath={`/question/${question.id}`}
+                title={question.title}
+                collectionId={question.collection_id}
+                className="flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-900"
+              />
             </div>
             
             <div className="flex items-center gap-4 text-gray-400 text-sm">

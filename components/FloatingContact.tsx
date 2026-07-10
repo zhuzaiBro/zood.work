@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useProfile } from '@/store/userStore'
 import MembershipConsultationModal from '@/components/MembershipConsultationModal'
+import { getEffectiveVipLevel } from '@/lib/membership'
 
 export default function FloatingContact() {
   const [showQR, setShowQR] = useState(false)
   const [showVIP, setShowVIP] = useState(false)
   const [consultationOpen, setConsultationOpen] = useState(false)
   const profile = useProfile()
+  const activeVipLevel = getEffectiveVipLevel(profile)
 
   // 监听点击外部关闭
   useEffect(() => {
@@ -53,8 +55,8 @@ export default function FloatingContact() {
             <div className="rounded-xl border border-sky-300/10 bg-white/[0.03] p-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#8da2c4]">当前等级</span>
-                <span className={`font-bold ${(profile?.vip_level || 0) > 0 ? 'text-sky-200' : 'text-[#60708f]'}`}>
-                  {(profile?.vip_level || 0) > 0 ? `VIP${profile?.vip_level}` : '普通用户'}
+                <span className={`font-bold ${activeVipLevel > 0 ? 'text-sky-200' : 'text-[#60708f]'}`}>
+                  {activeVipLevel > 0 ? `VIP${activeVipLevel}` : '普通用户'}
                 </span>
               </div>
             </div>

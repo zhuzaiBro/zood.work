@@ -7,6 +7,7 @@ export interface UserProfile {
   avatar_url: string | null
   bio: string | null
   vip_level: number
+  vip_expires_at?: string | null
   is_admin: boolean | null
   created_at: string | null
   updated_at: string | null
@@ -30,4 +31,3 @@ export interface UserState {
   isLoading: boolean
   isAuthenticated: boolean
 }
-

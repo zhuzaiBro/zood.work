@@ -104,11 +104,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 });
     }
 
-    const { data: updatedProfile, error: updateError } = await adminClient
+  const { data: updatedProfile, error: updateError } = await adminClient
       .from('user_profiles')
-      .update({ vip_level: vipLevel })
+      .update({ vip_level: vipLevel, vip_expires_at: null })
       .eq('id', userId)
-      .select('id, username, display_name, avatar_url, vip_level, is_admin, created_at')
+      .select('id, username, display_name, avatar_url, vip_level, vip_expires_at, is_admin, created_at')
       .single();
 
     if (updateError) {

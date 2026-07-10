@@ -8,6 +8,7 @@ import Image from 'next/image'
 import { useProfile, useUser, useIsAuthenticated, useUserStore } from '@/store/userStore'
 import QiniuUploader from '@/components/QiniuUploader'
 import MembershipConsultationModal from '@/components/MembershipConsultationModal'
+import { getEffectiveVipLevel } from '@/lib/membership'
 
 type ProfileDashboardData = {
   enrollments: any[]
@@ -262,7 +263,7 @@ export default function ProfilePage() {
   }, [user?.id])
 
   const displayName = profile?.display_name || profile?.username || '用户'
-  const vipLevel = profile?.vip_level || 0
+  const vipLevel = getEffectiveVipLevel(profile)
   const userAvatar = profile?.avatar_url
 
   const handleCopyId = () => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { isActiveMember } from "@/lib/membership";
 
 const MONTHLY_FREE_UNLOCK_LIMIT = 3;
 
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 
     const { data: profile, error: profileError } = await admin
       .from("user_profiles")
-      .select("id, vip_level")
+      .select("id, vip_level, vip_expires_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
-    const isMember = (profile?.vip_level ?? 0) > 0;
+    const isMember = isActiveMember(profile);
     const { data: jobData, error: jobError } = await (admin as any)
       .from("job_listings")
       .select("id, title, company_name, email, phone, wechat, telegram")

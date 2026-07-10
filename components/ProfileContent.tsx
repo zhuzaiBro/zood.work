@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { getEffectiveVipLevel } from '@/lib/membership'
 
 interface ProfileContentProps {
   user: {
@@ -14,6 +15,7 @@ interface ProfileContentProps {
     avatar_url?: string | null
     bio?: string | null
     vip_level?: number | null
+    vip_expires_at?: string | null
   } | null
 }
 
@@ -22,7 +24,7 @@ export default function ProfileContent({ user, profile }: ProfileContentProps) {
   const [copiedId, setCopiedId] = useState(false)
 
   const displayName = profile?.display_name || profile?.username || '用户'
-  const vipLevel = profile?.vip_level || 0
+  const vipLevel = getEffectiveVipLevel(profile)
   const userAvatar = profile?.avatar_url
 
   const handleCopyId = () => {
@@ -294,4 +296,3 @@ export default function ProfileContent({ user, profile }: ProfileContentProps) {
     </div>
   )
 }
-

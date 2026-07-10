@@ -1,6 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database.types'
+import {
+  INTERVIEW_REFERRAL_COLLECTION_COOKIE,
+  INTERVIEW_REFERRAL_URL_COOKIE,
+  INTERVIEW_REFERRER_COOKIE,
+  isUuid,
+} from '@/lib/interview-referral-cookies'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -36,6 +42,31 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const referrerUserId = request.nextUrl.searchParams.get('ref')
+  if (isUuid(referrerUserId)) {
+    const sourceCollectionId = request.nextUrl.searchParams.get('refCollection')
+    const cookieOptions = {
+      maxAge: 7 * 24 * 60 * 60,
+      sameSite: 'lax' as const,
+      path: '/',
+    }
+
+    supabaseResponse.cookies.set(INTERVIEW_REFERRER_COOKIE, referrerUserId!, cookieOptions)
+    supabaseResponse.cookies.set(
+      INTERVIEW_REFERRAL_URL_COOKIE,
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      cookieOptions,
+    )
+
+    if (isUuid(sourceCollectionId)) {
+      supabaseResponse.cookies.set(
+        INTERVIEW_REFERRAL_COLLECTION_COOKIE,
+        sourceCollectionId!,
+        cookieOptions,
+      )
+    }
+  }
+
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:
@@ -51,4 +82,3 @@ export async function updateSession(request: NextRequest) {
 
   return supabaseResponse
 }
-
