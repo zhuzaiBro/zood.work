@@ -26,6 +26,7 @@ export default function Header() {
     pathname === "/" ||
     pathname === "/faucet" ||
     pathname === "/interview" ||
+    pathname === "/learning-test" ||
     pathname.startsWith("/jobs");
   const isImmersiveHero = isDarkImmersivePage && isHero;
 
