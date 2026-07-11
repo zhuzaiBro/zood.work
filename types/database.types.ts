@@ -596,6 +596,74 @@ export type Database = {
           },
         ]
       }
+      telegram_message_links: {
+        Row: {
+          created_at: string
+          direction: string
+          id: string
+          session_id: string
+          site_message_id: string
+          telegram_chat_id: number
+          telegram_message_id: number
+          telegram_update_id: number | null
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          id?: string
+          session_id: string
+          site_message_id: string
+          telegram_chat_id: number
+          telegram_message_id: number
+          telegram_update_id?: number | null
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          id?: string
+          session_id?: string
+          site_message_id?: string
+          telegram_chat_id?: number
+          telegram_message_id?: number
+          telegram_update_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_message_links_site_message_id_fkey"
+            columns: ["site_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telegram_support_admins: {
+        Row: {
+          active: boolean
+          chat_id: number
+          created_at: string
+          telegram_user_id: number
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          active?: boolean
+          chat_id: number
+          created_at?: string
+          telegram_user_id: number
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          active?: boolean
+          chat_id?: number
+          created_at?: string
+          telegram_user_id?: number
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       post_cate_relations: {
         Row: {
           cate_id: string

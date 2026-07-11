@@ -106,20 +106,30 @@ export default function ChatDialog() {
     setSending(true);
     setError('');
 
-    const supabase = createClient();
-    const { error: sendError } = await supabase.from('messages').insert({
-      session_id: sessionId,
-      user_id: user?.id ?? null,
-      sender_type: 'user',
-      content,
-    });
+    try {
+      const response = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          content,
+          pageUrl: window.location.href,
+        }),
+      });
 
-    if (sendError) {
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(payload?.error || '发送失败，请稍后重试');
+      } else {
+        setInput('');
+      }
+    } catch {
       setError('发送失败，请稍后重试');
-    } else {
-      setInput('');
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   return (

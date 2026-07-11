@@ -28,6 +28,8 @@ export default async function QuestionLayout({
       .from('interview_question')
       .select('id, title')
       .eq('collection_id', question.collection_id)
+      .order('sort', { ascending: true })
+      .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .limit(100);
     
@@ -94,4 +96,3 @@ export default async function QuestionLayout({
     </div>
   );
 }
-
