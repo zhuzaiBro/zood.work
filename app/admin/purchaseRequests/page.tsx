@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import { createClient } from '@/lib/supabase/client';
 import {
   App,
   Button,
@@ -77,6 +78,7 @@ function formatDateTime(value: string | null) {
 
 export default function PurchaseRequestsPage() {
   const router = useRouter();
+  const supabase = createClient();
   const { message } = App.useApp();
   const [activeTab, setActiveTab] = useState('course');
   const [loading, setLoading] = useState(true);
@@ -88,50 +90,22 @@ export default function PurchaseRequestsPage() {
   const [grantingConsultationId, setGrantingConsultationId] = useState<number | null>(null);
 
   const loadCourseRequests = async () => {
-    const response = await fetch('/api/admin/course-purchase-requests', {
-      cache: 'no-store',
-    });
-
-    if (response.status === 401) {
-      router.push('/login?redirect=/admin/purchaseRequests');
-      return false;
-    }
-
-    if (response.status === 403) {
-      setHasPermission(false);
-      return false;
-    }
-
-    const body = await response.json();
-    if (!response.ok) {
-      throw new Error(body.error || '加载课程购买咨询失败');
-    }
-
-    setRequests(body.requests ?? []);
+    const { data, error } = await supabase
+      .from('course_purchase_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    setRequests((data ?? []) as PurchaseRequest[]);
     return true;
   };
 
   const loadMembershipRequests = async () => {
-    const response = await fetch('/api/admin/membership-consultation-requests', {
-      cache: 'no-store',
-    });
-
-    if (response.status === 401) {
-      router.push('/login?redirect=/admin/purchaseRequests');
-      return false;
-    }
-
-    if (response.status === 403) {
-      setHasPermission(false);
-      return false;
-    }
-
-    const body = await response.json();
-    if (!response.ok) {
-      throw new Error(body.error || '加载会员咨询失败');
-    }
-
-    setMembershipRequests(body.requests ?? []);
+    const { data, error } = await (supabase as any)
+      .from('membership_consultation_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    setMembershipRequests((data ?? []) as MembershipConsultationRequest[]);
     return true;
   };
 
@@ -139,6 +113,25 @@ export default function PurchaseRequestsPage() {
     setLoading(true);
 
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login?redirect=/admin/purchaseRequests');
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      const adminProfile = profile as { is_admin?: boolean | null } | null;
+      if (profileError || !adminProfile?.is_admin) {
+        setHasPermission(false);
+        return;
+      }
+
       const [courseOk, membershipOk] = await Promise.all([
         loadCourseRequests(),
         loadMembershipRequests(),
@@ -193,20 +186,18 @@ export default function PurchaseRequestsPage() {
     setUpdatingId(record.id);
 
     try {
-      const response = await fetch('/api/admin/course-purchase-requests', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: record.id,
-          status,
-          adminNote: record.admin_note,
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
+      const updates: Record<string, string | null> = {
+        status,
+        admin_note: record.admin_note,
+      };
+      if (status === 'contacted') updates.contacted_at = new Date().toISOString();
+      if (status === 'paid') updates.paid_at = new Date().toISOString();
 
-      if (!response.ok) {
-        throw new Error(body.error || '更新状态失败');
-      }
+      const { error } = await supabase
+        .from('course_purchase_requests')
+        .update(updates as never)
+        .eq('id', record.id);
+      if (error) throw error;
 
       message.success('状态已更新');
       await loadCourseRequests();
@@ -224,20 +215,18 @@ export default function PurchaseRequestsPage() {
     setUpdatingId(record.id);
 
     try {
-      const response = await fetch('/api/admin/membership-consultation-requests', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: record.id,
-          status,
-          adminNote: record.admin_note,
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
+      const updates: Record<string, string | null> = {
+        status,
+        admin_note: record.admin_note,
+      };
+      if (status === 'contacted') updates.contacted_at = new Date().toISOString();
+      if (status === 'paid') updates.paid_at = new Date().toISOString();
 
-      if (!response.ok) {
-        throw new Error(body.error || '更新状态失败');
-      }
+      const { error } = await (supabase as any)
+        .from('membership_consultation_requests')
+        .update(updates)
+        .eq('id', record.id);
+      if (error) throw error;
 
       message.success('状态已更新');
       await loadMembershipRequests();

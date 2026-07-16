@@ -16,6 +16,17 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, StopOutlined, UserAddOutlined } from '@ant-design/icons';
 import Skeleton from '@/components/ui/Skeleton';
+import { createClient } from '@/lib/supabase/client';
+import type { Database } from '@/types/database.types';
+
+type ProfileRow = Pick<
+  Database['public']['Tables']['user_profiles']['Row'],
+  'id' | 'username' | 'display_name' | 'avatar_url' | 'is_admin' | 'created_at'
+>;
+type EnrollmentRow = Pick<
+  Database['public']['Tables']['course_enrollments']['Row'],
+  'id' | 'course_id' | 'user_id' | 'source' | 'status' | 'granted_at' | 'revoked_at' | 'note' | 'created_at' | 'updated_at'
+>;
 
 interface CourseEnrollment {
   id: number;
@@ -73,6 +84,7 @@ export default function CourseAccessModal({
   onAccessChange,
 }: CourseAccessModalProps) {
   const { message, modal } = App.useApp();
+  const supabase = createClient();
   const [accessUsers, setAccessUsers] = useState<CourseAccessUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>();
@@ -82,18 +94,63 @@ export default function CourseAccessModal({
     if (!courseId) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/admin/course-enrollments?courseId=${courseId}`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || '加载用户开通列表失败');
-      }
-      setAccessUsers(data.users || []);
+      const [profilesResult, enrollmentsResult] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select('id, username, display_name, avatar_url, is_admin, created_at')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('course_enrollments')
+          .select('id, course_id, user_id, source, status, granted_at, revoked_at, note, created_at, updated_at')
+          .eq('course_id', courseId)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      if (profilesResult.error) throw profilesResult.error;
+      if (enrollmentsResult.error) throw enrollmentsResult.error;
+
+      const enrollmentRows = (enrollmentsResult.data ?? []) as EnrollmentRow[];
+      const enrollmentsByUserId = new Map(
+        enrollmentRows.map((enrollment) => [enrollment.user_id, enrollment]),
+      );
+      const profileRows = (profilesResult.data ?? []) as ProfileRow[];
+      const users: CourseAccessUser[] = profileRows.map((profile) => {
+        const enrollment = enrollmentsByUserId.get(profile.id);
+        return {
+          id: profile.id,
+          email: null,
+          phone: null,
+          username: profile.username,
+          displayName: profile.display_name,
+          avatarUrl: profile.avatar_url,
+          provider: null,
+          isAdmin: Boolean(profile.is_admin),
+          hasProfile: true,
+          createdAt: profile.created_at,
+          lastSignInAt: null,
+          enrollment: enrollment
+            ? {
+                id: enrollment.id,
+                courseId: enrollment.course_id,
+                userId: enrollment.user_id,
+                source: enrollment.source,
+                status: enrollment.status,
+                grantedAt: enrollment.granted_at,
+                revokedAt: enrollment.revoked_at,
+                note: enrollment.note,
+                createdAt: enrollment.created_at,
+                updatedAt: enrollment.updated_at,
+              }
+            : null,
+        };
+      });
+      setAccessUsers(users);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载用户开通列表失败');
     } finally {
       setLoading(false);
     }
-  }, [courseId, message]);
+  }, [courseId, message, supabase]);
 
   useEffect(() => {
     if (open) {
@@ -117,15 +174,24 @@ export default function CourseAccessModal({
 
     setGrantingUserId(userId);
     try {
-      const response = await fetch('/api/admin/course-enrollments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, userId }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || '开通失败');
-      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('登录状态失效，请重新登录');
+
+      const { error } = await supabase
+        .from('course_enrollments')
+        .upsert({
+          course_id: courseId,
+          user_id: userId,
+          source: 'manual',
+          status: 'active',
+          granted_by: user.id,
+          granted_at: new Date().toISOString(),
+          revoked_by: null,
+          revoked_at: null,
+        } as never, { onConflict: 'course_id,user_id' });
+      if (error) throw error;
       message.success('课程已开通');
       setSelectedUserId(undefined);
       await loadAccess();
@@ -147,19 +213,21 @@ export default function CourseAccessModal({
       onOk: async () => {
         setGrantingUserId(record.id);
         try {
-          const response = await fetch('/api/admin/course-enrollments', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              courseId,
-              userId: record.id,
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) throw new Error('登录状态失效，请重新登录');
+
+          const { error } = await supabase
+            .from('course_enrollments')
+            .update({
               status: 'revoked',
-            }),
-          });
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || '撤销失败');
-          }
+              revoked_by: user.id,
+              revoked_at: new Date().toISOString(),
+            } as never)
+            .eq('course_id', courseId)
+            .eq('user_id', record.id);
+          if (error) throw error;
           message.success('已撤销课程开通');
           await loadAccess();
           onAccessChange?.();

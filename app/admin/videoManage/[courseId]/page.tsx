@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '@/types/user';
+import type { Database } from '@/types/database.types';
 import LessonUploadModal from '@/components/admin/LessonUploadModal';
 import CourseSettingsModal, {
   type CourseSettingsValues,
@@ -74,6 +75,19 @@ interface CourseDetail {
   price: number;
 }
 
+type CourseRow = Pick<
+  Database['public']['Tables']['courses']['Row'],
+  'id' | 'title' | 'description' | 'cover_image_url' | 'status' | 'is_free' | 'price'
+>;
+type ChapterRow = Pick<
+  Database['public']['Tables']['chapters']['Row'],
+  'id' | 'title' | 'description' | 'sort_order'
+>;
+type LessonRow = Pick<
+  Database['public']['Tables']['lessons']['Row'],
+  'id' | 'chapter_id' | 'title' | 'description' | 'courseware_name' | 'courseware_url' | 'content_html' | 'content_markdown' | 'duration' | 'is_free' | 'is_locked' | 'video_url' | 'video_id' | 'sort_order'
+>;
+
 const statusMap: Record<string, { color: string; label: string }> = {
   draft: { color: 'default', label: '草稿' },
   published: { color: 'green', label: '已发布' },
@@ -86,6 +100,7 @@ export default function CourseDetailPage() {
   const params = useParams<{ courseId: string }>();
   const courseId = params.courseId;
   const router = useRouter();
+  const supabase = createClient();
   const { message, modal } = App.useApp();
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -116,28 +131,83 @@ export default function CourseDetailPage() {
     if (!courseId) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/courses/${courseId}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '加载课程详情失败');
-      }
-      const data = await response.json();
-      setCourse(data.course);
-      setChapters(data.chapters || []);
-      if ((data.chapters || []).length > 0) {
-        setActiveKeys([data.chapters[0].id]);
+      const [courseResult, chaptersResult] = await Promise.all([
+        supabase
+          .from('courses')
+          .select('id, title, description, cover_image_url, status, is_free, price')
+          .eq('id', courseId)
+          .single(),
+        supabase
+          .from('chapters')
+          .select('id, title, description, sort_order')
+          .eq('course_id', courseId)
+          .order('sort_order', { ascending: true }),
+      ]);
+
+      if (courseResult.error) throw courseResult.error;
+      if (chaptersResult.error) throw chaptersResult.error;
+
+      const chapterRows = (chaptersResult.data ?? []) as ChapterRow[];
+      const chapterIds = chapterRows.map((chapter) => chapter.id);
+      const lessonsResult = chapterIds.length > 0
+        ? await supabase
+          .from('lessons')
+          .select('id, chapter_id, title, description, courseware_name, courseware_url, content_html, content_markdown, duration, is_free, is_locked, video_url, video_id, sort_order')
+          .in('chapter_id', chapterIds)
+          .order('sort_order', { ascending: true })
+        : { data: [], error: null };
+
+      if (lessonsResult.error) throw lessonsResult.error;
+
+      const courseRow = courseResult.data as CourseRow;
+      const lessonRows = (lessonsResult.data ?? []) as LessonRow[];
+      const nextChapters = chapterRows.map((chapter) => ({
+        id: chapter.id,
+        title: chapter.title,
+        description: chapter.description,
+        sortOrder: chapter.sort_order,
+        lessons: lessonRows
+          .filter((lesson) => lesson.chapter_id === chapter.id)
+          .map((lesson) => ({
+            id: lesson.id,
+            title: lesson.title,
+            description: lesson.description,
+            coursewareName: lesson.courseware_name,
+            coursewareUrl: lesson.courseware_url,
+            contentHtml: lesson.content_html,
+            contentMarkdown: lesson.content_markdown,
+            durationSeconds: lesson.duration,
+            isFree: lesson.is_free,
+            isLocked: lesson.is_locked,
+            videoUrl: lesson.video_url,
+            videoId: lesson.video_id,
+            sortOrder: lesson.sort_order,
+          })),
+      }));
+
+      setCourse({
+        id: courseRow.id,
+        title: courseRow.title,
+        description: courseRow.description,
+        coverImageUrl: courseRow.cover_image_url,
+        status: courseRow.status,
+        isFree: courseRow.is_free,
+        price: Number(courseRow.price) || 0,
+      });
+      setChapters(nextChapters);
+      if (nextChapters.length > 0) {
+        setActiveKeys([nextChapters[0].id]);
       }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载课程详情失败');
     } finally {
       setLoading(false);
     }
-  }, [courseId, message]);
+  }, [courseId, message, supabase]);
 
   useEffect(() => {
     const checkAuth = async () => {
       setIsCheckingAuth(true);
-      const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -165,33 +235,38 @@ export default function CourseDetailPage() {
     };
 
     checkAuth();
-  }, [courseId, router, loadCourseDetail]);
+  }, [courseId, router, loadCourseDetail, supabase]);
 
   const handleSaveSettings = async (values: CourseSettingsValues) => {
     if (!courseId) return;
     setSettingsSaving(true);
 
     try {
-      const response = await fetch(`/api/courses/${courseId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data: updated, error } = await supabase
+        .from('courses')
+        .update({
           title: values.title,
           description: values.description,
-          coverImageUrl: values.coverImageUrl || null,
+          cover_image_url: values.coverImageUrl || null,
           status: values.status,
-          isFree: values.isFree,
+          is_free: values.isFree,
           price: values.isFree ? 0 : values.price,
-        }),
+        } as never)
+        .eq('id', courseId)
+        .select('id, title, description, cover_image_url, status, is_free, price')
+        .single();
+
+      if (error) throw error;
+      const updatedCourse = updated as CourseRow;
+      setCourse({
+        id: updatedCourse.id,
+        title: updatedCourse.title,
+        description: updatedCourse.description,
+        coverImageUrl: updatedCourse.cover_image_url,
+        status: updatedCourse.status,
+        isFree: updatedCourse.is_free,
+        price: Number(updatedCourse.price) || 0,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '保存课程设置失败');
-      }
-
-      const { course: updated } = await response.json();
-      setCourse(updated);
       message.success('课程设置已保存');
       setSettingsModalOpen(false);
     } catch (error) {
@@ -227,34 +302,24 @@ export default function CourseDetailPage() {
 
     try {
       if (chapterModalMode === 'create') {
-        const response = await fetch('/api/chapters', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            courseId,
+        const { error } = await supabase
+          .from('chapters')
+          .insert({
+            course_id: courseId,
             title: values.title,
-            sortOrder: values.sortOrder ?? chapters.length,
-          }),
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || '创建章节失败');
-        }
+            sort_order: values.sortOrder ?? chapters.length,
+          } as never);
+        if (error) throw error;
         message.success('章节已创建');
       } else if (editingChapterId) {
-        const response = await fetch('/api/chapters', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: editingChapterId,
+        const { error } = await supabase
+          .from('chapters')
+          .update({
             title: values.title,
-            sortOrder: values.sortOrder ?? 0,
-          }),
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || '更新章节失败');
-        }
+            sort_order: values.sortOrder ?? 0,
+          } as never)
+          .eq('id', editingChapterId);
+        if (error) throw error;
         message.success('章节已更新');
       }
 
@@ -275,13 +340,11 @@ export default function CourseDetailPage() {
       okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
-        const response = await fetch(`/api/chapters?id=${chapter.id}`, {
-          method: 'DELETE',
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || '删除章节失败');
-        }
+        const { error } = await supabase
+          .from('chapters')
+          .delete()
+          .eq('id', chapter.id);
+        if (error) throw error;
         message.success('章节已删除');
         loadCourseDetail();
       },

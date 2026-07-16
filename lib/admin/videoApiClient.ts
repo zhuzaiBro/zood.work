@@ -1,5 +1,12 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import type { createClient } from '@/lib/supabase/client';
+import type { Database } from '@/types/database.types';
 import { videoApiUrl } from '@/lib/videoApi';
+
+type BrowserSupabaseClient = ReturnType<typeof createClient>;
+type VideoRow = Pick<
+  Database['public']['Tables']['videos']['Row'],
+  'id' | 'title' | 'description' | 'duration' | 'status' | 'created_at' | 'updated_at'
+>;
 
 export type UploadProgressState = {
   uploaded: number;
@@ -24,7 +31,9 @@ export type VideoListResult = {
   pageSize: number;
 };
 
-export async function getVideoApiAuthHeaders(supabase: SupabaseClient) {
+export async function getVideoApiAuthHeaders(
+  supabase: BrowserSupabaseClient,
+): Promise<Record<string, string>> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -54,24 +63,64 @@ export async function fetchVideoApiJson<T>(
 }
 
 export async function listVideos(
-  _supabase: SupabaseClient,
+  supabase: BrowserSupabaseClient,
   page = 1,
   pageSize = 10,
 ): Promise<VideoListResult> {
-  const params = new URLSearchParams({
-    page: String(page),
-    pageSize: String(pageSize),
-  });
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await supabase
+    .from('videos')
+    .select('id, title, description, duration, status, created_at, updated_at', {
+      count: 'exact',
+    })
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
-  return fetchVideoApiJson<VideoListResult>(
-    `/api/admin/videos?${params.toString()}`,
-  );
+  if (!error) {
+    return {
+      items: ((data ?? []) as VideoRow[]).map((video) => ({
+        id: video.id,
+        title: video.title,
+        description: video.description,
+        duration: video.duration,
+        status: video.status,
+        createdAt: video.created_at ?? undefined,
+        updatedAt: video.updated_at ?? undefined,
+      })),
+      total: count ?? 0,
+      page,
+      pageSize,
+    };
+  }
+
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return fetchVideoApiJson<VideoListResult>(`/api/admin/videos?${params.toString()}`);
 }
 
 export async function getVideoDetail(
-  _supabase: SupabaseClient,
+  supabase: BrowserSupabaseClient,
   videoId: string,
 ): Promise<VideoRecord> {
+  const { data, error } = await supabase
+    .from('videos')
+    .select('id, title, description, duration, status, created_at, updated_at')
+    .eq('id', videoId)
+    .maybeSingle();
+
+  const video = data as VideoRow | null;
+  if (!error && video) {
+    return {
+      id: video.id,
+      title: video.title,
+      description: video.description,
+      duration: video.duration,
+      status: video.status,
+      createdAt: video.created_at ?? undefined,
+      updatedAt: video.updated_at ?? undefined,
+    };
+  }
+
   return fetchVideoApiJson<VideoRecord>(`/api/admin/videos/${videoId}`);
 }
 

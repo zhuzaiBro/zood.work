@@ -1,4 +1,4 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import type { createClient } from '@/lib/supabase/client';
 import { videoApiUrl } from '@/lib/videoApi';
 import {
   fetchVideoApiJson,
@@ -7,10 +7,12 @@ import {
   type UploadProgressState,
 } from '@/lib/admin/videoApiClient';
 
+type BrowserSupabaseClient = ReturnType<typeof createClient>;
+
 export type { UploadProgressState };
 
 export async function uploadLessonVideo(options: {
-  supabase: SupabaseClient;
+  supabase: BrowserSupabaseClient;
   videoFile: File;
   lessonTitle: string;
   lessonDescription: string;

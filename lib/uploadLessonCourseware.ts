@@ -1,5 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/database.types'
+import type { createClient } from '@/lib/supabase/client'
+
+type BrowserSupabaseClient = ReturnType<typeof createClient>
 
 export const LESSON_COURSEWARE_BUCKET = 'lesson-courseware'
 
@@ -24,7 +25,7 @@ function getFileExt(file: File) {
 }
 
 export async function uploadLessonCourseware(
-  supabase: SupabaseClient<Database>,
+  supabase: BrowserSupabaseClient,
   userId: string,
   file: File,
 ): Promise<{ publicUrl: string; fileName: string } | { error: string }> {

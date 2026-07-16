@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import { createClient } from '@/lib/supabase/client';
+import {
+  loadAdminUserStudyData,
+  type AdminUsersResponse,
+  type AdminUserStudyRow,
+} from '@/lib/admin/userStudyClient';
 import {
   App,
   Avatar,
@@ -28,48 +34,6 @@ import {
   UserOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-
-interface AdminUserStudyRow {
-  id: string;
-  email: string | null;
-  phone: string | null;
-  username: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-  provider: string | null;
-  providers: string[];
-  role: string | null;
-  emailConfirmedAt: string | null;
-  phoneConfirmedAt: string | null;
-  lastSignInAt: string | null;
-  isSsoUser: boolean;
-  isAnonymous: boolean;
-  hasProfile: boolean;
-  vipLevel: number | null;
-  isAdmin: boolean;
-  createdAt: string | null;
-  todayStudySeconds: number;
-  yesterdayStudySeconds: number;
-  totalStudySeconds: number;
-  uniqueVideoCount: number;
-  recentStudyAt: string | null;
-}
-
-interface AdminUsersResponse {
-  users: AdminUserStudyRow[];
-  summary: {
-    userCount: number;
-    missingProfileCount: number;
-    activeTodayCount: number;
-    activeYesterdayCount: number;
-    todayStudySeconds: number;
-    yesterdayStudySeconds: number;
-  };
-  ranges: {
-    today: { label: string; start: string; end: string };
-    yesterday: { label: string; start: string; end: string };
-  };
-}
 
 const { Title, Text } = Typography;
 
@@ -104,6 +68,7 @@ function formatDateTime(value: string | null) {
 
 export default function AdminUsersPage() {
   const router = useRouter();
+  const supabase = createClient();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [repairingProfiles, setRepairingProfiles] = useState(false);
@@ -116,26 +81,26 @@ export default function AdminUsersPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/admin/users', {
-        cache: 'no-store',
-      });
-
-      if (response.status === 401) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
         router.push('/login?redirect=/admin/users');
         return;
       }
 
-      if (response.status === 403) {
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      const adminProfile = profile as { is_admin?: boolean | null } | null;
+      if (profileError || !adminProfile?.is_admin) {
         setHasPermission(false);
         return;
       }
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || '加载用户学习统计失败');
-      }
-
+      const result = await loadAdminUserStudyData(supabase);
       setHasPermission(true);
       setData(result);
     } catch (error) {

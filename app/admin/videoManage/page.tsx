@@ -68,12 +68,14 @@ export default function VideoManagePage() {
   const loadCourses = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/courses');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '加载课程失败');
-      }
-      const { courses: data } = await response.json();
+      const { data, error } = await supabase
+        .from('courses')
+        .select('id, title, description, cover_image_url, price, is_free, status, sort_order, created_at, updated_at')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
       setCourses(
         (data || []).map((course: CourseRow) => ({
           ...course,
@@ -90,23 +92,32 @@ export default function VideoManagePage() {
   const handleCreateCourse = async (values: CourseFormValues) => {
     setCreating(true);
     try {
-      const response = await fetch('/api/courses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
+      const title = values.title.trim();
+      if (!title) throw new Error('课程标题不能为空');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '创建课程失败');
-      }
+      const { count, error: countError } = await supabase
+        .from('courses')
+        .select('id', { count: 'exact', head: true });
 
-      const { course } = await response.json();
+      if (countError) throw countError;
+
+      const { data: course, error } = await supabase
+        .from('courses')
+        .insert({
+          title,
+          description: values.description?.trim() || null,
+          sort_order: count ?? 0,
+        } as never)
+        .select()
+        .single();
+
+      if (error) throw error;
       message.success('课程创建成功');
       setCreateModalOpen(false);
       await loadCourses();
-      if (course?.id) {
-        router.push(`/admin/videoManage/${course.id}`);
+      const createdCourse = course as { id?: string } | null;
+      if (createdCourse?.id) {
+        router.push(`/admin/videoManage/${createdCourse.id}`);
       }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '创建课程失败');
