@@ -1,17 +1,70 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
+import { unstable_cache } from 'next/cache';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Database } from '@/types/database.types';
 import ReferralShareButton from '@/components/interview/ReferralShareButton';
 import QuestionCollectionBrowser, { type CollectionQuestionItem } from '@/components/interview/QuestionCollectionBrowser';
 
-type Collection = Database['public']['Tables']['interview_collections']['Row'];
-type Question = Database['public']['Tables']['interview_question']['Row'] & {
+type Collection = Pick<
+  Database['public']['Tables']['interview_collections']['Row'],
+  'id' | 'title' | 'description' | 'icon'
+>;
+type Question = Pick<
+  Database['public']['Tables']['interview_question']['Row'],
+  'id' | 'title' | 'difficulty' | 'is_vip' | 'vip_level_required' | 'sort' | 'created_at'
+> & {
   interview_question_tags: {
-    interview_tags: Database['public']['Tables']['interview_tags']['Row'];
+    interview_tags: Pick<Database['public']['Tables']['interview_tags']['Row'], 'id' | 'name'>;
   }[];
 };
+
+export const revalidate = 300;
+export const dynamic = 'force-static';
+
+const getCollectionPageData = unstable_cache(
+  async (id: string) => {
+    const supabase = createAdminClient();
+    const [collectionResult, questionsResult] = await Promise.all([
+      supabase
+        .from('interview_collections')
+        .select('id, title, description, icon')
+        .eq('id', id)
+        .maybeSingle(),
+      supabase
+        .from('interview_question')
+        .select(`
+          id,
+          title,
+          difficulty,
+          is_vip,
+          vip_level_required,
+          sort,
+          created_at,
+          interview_question_tags (
+            interview_tags (
+              id,
+              name
+            )
+          )
+        `)
+        .eq('collection_id', id)
+        .order('sort', { ascending: true })
+        .order('created_at', { ascending: true }),
+    ]);
+
+    if (collectionResult.error) throw collectionResult.error;
+    if (questionsResult.error) throw questionsResult.error;
+
+    return {
+      collection: collectionResult.data as Collection | null,
+      questions: (questionsResult.data ?? []) as Question[],
+    };
+  },
+  ['interview-collection-page-v2'],
+  { revalidate: 300, tags: ['interview-collections'] },
+);
 
 export default async function CollectionPage({
   params,
@@ -19,37 +72,12 @@ export default async function CollectionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data: collectionData } = await supabase
-    .from('interview_collections')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  const collection = collectionData as Collection | null;
+  const { collection, questions } = await getCollectionPageData(id);
 
   if (!collection) {
     notFound();
   }
 
-  const { data: questionsData } = await supabase
-    .from('interview_question')
-    .select(`
-      *,
-      interview_question_tags (
-        interview_tags (
-          *
-        )
-      )
-    `)
-    .eq('collection_id', id)
-    .order('sort', { ascending: true })
-    .order('created_at', { ascending: true });
-
-  // Using 'any' cast here because Supabase complex joins type inference can be tricky
-  // but we know the shape from the query
-  const questions = questionsData as any[] as Question[];
   const browserQuestions: CollectionQuestionItem[] = questions.map((question) => ({
     id: question.id,
     title: question.title,
@@ -60,7 +88,7 @@ export default async function CollectionPage({
       name: tagRel.interview_tags.name,
     })),
   }));
-  const firstQuestion = questions[0] ?? null;
+  const firstQuestion = browserQuestions[0] ?? null;
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pb-12">

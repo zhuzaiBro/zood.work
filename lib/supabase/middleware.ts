@@ -13,6 +13,44 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  const referrerUserId = request.nextUrl.searchParams.get('ref')
+  if (isUuid(referrerUserId)) {
+    const sourceCollectionId = request.nextUrl.searchParams.get('refCollection')
+    const cookieOptions = {
+      maxAge: 7 * 24 * 60 * 60,
+      sameSite: 'lax' as const,
+      path: '/',
+    }
+
+    supabaseResponse.cookies.set(INTERVIEW_REFERRER_COOKIE, referrerUserId!, cookieOptions)
+    supabaseResponse.cookies.set(
+      INTERVIEW_REFERRAL_URL_COOKIE,
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      cookieOptions,
+    )
+
+    if (isUuid(sourceCollectionId)) {
+      supabaseResponse.cookies.set(
+        INTERVIEW_REFERRAL_COLLECTION_COOKIE,
+        sourceCollectionId!,
+        cookieOptions,
+      )
+    }
+
+    supabaseResponse.headers.set('Cache-Control', 'private, no-store')
+  }
+
+  const isPublicInterviewRoute =
+    request.nextUrl.pathname === '/interview'
+    || request.nextUrl.pathname.startsWith('/interview/')
+
+  // Public question collections do not need a server-side Auth round trip.
+  // The browser client maintains its own session, while protected routes below
+  // still refresh and validate Supabase Auth cookies as before.
+  if (isPublicInterviewRoute) {
+    return supabaseResponse
+  }
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -41,31 +79,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const referrerUserId = request.nextUrl.searchParams.get('ref')
-  if (isUuid(referrerUserId)) {
-    const sourceCollectionId = request.nextUrl.searchParams.get('refCollection')
-    const cookieOptions = {
-      maxAge: 7 * 24 * 60 * 60,
-      sameSite: 'lax' as const,
-      path: '/',
-    }
-
-    supabaseResponse.cookies.set(INTERVIEW_REFERRER_COOKIE, referrerUserId!, cookieOptions)
-    supabaseResponse.cookies.set(
-      INTERVIEW_REFERRAL_URL_COOKIE,
-      `${request.nextUrl.pathname}${request.nextUrl.search}`,
-      cookieOptions,
-    )
-
-    if (isUuid(sourceCollectionId)) {
-      supabaseResponse.cookies.set(
-        INTERVIEW_REFERRAL_COLLECTION_COOKIE,
-        sourceCollectionId!,
-        cookieOptions,
-      )
-    }
-  }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
