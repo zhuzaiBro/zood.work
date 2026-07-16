@@ -43,11 +43,14 @@ export async function updateSession(request: NextRequest) {
   const isPublicInterviewRoute =
     request.nextUrl.pathname === '/interview'
     || request.nextUrl.pathname.startsWith('/interview/')
+  const isClientRenderedAdminRoute =
+    request.nextUrl.pathname === '/admin'
+    || request.nextUrl.pathname.startsWith('/admin/')
 
-  // Public question collections do not need a server-side Auth round trip.
-  // The browser client maintains its own session, while protected routes below
-  // still refresh and validate Supabase Auth cookies as before.
-  if (isPublicInterviewRoute) {
+  // These routes own their session checks in the browser and do not need an
+  // additional server-side Auth round trip before the static shell is served.
+  // Sensitive admin APIs still call requireAdminRequest independently.
+  if (isPublicInterviewRoute || isClientRenderedAdminRoute) {
     return supabaseResponse
   }
 
