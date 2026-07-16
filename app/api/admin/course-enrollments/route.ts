@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { AuthUser } from '@supabase/supabase-js';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database.types';
 
@@ -31,53 +30,6 @@ async function requireAdmin() {
   }
 
   return { user };
-}
-
-async function listAllAuthUsers(adminClient: ReturnType<typeof createAdminClient>) {
-  const users: AuthUser[] = [];
-  const perPage = 1000;
-  let page = 1;
-
-  while (true) {
-    const { data, error } = await adminClient.auth.admin.listUsers({
-      page,
-      perPage,
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    users.push(...data.users);
-
-    if (!data.nextPage || data.users.length === 0) {
-      break;
-    }
-
-    page = data.nextPage;
-  }
-
-  return users;
-}
-
-function getAuthDisplayName(user: AuthUser) {
-  return (
-    user.user_metadata?.full_name
-    || user.user_metadata?.name
-    || user.user_metadata?.user_name
-    || user.user_metadata?.preferred_username
-    || user.email
-    || user.phone
-    || user.id
-  );
-}
-
-function getAuthAvatarUrl(user: AuthUser) {
-  return (
-    user.user_metadata?.avatar_url
-    || user.user_metadata?.picture
-    || null
-  );
 }
 
 function serializeEnrollment(enrollment: CourseEnrollment | null) {
@@ -126,29 +78,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '课程不存在' }, { status: 404 });
     }
 
-    const authUsers = await listAllAuthUsers(adminClient);
+    const [profilesResult, enrollmentsResult] = await Promise.all([
+      adminClient
+        .from('user_profiles')
+        .select('id, username, display_name, avatar_url, vip_level, is_admin, created_at')
+        .order('created_at', { ascending: false }),
+      adminClient
+        .from('course_enrollments')
+        .select('*')
+        .eq('course_id', courseId)
+        .order('created_at', { ascending: false }),
+    ]);
 
-    const { data: profiles, error: profilesError } = await adminClient
-      .from('user_profiles')
-      .select('id, username, display_name, avatar_url, vip_level, is_admin, created_at');
+    const { data: profiles, error: profilesError } = profilesResult;
 
     if (profilesError) {
       return NextResponse.json({ error: profilesError.message }, { status: 500 });
     }
 
-    const { data: enrollments, error: enrollmentError } = await adminClient
-      .from('course_enrollments')
-      .select('*')
-      .eq('course_id', courseId)
-      .order('created_at', { ascending: false });
+    const { data: enrollments, error: enrollmentError } = enrollmentsResult;
 
     if (enrollmentError) {
       return NextResponse.json({ error: enrollmentError.message }, { status: 500 });
-    }
-
-    const profilesById = new Map<string, UserProfile>();
-    for (const profile of profiles ?? []) {
-      profilesById.set(profile.id, profile);
     }
 
     const enrollmentsByUserId = new Map<string, CourseEnrollment>();
@@ -156,28 +107,23 @@ export async function GET(request: NextRequest) {
       enrollmentsByUserId.set(enrollment.user_id, enrollment);
     }
 
-    const users = authUsers
-      .map((authUser) => {
-        const profile = profilesById.get(authUser.id) ?? null;
-        const enrollment = enrollmentsByUserId.get(authUser.id) ?? null;
-        const providers = authUser.app_metadata?.providers ?? (
-          authUser.app_metadata?.provider ? [authUser.app_metadata.provider] : []
-        );
-
+    const users = (profiles ?? [])
+      .map((profile: UserProfile) => {
+        const enrollment = enrollmentsByUserId.get(profile.id) ?? null;
         return {
-          id: authUser.id,
-          email: authUser.email ?? null,
-          phone: authUser.phone ?? null,
-          username: profile?.username ?? authUser.email ?? authUser.phone ?? authUser.id,
-          displayName: profile?.display_name ?? getAuthDisplayName(authUser),
-          avatarUrl: profile?.avatar_url ?? getAuthAvatarUrl(authUser),
-          provider: authUser.app_metadata?.provider ?? providers[0] ?? null,
-          providers,
-          isAdmin: Boolean(profile?.is_admin),
-          vipLevel: profile?.vip_level ?? null,
-          hasProfile: Boolean(profile),
-          createdAt: authUser.created_at ?? profile?.created_at ?? null,
-          lastSignInAt: authUser.last_sign_in_at ?? null,
+          id: profile.id,
+          email: null,
+          phone: null,
+          username: profile.username,
+          displayName: profile.display_name,
+          avatarUrl: profile.avatar_url,
+          provider: null,
+          providers: [],
+          isAdmin: Boolean(profile.is_admin),
+          vipLevel: profile.vip_level,
+          hasProfile: true,
+          createdAt: profile.created_at,
+          lastSignInAt: null,
           enrollment: serializeEnrollment(enrollment),
         };
       })
@@ -197,6 +143,7 @@ export async function GET(request: NextRequest) {
         activeCount: users.filter((item) => item.enrollment?.status === 'active').length,
         revokedCount: users.filter((item) => item.enrollment?.status === 'revoked').length,
       },
+      source: 'supabase-database',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '服务器错误';

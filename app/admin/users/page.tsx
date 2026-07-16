@@ -236,31 +236,18 @@ export default function AdminUsersPage() {
       ),
     },
     {
-      title: 'Auth 信息',
+      title: '账号资料',
       key: 'auth',
       width: 210,
       render: (_, record) => {
-        const providers = (record.providers.length > 0
-          ? record.providers
-          : [record.provider]
-        ).filter((provider): provider is string => Boolean(provider));
-
         return (
           <Space direction="vertical" size={2}>
             <Space size={4} wrap>
-              {providers.map((provider) => (
-                <Tag key={provider} color="cyan">
-                  {provider}
-                </Tag>
-              ))}
-              {record.emailConfirmedAt || record.phoneConfirmedAt ? (
-                <Tag color="green">已验证</Tag>
-              ) : (
-                <Tag color="orange">未验证</Tag>
-              )}
+              <Tag color="cyan">Supabase DB</Tag>
+              {record.isAdmin ? <Tag color="blue">管理员</Tag> : null}
             </Space>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              最后登录 {formatDateTime(record.lastSignInAt)}
+              资料创建 {formatDateTime(record.createdAt)}
             </Text>
           </Space>
         );
@@ -395,15 +382,15 @@ export default function AdminUsersPage() {
             用户管理
           </Title>
           <Text type="secondary">
-            用户来源于 Supabase Authentication，并合并 profile 与视频访问日志统计学习时长。
+            优先读取 Supabase 业务数据库，并合并最近两天的视频访问日志统计学习时长。
           </Text>
         </div>
         <Space>
           <Button
             onClick={repairMissingProfiles}
-            disabled={repairingProfiles || (data?.summary.missingProfileCount ?? 0) === 0}
+            disabled={repairingProfiles}
           >
-            {repairingProfiles ? '补齐中' : '补齐缺失资料'}
+            {repairingProfiles ? '同步中' : '同步 Auth 用户'}
           </Button>
           <Button icon={<ReloadOutlined />} onClick={loadUsers} disabled={loading}>
             {loading ? '刷新中' : '刷新'}
@@ -420,7 +407,7 @@ export default function AdminUsersPage() {
       >
         <Card>
           <Statistic
-            title="Auth 总用户"
+            title="数据库用户"
             value={data?.summary.userCount ?? 0}
             prefix={<TeamOutlined />}
           />
@@ -463,7 +450,7 @@ export default function AdminUsersPage() {
           <Input
             allowClear
             prefix={<SearchOutlined />}
-            placeholder="搜索昵称 / 邮箱 / 手机 / ID"
+            placeholder="搜索昵称 / 用户名 / ID"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             style={{ width: 280 }}

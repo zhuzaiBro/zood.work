@@ -52,26 +52,6 @@ async function listAllAuthUsers(adminClient: ReturnType<typeof createAdminClient
   return users;
 }
 
-function getAuthDisplayName(user: AuthUser) {
-  return (
-    user.user_metadata?.full_name
-    || user.user_metadata?.name
-    || user.user_metadata?.user_name
-    || user.user_metadata?.preferred_username
-    || user.email
-    || user.phone
-    || user.id
-  );
-}
-
-function getAuthAvatarUrl(user: AuthUser) {
-  return (
-    user.user_metadata?.avatar_url
-    || user.user_metadata?.picture
-    || null
-  );
-}
-
 function getShanghaiDayRange(dayOffset: number): DayRange {
   const now = new Date();
   const shanghaiNow = new Date(now.getTime() + SHANGHAI_OFFSET_MS);
@@ -162,23 +142,29 @@ export async function GET() {
     const today = getShanghaiDayRange(0);
     const yesterday = getShanghaiDayRange(-1);
     const adminClient = createAdminClient();
-    const authUsers = await listAllAuthUsers(adminClient);
 
-    const { data: profiles, error: profilesError } = await adminClient
-      .from('user_profiles')
-      .select('id, username, display_name, avatar_url, vip_level, is_admin, created_at')
-      .order('created_at', { ascending: false });
+    // The admin dashboard reads the application database first. Listing every
+    // Auth user is deliberately reserved for the explicit profile-sync action.
+    const [profilesResult, logsResult] = await Promise.all([
+      adminClient
+        .from('user_profiles')
+        .select('id, username, display_name, avatar_url, vip_level, is_admin, created_at')
+        .order('created_at', { ascending: false }),
+      adminClient
+        .from('video_access_logs')
+        .select('user_id, video_id, watch_seconds, created_at')
+        .gte('created_at', yesterday.start.toISOString())
+        .lt('created_at', today.end.toISOString())
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const { data: profiles, error: profilesError } = profilesResult;
 
     if (profilesError) {
       return NextResponse.json({ error: profilesError.message }, { status: 500 });
     }
 
-    const { data: logs, error: logsError } = await adminClient
-      .from('video_access_logs')
-      .select('user_id, video_id, watch_seconds, created_at')
-      .gte('created_at', yesterday.start.toISOString())
-      .lt('created_at', today.end.toISOString())
-      .order('created_at', { ascending: false });
+    const { data: logs, error: logsError } = logsResult;
 
     if (logsError) {
       return NextResponse.json({ error: logsError.message }, { status: 500 });
@@ -192,45 +178,29 @@ export async function GET() {
       statsByUser.set(log.user_id, stats);
     }
 
-    const usersById = new Map<string, Pick<
-      UserProfile,
-      'id' | 'username' | 'display_name' | 'avatar_url' | 'vip_level' | 'is_admin' | 'created_at'
-    >>();
-
-    for (const item of profiles ?? []) {
-      usersById.set(item.id, item);
-    }
-
-    const authUsersById = new Map(authUsers.map((item) => [item.id, item]));
-    const userIds = new Set(authUsersById.keys());
-    const users = [...userIds].map((userId) => {
-      const authUser = authUsersById.get(userId) ?? null;
-      const userProfile = usersById.get(userId) ?? null;
-      const stats = statsByUser.get(userId) ?? emptyAccumulator();
+    const users = (profiles ?? []).map((userProfile) => {
+      const stats = statsByUser.get(userProfile.id) ?? emptyAccumulator();
       const totalStudySeconds = stats.todayStudySeconds + stats.yesterdayStudySeconds;
-      const providers = authUser?.app_metadata?.providers ?? (
-        authUser?.app_metadata?.provider ? [authUser.app_metadata.provider] : []
-      );
 
       return {
-        id: userId,
-        email: authUser?.email ?? null,
-        phone: authUser?.phone ?? null,
-        username: userProfile?.username ?? authUser?.email ?? authUser?.phone ?? 'unknown-user',
-        displayName: userProfile?.display_name ?? (authUser ? getAuthDisplayName(authUser) : null),
-        avatarUrl: userProfile?.avatar_url ?? (authUser ? getAuthAvatarUrl(authUser) : null),
-        provider: authUser?.app_metadata?.provider ?? providers[0] ?? null,
-        providers,
-        role: authUser?.role ?? null,
-        emailConfirmedAt: authUser?.email_confirmed_at ?? authUser?.confirmed_at ?? null,
-        phoneConfirmedAt: authUser?.phone_confirmed_at ?? null,
-        lastSignInAt: authUser?.last_sign_in_at ?? null,
-        isSsoUser: Boolean(authUser?.is_sso_user),
-        isAnonymous: Boolean(authUser?.is_anonymous),
-        hasProfile: Boolean(userProfile),
-        vipLevel: userProfile?.vip_level ?? null,
-        isAdmin: Boolean(userProfile?.is_admin),
-        createdAt: authUser?.created_at ?? userProfile?.created_at ?? null,
+        id: userProfile.id,
+        email: null,
+        phone: null,
+        username: userProfile.username,
+        displayName: userProfile.display_name,
+        avatarUrl: userProfile.avatar_url,
+        provider: null,
+        providers: [],
+        role: null,
+        emailConfirmedAt: null,
+        phoneConfirmedAt: null,
+        lastSignInAt: null,
+        isSsoUser: false,
+        isAnonymous: false,
+        hasProfile: true,
+        vipLevel: userProfile.vip_level,
+        isAdmin: Boolean(userProfile.is_admin),
+        createdAt: userProfile.created_at,
         todayStudySeconds: stats.todayStudySeconds,
         yesterdayStudySeconds: stats.yesterdayStudySeconds,
         totalStudySeconds,
@@ -256,12 +226,13 @@ export async function GET() {
       users,
       summary: {
         userCount: users.length,
-        missingProfileCount: users.filter((item) => !item.hasProfile).length,
+        missingProfileCount: 0,
         activeTodayCount: users.filter((item) => item.todayStudySeconds > 0).length,
         activeYesterdayCount: users.filter((item) => item.yesterdayStudySeconds > 0).length,
         todayStudySeconds: users.reduce((sum, item) => sum + item.todayStudySeconds, 0),
         yesterdayStudySeconds: users.reduce((sum, item) => sum + item.yesterdayStudySeconds, 0),
       },
+      source: 'supabase-database',
       ranges: {
         today: {
           label: today.label,

@@ -54,30 +54,25 @@ export async function fetchVideoApiJson<T>(
 }
 
 export async function listVideos(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   page = 1,
   pageSize = 10,
 ): Promise<VideoListResult> {
-  const authHeaders = await getVideoApiAuthHeaders(supabase);
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
 
   return fetchVideoApiJson<VideoListResult>(
-    videoApiUrl(`/api/videos?${params.toString()}`),
-    { headers: authHeaders },
+    `/api/admin/videos?${params.toString()}`,
   );
 }
 
 export async function getVideoDetail(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   videoId: string,
 ): Promise<VideoRecord> {
-  const authHeaders = await getVideoApiAuthHeaders(supabase);
-  return fetchVideoApiJson<VideoRecord>(videoApiUrl(`/api/videos/${videoId}`), {
-    headers: authHeaders,
-  });
+  return fetchVideoApiJson<VideoRecord>(`/api/admin/videos/${videoId}`);
 }
 
 export async function saveLesson(options: {
