@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { platformPublic } from '@/lib/platform/client';
+import { platformPublic, PlatformError } from '@/lib/platform/client';
 import { unstable_cache } from 'next/cache';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -48,7 +48,17 @@ export default async function CollectionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { collection, questions } = await getCollectionPageData(id);
+  let collection: Collection | null = null;
+  let questions: Question[] = [];
+  try {
+    const loaded = await getCollectionPageData(id);
+    collection = loaded.collection;
+    questions = loaded.questions ?? [];
+  } catch (error) {
+    if (!(error instanceof PlatformError) || error.status !== 404) {
+      console.error('Load interview collection failed:', error);
+    }
+  }
 
   if (!collection) {
     notFound();
