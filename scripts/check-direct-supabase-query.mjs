@@ -8,17 +8,6 @@ const allow = new Set([
   'lib/supabase/server.ts',
   'lib/supabase/middleware.ts',
   'lib/platform/client.ts',
-  // These paths still need a privileged server credential. They are not
-  // reachable from the browser and are documented as unfinished.
-  'lib/interview-referrals.ts',
-  'app/auth/callback/route.ts',
-  'app/api/telegram/webhook/route.ts',
-  'app/api/admin/users/route.ts',
-  // Telegram tables are revoked from anon/authenticated. Message text itself
-  // is saved through the platform API.
-  'app/api/chat/messages/route.ts',
-  // Grants VIP on another user and may create a missing profile through Auth Admin.
-  'app/api/admin/users/membership/route.ts',
 ])
 
 const queryPattern = /\.from\(\s*['"`]|createAdminClient\(|\.rpc\(\s*['"`]/

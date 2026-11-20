@@ -29,11 +29,25 @@ export default async function QuestionPage({
   const { id } = await params;
 
   let questionData: Question | null = null;
+  let previousQuestion: QuestionNavItem | null = null;
+  let nextQuestion: QuestionNavItem | null = null;
+  let currentQuestionIndex = -1;
+  let collectionQuestionCount = 0;
   try {
-    const result = await platformServer<{ question: Question | null }>(
-      `/api/platform/interview/questions/${encodeURIComponent(id)}`,
-    );
+    const result = await platformServer<{
+      question: Question | null;
+      navigation?: {
+        index?: number;
+        count?: number;
+        previous?: QuestionNavItem | null;
+        next?: QuestionNavItem | null;
+      };
+    }>(`/api/platform/interview/questions/${encodeURIComponent(id)}`);
     questionData = result.question ?? null;
+    previousQuestion = result.navigation?.previous ?? null;
+    nextQuestion = result.navigation?.next ?? null;
+    currentQuestionIndex = result.navigation?.index ?? -1;
+    collectionQuestionCount = result.navigation?.count ?? 0;
   } catch (error) {
     if (error instanceof PlatformError && error.status === 404) {
       notFound();
@@ -46,12 +60,6 @@ export default async function QuestionPage({
   }
 
   const question = questionData as Question;
-  // Collection question lists are not returned by the question detail endpoint.
-  const navItems: QuestionNavItem[] = [];
-  const previousQuestion = navItems[0] ?? null;
-  const nextQuestion = navItems[1] ?? null;
-  const currentQuestionIndex = -1;
-  const collectionQuestionCount = 0;
 
   // 2. Check VIP Access
   let hasAccess = true;

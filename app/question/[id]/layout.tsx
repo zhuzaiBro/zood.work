@@ -17,21 +17,24 @@ export default async function QuestionLayout({
     interview_collections?: { title?: string | null } | { title?: string | null }[] | null;
   };
   let question: SidebarQuestion | null = null;
+  let collectionQuestions: Pick<Question, 'id' | 'title'>[] = [];
 
   try {
-    const result = await platformPublic<{ question: SidebarQuestion | null }>(
-      `/api/platform/interview/questions/${encodeURIComponent(id)}`,
-    );
+    const result = await platformPublic<{
+      question: SidebarQuestion | null;
+      navigation?: { questions?: Pick<Question, 'id' | 'title'>[] };
+    }>(`/api/platform/interview/questions/${encodeURIComponent(id)}`);
     question = result.question ?? null;
+    collectionQuestions = result.navigation?.questions ?? [];
   } catch (error) {
     if (!(error instanceof PlatformError && error.status === 404)) {
       console.error('Load question sidebar failed:', error);
     }
   }
 
-  const collectionQuestions: Pick<Question, 'id' | 'title'>[] = question
-    ? [{ id: question.id, title: question.title }]
-    : [];
+  if (collectionQuestions.length === 0 && question) {
+    collectionQuestions = [{ id: question.id, title: question.title }];
+  }
   const embeddedCollection = question?.interview_collections;
   const collectionTitle = Array.isArray(embeddedCollection)
     ? embeddedCollection[0]?.title ?? null

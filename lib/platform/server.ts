@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { platformRequest, PlatformError } from '@/lib/platform/client'
+import { platformRequest, PlatformError } from '@/lib/platform/http'
 
 export { platformRequest, PlatformError }
 

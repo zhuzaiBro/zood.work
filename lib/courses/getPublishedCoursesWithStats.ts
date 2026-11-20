@@ -18,7 +18,7 @@ export type PublishedCourseWithStats = CourseRow & {
 };
 
 export async function getPublishedCoursesWithStats(): Promise<PublishedCourseWithStats[]> {
-  const { courses } = await platformPublic<{ courses: CourseRow[] }>(
+  const { courses } = await platformPublic<{ courses: Array<CourseRow & { lessonCount?: number; totalDuration?: number }> }>(
     '/api/platform/courses?status=published',
   );
 
@@ -26,7 +26,7 @@ export async function getPublishedCoursesWithStats(): Promise<PublishedCourseWit
     ...course,
     price: Number(course.price ?? 0),
     is_free: Boolean(course.is_free),
-    lessonCount: 0,
-    totalDuration: 0,
+    lessonCount: Number(course.lessonCount ?? 0),
+    totalDuration: Number(course.totalDuration ?? 0),
   }));
 }
