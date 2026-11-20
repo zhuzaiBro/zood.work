@@ -1,23 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { platformBrowser, PlatformError } from '@/lib/platform/client'
-import { useRouter } from 'next/navigation'
-import { buildDefaultUserProfile } from '@/lib/user-profiles'
+import { platformPublic } from '@/lib/platform/client'
 
 export default function Web3LoginButton() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
 
   const handleWeb3Login = async (chainType: 'ethereum' | 'solana' = 'ethereum') => {
     setError('')
     setIsLoading(true)
 
     try {
-      const supabase = createClient()
-
       // 检查钱包是否已安装
       if (chainType === 'ethereum') {
         if (typeof window.ethereum === 'undefined') {
@@ -39,64 +33,8 @@ export default function Web3LoginButton() {
         }
       }
 
-      // 使用 Supabase 的官方 Web3 登录 API
-      // Supabase 会自动处理：连接钱包、生成消息、请求签名、验证签名
-      // 注意：statement 不能包含换行符
-      // Solana 钱包对格式更严格，建议使用简单的英文消息
-      // 重要：Solana 需要提供 uri 参数来验证消息来源
-      const signInParams = chainType === 'ethereum'
-        ? {
-            chain: 'ethereum' as const,
-            uri: window.location.origin,
-            statement: `登录到zood的小破站 - 我接受服务条款：${window.location.origin}/terms`,
-          }
-        : {
-            chain: 'solana' as const,
-            uri: window.location.origin,
-            statement: 'Sign in to My Blog', // Solana 使用简单的英文
-          }
-      
-      const { data, error: signInError } = await supabase.auth.signInWithWeb3(signInParams as any)
-
-      if (signInError) {
-        throw signInError
-      }
-
-      if (!data?.user) {
-        throw new Error('登录失败，请重试')
-      }
-
-      // 确保平台用户资料存在。登录态仍由 Supabase Auth 维护。
-      let existingProfile: { id?: string } | null = null
-      try {
-        const result = await platformBrowser<{ profile: { id?: string } | null }>('/api/platform/me/profile')
-        existingProfile = result.profile
-      } catch (profileError) {
-        if (!(profileError instanceof PlatformError) || profileError.status !== 404) {
-          console.error('读取用户资料失败:', profileError)
-        }
-      }
-
-      if (!existingProfile) {
-        const profileData = buildDefaultUserProfile(data.user)
-        try {
-          await platformBrowser('/api/platform/me/profile', {
-            method: 'PUT',
-            body: {
-              username: profileData.username,
-              display_name: profileData.display_name,
-              avatar_url: profileData.avatar_url,
-              bio: profileData.bio,
-            },
-          })
-        } catch (insertError) {
-          console.error('创建用户资料失败:', insertError)
-        }
-      }
-
-      // 登录成功，跳转到首页
-      router.push('/')
-      router.refresh()
+      await platformPublic('/api/platform/auth/web3', { method: 'POST', body: { chain: chainType } })
+      throw new Error('Web3 登录需要钱包验证服务凭据，当前没有配置')
     } catch (err: any) {
       console.error('Web3 login error:', err)
       setError(err.message || '钱包登录失败，请重试')

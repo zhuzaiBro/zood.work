@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { platformBrowser } from '@/lib/platform/client';
 import { getChatSessionId } from '@/lib/chatSession';
 import { useUser } from '@/store/userStore';
@@ -68,26 +67,18 @@ export default function ChatDialog() {
 
   useEffect(() => {
     if (!open || !sessionId) return;
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`chat-${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `session_id=eq.${sessionId}`,
-        },
-        () => {
-          void reloadMessages();
-        }
-      )
-      .subscribe();
-
+    let timer = 0;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      void reloadMessages();
+      const hidden = document.visibilityState === 'hidden';
+      timer = window.setTimeout(tick, hidden ? 20000 : 4000);
+    };
+    timer = window.setTimeout(tick, 4000);
     return () => {
-      supabase.removeChannel(channel);
+      stopped = true;
+      window.clearTimeout(timer);
     };
   }, [open, reloadMessages, sessionId]);
 

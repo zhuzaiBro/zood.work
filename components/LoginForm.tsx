@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { signInWithPassword, signUp } from '@/lib/auth/session'
+import { platformPublic } from '@/lib/platform/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
 
@@ -25,14 +26,7 @@ export default function LoginForm() {
     setIsLoading(true)
     setError('')
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeRedirectTarget)}`,
-        },
-      })
-      if (error) throw error
+      await platformPublic('/api/platform/auth/oauth/github', { method: 'POST', body: {} })
     } catch (err: any) {
       console.error('GitHub login error:', err)
       setError(err.message || 'GitHub 登录失败')
@@ -47,31 +41,13 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
-      const supabase = createClient()
-
       if (isSignUp) {
-        // 注册
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeRedirectTarget)}`,
-          },
-        })
-
-        if (signUpError) throw signUpError
-
-        setMessage('注册成功！请检查您的邮箱以验证账户。')
+        await signUp(email, password)
+        setMessage('注册成功。邮箱没有被标成已验证，可以直接用密码登录。')
         setEmail('')
         setPassword('')
       } else {
-        // 登录
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-
-        if (signInError) throw signInError
+        await signInWithPassword(email, password)
 
         // 登录成功后，手动初始化用户状态
         await initialize()

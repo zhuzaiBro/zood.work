@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { serverUser } from '@/lib/auth/server'
 import { platformServer } from '@/lib/platform/server'
 import CommentForm from '@/components/CommentForm'
 import CommentList from '@/components/CommentList'
@@ -8,8 +8,7 @@ interface CommentSectionProps {
 }
 
 export default async function CommentSection({ postId }: CommentSectionProps) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await serverUser()
 
   let comments: any[] | null = null
   try {

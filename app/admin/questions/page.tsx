@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
@@ -58,7 +58,6 @@ const { Title, Text, Paragraph } = Typography;
 
 export default function QuestionsManagePage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message, modal } = App.useApp();
 
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -93,9 +92,7 @@ export default function QuestionsManagePage() {
   const checkAuth = async () => {
     setIsCheckingAuth(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await browserUser();
     if (!user) {
       router.push('/login?redirect=/admin/questions');
       return;

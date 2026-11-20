@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { serverUser } from '@/lib/auth/server';
 import { platformServer, PlatformError } from '@/lib/platform/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -66,8 +66,7 @@ export default async function QuestionPage({
   let accessReason = ''; // 'login' | 'upgrade'
 
   if (question.vip_level_required && question.vip_level_required > 0) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await serverUser();
     
     if (!user) {
       hasAccess = false;

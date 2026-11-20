@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { serverUser } from '@/lib/auth/server'
 import { redirect } from 'next/navigation'
 import LoginForm from '@/components/LoginForm'
 
@@ -12,8 +12,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ redirect?: string }>
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await serverUser()
   const { redirect: redirectTarget } = await searchParams
   const safeRedirectTarget =
     redirectTarget && redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')

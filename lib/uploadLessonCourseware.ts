@@ -1,6 +1,4 @@
-import type { createClient } from '@/lib/supabase/client'
-
-type BrowserSupabaseClient = ReturnType<typeof createClient>
+import { uploadPlatformFile } from '@/lib/platform/uploads'
 
 export const LESSON_COURSEWARE_BUCKET = 'lesson-courseware'
 
@@ -25,8 +23,6 @@ function getFileExt(file: File) {
 }
 
 export async function uploadLessonCourseware(
-  supabase: BrowserSupabaseClient,
-  userId: string,
   file: File,
 ): Promise<{ publicUrl: string; fileName: string } | { error: string }> {
   const ext = getFileExt(file)
@@ -38,31 +34,10 @@ export async function uploadLessonCourseware(
   if (file.size > MAX_BYTES) {
     return { error: '课件文件不能超过 50MB' }
   }
-  const id =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-  const path = `${userId}/${Date.now()}-${id}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from(LESSON_COURSEWARE_BUCKET)
-    .upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type || 'application/octet-stream',
-    })
-
-  if (uploadError) {
-    return { error: uploadError.message }
-  }
-
-  const { data } = supabase.storage
-    .from(LESSON_COURSEWARE_BUCKET)
-    .getPublicUrl(path)
-
+  const uploaded = await uploadPlatformFile(LESSON_COURSEWARE_BUCKET, file)
+  if (uploaded.error || !uploaded.publicUrl) return { error: uploaded.error || '上传失败' }
   return {
-    publicUrl: data.publicUrl,
-    fileName: file.name,
+    publicUrl: uploaded.publicUrl,
+    fileName: uploaded.fileName,
   }
 }

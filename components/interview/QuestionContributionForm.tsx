@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -190,14 +190,12 @@ export default function QuestionContributionForm() {
     }
 
     setIsSubmitting(true);
-
-    const supabase = createClient();
     let uploadedAttachmentPath: string | null = null;
     let attachmentName: string | null = null;
     let attachmentMimeType: string | null = null;
 
     if (attachmentFile) {
-      const uploadResult = await uploadInterviewSubmissionAttachment(supabase, user.id, attachmentFile);
+      const uploadResult = await uploadInterviewSubmissionAttachment(attachmentFile);
 
       if ('error' in uploadResult) {
         setIsSubmitting(false);
@@ -225,12 +223,6 @@ export default function QuestionContributionForm() {
         },
       });
     } catch (submitError) {
-      if (uploadedAttachmentPath) {
-        await supabase.storage
-          .from(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET)
-          .remove([uploadedAttachmentPath]);
-      }
-
       setIsSubmitting(false);
       const code = submitError instanceof PlatformError ? submitError.code : undefined;
       if (code === '42501') {

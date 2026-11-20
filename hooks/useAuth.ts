@@ -1,7 +1,7 @@
 'use client'
 
 import { useUserStore, useUser, useProfile, useIsAuthenticated, useIsLoading } from '@/store/userStore'
-import { createClient } from '@/lib/supabase/client'
+import { signOut as clearSession } from '@/lib/auth/session'
 import { platformBrowser } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 
@@ -20,8 +20,7 @@ export function useAuth() {
    * 登出
    */
   const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await clearSession()
     clearUser()
     router.push('/login')
     router.refresh()

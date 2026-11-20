@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
-import { createClient } from '@/lib/supabase/client'
+import { browserUser } from '@/lib/auth/session'
 import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { uploadPostBanner } from '@/lib/uploadPostBanner'
 import Skeleton from '@/components/ui/Skeleton'
@@ -234,8 +234,6 @@ export default function CreatePostPage() {
     setIsSubmitting(true)
 
     try {
-      const supabase = createClient()
-
       try {
         const { post: existingPost } = await platformBrowser<{ post: { id: string } | null }>(
           `/api/platform/posts/by-slug?slug=${encodeURIComponent(slug.trim())}`,
@@ -253,7 +251,7 @@ export default function CreatePostPage() {
 
       let bannerPublicUrl: string | null = null
       if (bannerFile) {
-        const up = await uploadPostBanner(supabase as never, user.id, bannerFile)
+        const up = await uploadPostBanner(bannerFile)
         if ('error' in up) {
           setError(up.error)
           setIsSubmitting(false)

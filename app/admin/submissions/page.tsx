@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
@@ -85,7 +85,6 @@ function getStatusMeta(status: string) {
 
 export default function AdminSubmissionsPage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message } = App.useApp();
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -100,9 +99,7 @@ export default function AdminSubmissionsPage() {
   const checkAuth = async () => {
     setIsCheckingAuth(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await browserUser();
 
     if (!user) {
       router.push('/login?redirect=/admin/submissions');
@@ -193,15 +190,11 @@ export default function AdminSubmissionsPage() {
     setOpeningAttachmentId(record.id);
 
     try {
-      const { data, error } = await supabase.storage
-        .from(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET)
-        .createSignedUrl(record.attachment_path, 60 * 10);
-
-      if (error || !data?.signedUrl) {
-        throw new Error(error?.message || '生成附件访问链接失败');
+      if (record.attachment_path.startsWith('http')) {
+        window.open(record.attachment_path, '_blank', 'noopener,noreferrer');
+        return;
       }
-
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      throw new Error('这份附件只有旧的存储元数据，文件内容不在本地，无法打开');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '打开附件失败');
     } finally {

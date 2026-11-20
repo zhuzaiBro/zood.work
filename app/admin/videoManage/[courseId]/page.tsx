@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import LessonUploadModal from '@/components/admin/LessonUploadModal';
 import CourseSettingsModal, {
@@ -129,7 +129,6 @@ export default function CourseDetailPage() {
   const params = useParams<{ courseId: string }>();
   const courseId = params.courseId;
   const router = useRouter();
-  const supabase = createClient();
   const { message, modal } = App.useApp();
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -210,9 +209,7 @@ export default function CourseDetailPage() {
   useEffect(() => {
     const checkAuth = async () => {
       setIsCheckingAuth(true);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await browserUser();
 
       if (!user) {
         router.push(`/login?redirect=/admin/videoManage/${courseId}`);
@@ -240,7 +237,7 @@ export default function CourseDetailPage() {
     };
 
     checkAuth();
-  }, [courseId, router, loadCourseDetail, supabase]);
+  }, [courseId, router, loadCourseDetail]);
 
   const handleSaveSettings = async (values: CourseSettingsValues) => {
     if (!courseId) return;

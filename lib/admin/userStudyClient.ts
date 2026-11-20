@@ -1,7 +1,4 @@
-import type { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
-
-type BrowserSupabaseClient = ReturnType<typeof createClient>;
 type VideoAccessLog = Pick<
   Database['public']['Tables']['video_access_logs']['Row'],
   'user_id' | 'video_id' | 'watch_seconds' | 'created_at'
@@ -78,7 +75,7 @@ function getShanghaiDayRange(dayOffset: number) {
 }
 
 export async function loadAdminUserStudyData(
-  _supabase?: BrowserSupabaseClient,
+  _unused?: unknown,
 ): Promise<AdminUsersResponse> {
   const response = await fetch('/api/admin/users', { cache: 'no-store' });
   const body = await response.json().catch(() => ({}));

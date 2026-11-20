@@ -1,8 +1,8 @@
-import type { createClient } from '@/lib/supabase/client';
+import { readBrowserToken } from '@/lib/auth/session';
 import type { Database } from '@/types/database.types';
 import { videoApiUrl } from '@/lib/videoApi';
 
-type BrowserSupabaseClient = ReturnType<typeof createClient>;
+type BrowserSupabaseClient = { auth?: unknown };
 type VideoRow = Pick<
   Database['public']['Tables']['videos']['Row'],
   'id' | 'title' | 'description' | 'duration' | 'status' | 'created_at' | 'updated_at'
@@ -31,16 +31,9 @@ export type VideoListResult = {
   pageSize: number;
 };
 
-export async function getVideoApiAuthHeaders(
-  supabase: BrowserSupabaseClient,
-): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  return session?.access_token
-    ? { Authorization: `Bearer ${session.access_token}` }
-    : {};
+export async function getVideoApiAuthHeaders(): Promise<Record<string, string>> {
+  const token = readBrowserToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export async function fetchVideoApiJson<T>(
@@ -63,7 +56,6 @@ export async function fetchVideoApiJson<T>(
 }
 
 export async function listVideos(
-  _supabase: BrowserSupabaseClient,
   page = 1,
   pageSize = 10,
 ): Promise<VideoListResult> {
@@ -72,7 +64,6 @@ export async function listVideos(
 }
 
 export async function getVideoDetail(
-  _supabase: BrowserSupabaseClient,
   videoId: string,
 ): Promise<VideoRecord> {
   return fetchVideoApiJson<VideoRecord>(`/api/admin/videos/${videoId}`);

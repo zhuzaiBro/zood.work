@@ -1,13 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { serverAccessToken } from '@/lib/auth/server'
 import { platformRequest, PlatformError } from '@/lib/platform/http'
 
-export { platformRequest, PlatformError }
-
-export async function serverAccessToken() {
-  const supabase = await createClient()
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
-}
+export { platformRequest, PlatformError, serverAccessToken }
 
 export async function platformServer<T = any>(
   path: string,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import CourseFormModal, { CourseFormValues } from '@/components/admin/CourseFormModal';
 import CourseListTable, { type CourseRow } from '@/components/admin/CourseListTable';
@@ -22,7 +22,6 @@ const { Title, Text } = Typography;
 
 export default function VideoManagePage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message } = App.useApp();
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -39,9 +38,7 @@ export default function VideoManagePage() {
 
   const checkAuth = async () => {
     setIsCheckingAuth(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await browserUser();
 
     if (!user) {
       router.push('/login?redirect=/admin/videoManage');

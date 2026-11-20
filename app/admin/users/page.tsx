@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import {
   loadAdminUserStudyData,
@@ -69,7 +69,6 @@ function formatDateTime(value: string | null) {
 
 export default function AdminUsersPage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [repairingProfiles, setRepairingProfiles] = useState(false);
@@ -82,9 +81,7 @@ export default function AdminUsersPage() {
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await browserUser();
       if (!user) {
         router.push('/login?redirect=/admin/users');
         return;
@@ -98,7 +95,7 @@ export default function AdminUsersPage() {
         return;
       }
 
-      const result = await loadAdminUserStudyData(supabase);
+      const result = await loadAdminUserStudyData();
       setHasPermission(true);
       setData(result);
     } catch (error) {

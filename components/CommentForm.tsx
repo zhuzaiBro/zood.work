@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { browserUser } from '@/lib/auth/session'
 import { platformBrowser } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 
@@ -29,8 +29,7 @@ export default function CommentForm({ postId, parentId, onCancel }: CommentFormP
     setIsSubmitting(true)
 
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await browserUser()
 
       if (!user) {
         setError('请先登录')

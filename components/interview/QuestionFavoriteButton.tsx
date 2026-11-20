@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { browserUser } from "@/lib/auth/session";
 import { platformBrowser, PlatformError } from "@/lib/platform/client";
 
 type QuestionFavoriteButtonProps = {
@@ -35,10 +35,7 @@ export default function QuestionFavoriteButton({
     let cancelled = false;
 
     async function loadFavorite() {
-      const supabase = createClient() as any;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await browserUser();
 
       if (cancelled) return;
 
