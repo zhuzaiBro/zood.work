@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import { createClient } from '@/lib/supabase/client';
+import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import {
   App,
   Button,
@@ -90,22 +91,18 @@ export default function PurchaseRequestsPage() {
   const [grantingConsultationId, setGrantingConsultationId] = useState<number | null>(null);
 
   const loadCourseRequests = async () => {
-    const { data, error } = await supabase
-      .from('course_purchase_requests')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    setRequests((data ?? []) as PurchaseRequest[]);
+    const { requests: rows } = await platformBrowser<{ requests: PurchaseRequest[] | null }>(
+      '/api/platform/admin/purchase-requests',
+    );
+    setRequests(rows ?? []);
     return true;
   };
 
   const loadMembershipRequests = async () => {
-    const { data, error } = await (supabase as any)
-      .from('membership_consultation_requests')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    setMembershipRequests((data ?? []) as MembershipConsultationRequest[]);
+    const { requests: rows } = await platformBrowser<{ requests: MembershipConsultationRequest[] | null }>(
+      '/api/platform/admin/consultations',
+    );
+    setMembershipRequests(rows ?? []);
     return true;
   };
 
@@ -121,13 +118,20 @@ export default function PurchaseRequestsPage() {
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      const adminProfile = profile as { is_admin?: boolean | null } | null;
-      if (profileError || !adminProfile?.is_admin) {
+      let profile: { is_admin?: boolean | null } | null = null;
+      try {
+        const result = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+          '/api/platform/me/profile',
+        );
+        profile = result.profile;
+      } catch (error) {
+        if (error instanceof PlatformError && (error.status === 401 || error.status === 403 || error.status === 404)) {
+          setHasPermission(false);
+          return;
+        }
+        throw error;
+      }
+      if (!profile?.is_admin) {
         setHasPermission(false);
         return;
       }
@@ -186,18 +190,13 @@ export default function PurchaseRequestsPage() {
     setUpdatingId(record.id);
 
     try {
-      const updates: Record<string, string | null> = {
-        status,
-        admin_note: record.admin_note,
-      };
-      if (status === 'contacted') updates.contacted_at = new Date().toISOString();
-      if (status === 'paid') updates.paid_at = new Date().toISOString();
-
-      const { error } = await supabase
-        .from('course_purchase_requests')
-        .update(updates as never)
-        .eq('id', record.id);
-      if (error) throw error;
+      await platformBrowser(`/api/platform/admin/purchase-requests/${record.id}`, {
+        method: 'PATCH',
+        body: {
+          status,
+          adminNote: record.admin_note,
+        },
+      });
 
       message.success('状态已更新');
       await loadCourseRequests();
@@ -215,18 +214,13 @@ export default function PurchaseRequestsPage() {
     setUpdatingId(record.id);
 
     try {
-      const updates: Record<string, string | null> = {
-        status,
-        admin_note: record.admin_note,
-      };
-      if (status === 'contacted') updates.contacted_at = new Date().toISOString();
-      if (status === 'paid') updates.paid_at = new Date().toISOString();
-
-      const { error } = await (supabase as any)
-        .from('membership_consultation_requests')
-        .update(updates)
-        .eq('id', record.id);
-      if (error) throw error;
+      await platformBrowser(`/api/platform/admin/consultations/${record.id}`, {
+        method: 'PATCH',
+        body: {
+          status,
+          adminNote: record.admin_note,
+        },
+      });
 
       message.success('状态已更新');
       await loadMembershipRequests();
@@ -415,8 +409,8 @@ export default function PurchaseRequestsPage() {
               options={[
                 { value: 'pending', label: '待联系' },
                 { value: 'contacted', label: '已联系' },
-                { value: 'paid', label: '已支付' },
                 { value: 'closed', label: '已关闭' },
+                ...(status === 'paid' ? [{ value: 'paid', label: '已支付', disabled: true }] : []),
               ]}
               style={{ width: 96 }}
             />

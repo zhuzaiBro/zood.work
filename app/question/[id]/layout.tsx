@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { platformPublic, PlatformError } from '@/lib/platform/client';
 import { Database } from '@/types/database.types';
 import QuestionSidebar from '@/components/question/QuestionSidebar';
 
@@ -12,40 +12,30 @@ export default async function QuestionLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  // 1. Fetch current question details (minimal needed for sidebar)
-  const { data: question } = await supabase
-    .from('interview_question')
-    .select('id, title, collection_id')
-    .eq('id', id)
-    .single<Question>();
+  type SidebarQuestion = Pick<Question, 'id' | 'title' | 'collection_id'> & {
+    interview_collections?: { title?: string | null } | { title?: string | null }[] | null;
+  };
+  let question: SidebarQuestion | null = null;
 
-  // 2. Fetch all questions in the same collection
-  let collectionQuestions: Pick<Question, 'id' | 'title'>[] = [];
-  let collectionTitle: string | null = null;
-  if (question?.collection_id) {
-    const [{ data }, { data: collection }] = await Promise.all([
-      supabase
-        .from('interview_question')
-        .select('id, title')
-        .eq('collection_id', question.collection_id)
-        .order('sort', { ascending: true })
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-        .limit(300),
-      supabase
-        .from('interview_collections')
-        .select('title')
-        .eq('id', question.collection_id)
-        .maybeSingle(),
-    ]);
-    
-    if (data) {
-      collectionQuestions = data;
+  try {
+    const result = await platformPublic<{ question: SidebarQuestion | null }>(
+      `/api/platform/interview/questions/${encodeURIComponent(id)}`,
+    );
+    question = result.question ?? null;
+  } catch (error) {
+    if (!(error instanceof PlatformError && error.status === 404)) {
+      console.error('Load question sidebar failed:', error);
     }
-    collectionTitle = (collection as { title: string } | null)?.title ?? null;
   }
+
+  const collectionQuestions: Pick<Question, 'id' | 'title'>[] = question
+    ? [{ id: question.id, title: question.title }]
+    : [];
+  const embeddedCollection = question?.interview_collections;
+  const collectionTitle = Array.isArray(embeddedCollection)
+    ? embeddedCollection[0]?.title ?? null
+    : embeddedCollection?.title ?? null;
 
   return (
     <div className="min-h-screen mt-[-5rem] bg-gray-50 pt-32 pb-12 bg-gradient-to-b from-blue-50 to-gray-50">

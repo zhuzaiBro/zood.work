@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import { createClient } from '@/lib/supabase/client';
+import { platformBrowser } from '@/lib/platform/client';
 import {
   loadAdminUserStudyData,
   type AdminUsersResponse,
@@ -89,13 +90,10 @@ export default function AdminUsersPage() {
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      const adminProfile = profile as { is_admin?: boolean | null } | null;
-      if (profileError || !adminProfile?.is_admin) {
+      const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+        '/api/platform/me/profile',
+      );
+      if (!profile?.is_admin) {
         setHasPermission(false);
         return;
       }

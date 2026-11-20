@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
-import { UserProfile } from '@/types/user';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import Skeleton from '@/components/ui/Skeleton';
 import {
@@ -109,13 +109,16 @@ export default function AdminSubmissionsPage() {
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single<UserProfile>();
-
-    if (profileError || !profile?.is_admin) {
+    try {
+      const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+        '/api/platform/me/profile',
+      );
+      if (!profile?.is_admin) {
+        setHasPermission(false);
+        setIsCheckingAuth(false);
+        return;
+      }
+    } catch {
       setHasPermission(false);
       setIsCheckingAuth(false);
       return;
@@ -129,31 +132,22 @@ export default function AdminSubmissionsPage() {
   const loadSubmissions = async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('interview_question_submissions')
-      .select(`
-        *,
-        user_profiles (
-          id,
-          username,
-          display_name,
-          avatar_url
-        ),
-        interview_collections (
-          id,
-          title
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      message.error(error.message || '加载投稿列表失败');
+    try {
+      const { submissions: rows } = await platformBrowser<{ submissions: SubmissionRow[] | null }>(
+        '/api/platform/admin/interview/submissions',
+      );
+      setSubmissions(
+        (rows ?? []).map((row) => ({
+          ...row,
+          tags: row.tags ?? [],
+          user_profiles: Array.isArray(row.user_profiles) ? row.user_profiles[0] ?? null : row.user_profiles ?? null,
+        })),
+      );
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载投稿列表失败');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSubmissions((data ?? []) as SubmissionRow[]);
-    setLoading(false);
   };
 
   useEffect(() => {

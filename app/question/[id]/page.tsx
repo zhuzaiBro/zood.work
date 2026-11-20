@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { platformServer, PlatformError } from '@/lib/platform/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Database } from '@/types/database.types';
@@ -26,73 +27,54 @@ export default async function QuestionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  // 1. Fetch current question details
-  const { data: questionData } = await supabase
-    .from('interview_question')
-    .select(`
-      *,
-      interview_question_tags (
-        interview_tags (
-          *
-        )
-      )
-    `)
-    .eq('id', id)
-    .single();
+  let questionData: Question | null = null;
+  try {
+    const result = await platformServer<{ question: Question | null }>(
+      `/api/platform/interview/questions/${encodeURIComponent(id)}`,
+    );
+    questionData = result.question ?? null;
+  } catch (error) {
+    if (error instanceof PlatformError && error.status === 404) {
+      notFound();
+    }
+    console.error('Load interview question failed:', error);
+  }
 
   if (!questionData) {
     notFound();
   }
 
-  const question = questionData as any as Question;
-  let previousQuestion: QuestionNavItem | null = null;
-  let nextQuestion: QuestionNavItem | null = null;
-  let currentQuestionIndex = -1;
-  let collectionQuestionCount = 0;
-
-  if (question.collection_id) {
-    const { data: siblingQuestionsData } = await supabase
-      .from('interview_question')
-      .select('id, title, sort, created_at')
-      .eq('collection_id', question.collection_id)
-      .order('sort', { ascending: true })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(300);
-
-    const siblingQuestions = (siblingQuestionsData || []) as QuestionNavItem[];
-    collectionQuestionCount = siblingQuestions.length;
-    currentQuestionIndex = siblingQuestions.findIndex((item) => item.id === question.id);
-    previousQuestion = currentQuestionIndex > 0 ? siblingQuestions[currentQuestionIndex - 1] : null;
-    nextQuestion =
-      currentQuestionIndex >= 0 && currentQuestionIndex < siblingQuestions.length - 1
-        ? siblingQuestions[currentQuestionIndex + 1]
-        : null;
-  }
+  const question = questionData as Question;
+  // Collection question lists are not returned by the question detail endpoint.
+  const navItems: QuestionNavItem[] = [];
+  const previousQuestion = navItems[0] ?? null;
+  const nextQuestion = navItems[1] ?? null;
+  const currentQuestionIndex = -1;
+  const collectionQuestionCount = 0;
 
   // 2. Check VIP Access
   let hasAccess = true;
   let accessReason = ''; // 'login' | 'upgrade'
 
   if (question.vip_level_required && question.vip_level_required > 0) {
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
       hasAccess = false;
       accessReason = 'login';
     } else {
-      // Get user VIP level
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('vip_level, vip_expires_at')
-        .eq('id', user.id)
-        .single();
-      
-      const userVipLevel = getEffectiveVipLevel(profile);
-      
-      if (userVipLevel < question.vip_level_required) {
+      try {
+        const { profile } = await platformServer<{ profile: { vip_level?: number | null; vip_expires_at?: string | null } | null }>(
+          '/api/platform/me/profile',
+        );
+        const userVipLevel = getEffectiveVipLevel(profile);
+        if (userVipLevel < question.vip_level_required) {
+          hasAccess = false;
+          accessReason = 'upgrade';
+        }
+      } catch {
         hasAccess = false;
         accessReason = 'upgrade';
       }

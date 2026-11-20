@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { platformPublic } from '@/lib/platform/client'
 import Link from 'next/link'
 
 export const metadata = {
@@ -9,18 +9,16 @@ export const metadata = {
 export const revalidate = 60
 
 export default async function CategoriesPage() {
-  const supabase = await createClient()
+  let categories: any[] | null = null
 
-  // 获取所有分类及其文章数量
-  const { data: categories } = await supabase
-    .from('post_cates')
-    .select(`
-      *,
-      post_cate_relations (
-        post_id
-      )
-    `)
-    .order('name')
+  try {
+    const result = await platformPublic<{ categories: any[] }>('/api/platform/categories')
+    categories = [...(result.categories ?? [])].sort((a, b) =>
+      String(a.name ?? '').localeCompare(String(b.name ?? ''), 'zh'),
+    )
+  } catch (error) {
+    console.error('Error fetching categories:', error)
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

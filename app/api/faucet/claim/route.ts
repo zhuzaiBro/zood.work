@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { ethers } from 'ethers'
+import { platformServer, PlatformError } from '@/lib/platform/server'
 import { RELAYER_CONFIG } from '@/lib/faucet/relayer'
 import type { FaucetNetworkId } from '@/lib/faucet/networks'
 
@@ -10,9 +10,13 @@ const FAUCET_ABI = [
   'function claimAmount() view returns (uint256)',
 ]
 
-const RATE_LIMIT_SECONDS = 60
+async function releaseReservation(id: string) {
+  await platformServer(`/api/platform/faucet/reservations/${id}`, { method: 'DELETE' })
+}
 
 export async function POST(request: Request) {
+  let reservationId: string | null = null
+
   try {
     const { walletAddress, network = 'sepolia' } = await request.json()
 
@@ -33,34 +37,6 @@ export async function POST(request: Request) {
     }
 
     const normalizedAddress = ethers.getAddress(walletAddress)
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0] ||
-      request.headers.get('x-real-ip') ||
-      'unknown'
-
-    let supabase
-    try {
-      supabase = createAdminClient()
-    } catch (adminError) {
-      console.error('Admin client init error:', adminError)
-      return NextResponse.json({ error: '服务器配置错误' }, { status: 500 })
-    }
-
-    const rateLimitTime = new Date(Date.now() - RATE_LIMIT_SECONDS * 1000).toISOString()
-    const { data: recentRequests, error: rateLimitError } = await supabase
-      .from('faucet_claims')
-      .select('id')
-      .eq('wallet_address', normalizedAddress.toLowerCase())
-      .gte('created_at', rateLimitTime)
-
-    if (rateLimitError) {
-      console.error('Rate limit check error:', rateLimitError)
-      return NextResponse.json({ error: '数据库查询错误' }, { status: 500 })
-    }
-
-    // if (recentRequests && recentRequests.length > 0) {
-    //   return NextResponse.json({ error: `请求过于频繁，请 ${RATE_LIMIT_SECONDS} 秒后再试` }, { status: 429 })
-    // }
 
     const provider = new ethers.JsonRpcProvider(config.rpcUrl)
     const relayer = new ethers.Wallet(privateKey, provider)
@@ -73,34 +49,17 @@ export async function POST(request: Request) {
 
     const claimAmount: bigint = await contract.claimAmount()
 
-    const tempTxHash = `pending_${network}_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const { data: insertedRecord, error: insertError } = await supabase
-      .from('faucet_claims')
-      .insert({
-        wallet_address: normalizedAddress.toLowerCase(),
-        ip_address: ip,
-        amount: Number(ethers.formatEther(claimAmount)),
-        tx_hash: tempTxHash,
-      })
-      .select('id')
-      .single()
-
-    // if (insertError) {
-    //   if (insertError.code === '23505') {
-    //     return NextResponse.json({ error: '请勿重复请求' }, { status: 400 })
-    //   }
-    //   console.error('Insert pending record error:', insertError)
-    //   return NextResponse.json(
-    //     {
-    //       error: '数据库写入错误',
-    //       details: insertError.message,
-    //       hint: insertError.hint ?? undefined,
-    //     },
-    //     { status: 500 }
-    //   )
-    // }
-
-    const recordId = insertedRecord?.id
+    const reserved = await platformServer<{ reservation?: { id?: string } }>(
+      '/api/platform/faucet/reservations',
+      {
+        method: 'POST',
+        body: { walletAddress: normalizedAddress.toLowerCase(), network },
+      },
+    )
+    reservationId = reserved.reservation?.id ?? null
+    if (!reservationId) {
+      return NextResponse.json({ error: '数据库写入错误' }, { status: 500 })
+    }
 
     try {
       const tx = await contract.claim(normalizedAddress, {
@@ -108,12 +67,20 @@ export async function POST(request: Request) {
       })
       const receipt = await tx.wait()
 
-      if (recordId) {
-        await supabase
-          .from('faucet_claims')
-          .update({ tx_hash: receipt.hash })
-          .eq('id', recordId)
+      try {
+        await platformServer(`/api/platform/faucet/reservations/${reservationId}/confirm`, {
+          method: 'POST',
+          body: { txHash: receipt.hash },
+        })
+      } catch (confirmError) {
+        console.error('Failed to confirm faucet reservation', {
+          wallet: normalizedAddress,
+          tx: receipt.hash,
+          recordId: reservationId,
+          error: confirmError,
+        })
       }
+      reservationId = null
 
       return NextResponse.json({
         success: true,
@@ -123,13 +90,26 @@ export async function POST(request: Request) {
         network,
       })
     } catch (txError) {
-      if (recordId) {
-        await supabase.from('faucet_claims').delete().eq('id', recordId)
+      if (reservationId) {
+        await releaseReservation(reservationId)
+        reservationId = null
       }
       throw txError
     }
   } catch (error: unknown) {
     console.error('Faucet relay claim error:', error)
+
+    if (reservationId) {
+      try {
+        await releaseReservation(reservationId)
+      } catch (cleanupError) {
+        console.error('Failed to cleanup pending record:', cleanupError)
+      }
+    }
+
+    if (error instanceof PlatformError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
 
     let message = '领取失败，请稍后重试'
     if (error instanceof Error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAdminRequest } from '@/lib/admin/requireAdmin';
+import { serverAccessToken } from '@/lib/platform/server';
 
 // Cloudflare Stream API 配置
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -13,23 +14,8 @@ export const maxDuration = 300; // 5 分钟超时
 export async function POST(request: NextRequest) {
   try {
     // 1. 验证用户身份和权限
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    // 检查管理员权限
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || !(profile as any).is_admin) {
-      return NextResponse.json({ error: '权限不足' }, { status: 403 });
-    }
+    const auth = await requireAdminRequest();
+    if ('response' in auth) return auth.response;
 
     // 2. 验证环境变量
     if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
@@ -136,10 +122,8 @@ export async function POST(request: NextRequest) {
 // 获取视频信息
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
+    const token = await serverAccessToken();
+    if (!token) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 

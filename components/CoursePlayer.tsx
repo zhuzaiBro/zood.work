@@ -7,6 +7,7 @@ import Hls from "hls.js";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
+import { platformBrowser } from "@/lib/platform/client";
 import type { Database } from "@/types/database.types";
 import { useAuth } from "@/hooks/useAuth";
 import { videoApiUrl } from "@/lib/videoApi";
@@ -160,75 +161,22 @@ const mapChaptersAndLessons = (
 
 const fetchPublicCourseFromSupabase = async (
   targetCourseId: string,
-  viewerLoggedIn: boolean,
 ): Promise<{ course: CourseDetail; chapters: Chapter[] } | null> => {
-  const supabase = createClient();
-  const { data: courseData, error: courseError } = await supabase
-    .from("courses")
-    .select(
-      "id,title,description,cover_image_url,price,is_free,status,created_at,created_by,updated_at",
-    )
-    .eq("id", targetCourseId)
-    .eq("status", "published")
-    .maybeSingle();
-
-  if (courseError) throw courseError;
-  const course = courseData as CourseRow | null;
-  if (!course) return null;
-
-  const { data: chapterData, error: chaptersError } = await supabase
-    .from("chapters")
-    .select("id,course_id,title,description,sort_order,created_at,updated_at")
-    .eq("course_id", targetCourseId)
-    .order("sort_order", { ascending: true });
-
-  if (chaptersError) throw chaptersError;
-
-  const chapterRows = (chapterData ?? []) as ChapterRow[];
-  const chapterIds = chapterRows.map((chapter) => chapter.id);
-  let lessons: LessonRow[] = [];
-
-  if (chapterIds.length > 0) {
-    const canLoadPublicVideoFields = viewerLoggedIn && course.is_free;
-    const lessonSelect = canLoadPublicVideoFields
-      ? "id,chapter_id,title,description,courseware_name,courseware_url,content_html,content_markdown,video_id,video_url,duration,is_free,is_locked,sort_order,created_at,updated_at"
-      : "id,chapter_id,title,description,courseware_name,courseware_url,content_html,content_markdown,duration,is_free,is_locked,sort_order,created_at,updated_at";
-    const { data: lessonData, error: lessonsError } = await supabase
-      .from("lessons")
-      .select(lessonSelect)
-      .in("chapter_id", chapterIds)
-      .order("sort_order", { ascending: true });
-
-    if (lessonsError) throw lessonsError;
-    lessons = (lessonData ?? []) as LessonRow[];
-  }
-
-  return {
-    course: mapCourseRow(course),
-    chapters: mapChaptersAndLessons(chapterRows, lessons, course, viewerLoggedIn),
-  };
+  return platformBrowser<{ course: CourseDetail; chapters: Chapter[] }>(
+    `/api/platform/courses/${targetCourseId}`,
+  );
 };
 
-const fetchFirstPublishedCourseFromSupabase = async (
-  viewerLoggedIn: boolean,
-): Promise<{ course: CourseDetail; chapters: Chapter[] } | null> => {
-  const supabase = createClient();
-  const { data: courseData, error } = await supabase
-    .from("courses")
-    .select(
-      "id,title,description,cover_image_url,price,is_free,status,created_at,created_by,updated_at",
-    )
-    .eq("status", "published")
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (error) throw error;
-
-  const courses = (courseData ?? []) as CourseRow[];
+const fetchFirstPublishedCourseFromSupabase = async (): Promise<{
+  course: CourseDetail;
+  chapters: Chapter[];
+} | null> => {
+  const { courses } = await platformBrowser<{ courses: Array<{ id: string }> }>(
+    "/api/platform/courses?status=published",
+  );
   const firstCourse = courses?.[0];
-  if (!firstCourse) return null;
-
-  return fetchPublicCourseFromSupabase(firstCourse.id, viewerLoggedIn);
+  if (!firstCourse?.id) return null;
+  return fetchPublicCourseFromSupabase(firstCourse.id);
 };
 
 export default function CoursePlayer({
@@ -779,8 +727,8 @@ export default function CoursePlayer({
 
         try {
           data = courseId
-            ? await fetchPublicCourseFromSupabase(courseId, isAuthenticated)
-            : await fetchFirstPublishedCourseFromSupabase(isAuthenticated);
+            ? await fetchPublicCourseFromSupabase(courseId)
+            : await fetchFirstPublishedCourseFromSupabase();
           loadedCourseId = data?.course.id ?? courseId;
         } catch (supabaseError) {
           console.warn("Supabase 公开课程读取失败，回退到 Node API:", supabaseError);

@@ -63,64 +63,18 @@ export async function fetchVideoApiJson<T>(
 }
 
 export async function listVideos(
-  supabase: BrowserSupabaseClient,
+  _supabase: BrowserSupabaseClient,
   page = 1,
   pageSize = 10,
 ): Promise<VideoListResult> {
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  const { data, error, count } = await supabase
-    .from('videos')
-    .select('id, title, description, duration, status, created_at, updated_at', {
-      count: 'exact',
-    })
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (!error) {
-    return {
-      items: ((data ?? []) as VideoRow[]).map((video) => ({
-        id: video.id,
-        title: video.title,
-        description: video.description,
-        duration: video.duration,
-        status: video.status,
-        createdAt: video.created_at ?? undefined,
-        updatedAt: video.updated_at ?? undefined,
-      })),
-      total: count ?? 0,
-      page,
-      pageSize,
-    };
-  }
-
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   return fetchVideoApiJson<VideoListResult>(`/api/admin/videos?${params.toString()}`);
 }
 
 export async function getVideoDetail(
-  supabase: BrowserSupabaseClient,
+  _supabase: BrowserSupabaseClient,
   videoId: string,
 ): Promise<VideoRecord> {
-  const { data, error } = await supabase
-    .from('videos')
-    .select('id, title, description, duration, status, created_at, updated_at')
-    .eq('id', videoId)
-    .maybeSingle();
-
-  const video = data as VideoRow | null;
-  if (!error && video) {
-    return {
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      duration: video.duration,
-      status: video.status,
-      createdAt: video.created_at ?? undefined,
-      updatedAt: video.updated_at ?? undefined,
-    };
-  }
-
   return fetchVideoApiJson<VideoRecord>(`/api/admin/videos/${videoId}`);
 }
 

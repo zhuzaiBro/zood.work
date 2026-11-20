@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { UserProfile } from '@/types/user';
-import type { Database } from '@/types/database.types';
+import { platformBrowser } from '@/lib/platform/client';
 import LessonUploadModal from '@/components/admin/LessonUploadModal';
 import CourseSettingsModal, {
   type CourseSettingsValues,
@@ -75,18 +74,48 @@ interface CourseDetail {
   price: number;
 }
 
-type CourseRow = Pick<
-  Database['public']['Tables']['courses']['Row'],
-  'id' | 'title' | 'description' | 'cover_image_url' | 'status' | 'is_free' | 'price'
->;
-type ChapterRow = Pick<
-  Database['public']['Tables']['chapters']['Row'],
-  'id' | 'title' | 'description' | 'sort_order'
->;
-type LessonRow = Pick<
-  Database['public']['Tables']['lessons']['Row'],
-  'id' | 'chapter_id' | 'title' | 'description' | 'courseware_name' | 'courseware_url' | 'content_html' | 'content_markdown' | 'duration' | 'is_free' | 'is_locked' | 'video_url' | 'video_id' | 'sort_order'
->;
+interface CourseDetailResponse {
+  course: {
+    id: string;
+    title: string;
+    description?: string | null;
+    coverImageUrl?: string | null;
+    status: string;
+    isFree: boolean;
+    price: number | string | null;
+  };
+  chapters?: Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    sortOrder?: number | null;
+    lessons?: Array<{
+      id: string;
+      title: string;
+      description?: string | null;
+      coursewareName?: string | null;
+      coursewareUrl?: string | null;
+      contentHtml?: string | null;
+      contentMarkdown?: string | null;
+      durationSeconds?: number | null;
+      isFree?: boolean;
+      isLocked?: boolean;
+      videoUrl?: string | null;
+      videoId?: string | null;
+      sortOrder?: number | null;
+    }>;
+  }>;
+}
+
+interface UpdatedCourseRow {
+  id: string;
+  title: string;
+  description?: string | null;
+  cover_image_url?: string | null;
+  status: string;
+  is_free: boolean;
+  price: number | string | null;
+}
 
 const statusMap: Record<string, { color: string; label: string }> = {
   draft: { color: 'default', label: '草稿' },
@@ -131,67 +160,40 @@ export default function CourseDetailPage() {
     if (!courseId) return;
     setLoading(true);
     try {
-      const [courseResult, chaptersResult] = await Promise.all([
-        supabase
-          .from('courses')
-          .select('id, title, description, cover_image_url, status, is_free, price')
-          .eq('id', courseId)
-          .single(),
-        supabase
-          .from('chapters')
-          .select('id, title, description, sort_order')
-          .eq('course_id', courseId)
-          .order('sort_order', { ascending: true }),
-      ]);
-
-      if (courseResult.error) throw courseResult.error;
-      if (chaptersResult.error) throw chaptersResult.error;
-
-      const chapterRows = (chaptersResult.data ?? []) as ChapterRow[];
-      const chapterIds = chapterRows.map((chapter) => chapter.id);
-      const lessonsResult = chapterIds.length > 0
-        ? await supabase
-          .from('lessons')
-          .select('id, chapter_id, title, description, courseware_name, courseware_url, content_html, content_markdown, duration, is_free, is_locked, video_url, video_id, sort_order')
-          .in('chapter_id', chapterIds)
-          .order('sort_order', { ascending: true })
-        : { data: [], error: null };
-
-      if (lessonsResult.error) throw lessonsResult.error;
-
-      const courseRow = courseResult.data as CourseRow;
-      const lessonRows = (lessonsResult.data ?? []) as LessonRow[];
-      const nextChapters = chapterRows.map((chapter) => ({
+      const detail = await platformBrowser<CourseDetailResponse>(`/api/platform/courses/${courseId}`);
+      const courseRow = detail.course;
+      if (!courseRow?.id) {
+        throw new Error('课程不存在');
+      }
+      const nextChapters = (detail.chapters ?? []).map((chapter) => ({
         id: chapter.id,
         title: chapter.title,
         description: chapter.description,
-        sortOrder: chapter.sort_order,
-        lessons: lessonRows
-          .filter((lesson) => lesson.chapter_id === chapter.id)
-          .map((lesson) => ({
-            id: lesson.id,
-            title: lesson.title,
-            description: lesson.description,
-            coursewareName: lesson.courseware_name,
-            coursewareUrl: lesson.courseware_url,
-            contentHtml: lesson.content_html,
-            contentMarkdown: lesson.content_markdown,
-            durationSeconds: lesson.duration,
-            isFree: lesson.is_free,
-            isLocked: lesson.is_locked,
-            videoUrl: lesson.video_url,
-            videoId: lesson.video_id,
-            sortOrder: lesson.sort_order,
-          })),
+        sortOrder: chapter.sortOrder ?? 0,
+        lessons: (chapter.lessons ?? []).map((lesson) => ({
+          id: lesson.id,
+          title: lesson.title,
+          description: lesson.description,
+          coursewareName: lesson.coursewareName,
+          coursewareUrl: lesson.coursewareUrl,
+          contentHtml: lesson.contentHtml,
+          contentMarkdown: lesson.contentMarkdown,
+          durationSeconds: lesson.durationSeconds ?? null,
+          isFree: Boolean(lesson.isFree),
+          isLocked: Boolean(lesson.isLocked),
+          videoUrl: lesson.videoUrl,
+          videoId: lesson.videoId,
+          sortOrder: lesson.sortOrder ?? 0,
+        })),
       }));
 
       setCourse({
         id: courseRow.id,
         title: courseRow.title,
         description: courseRow.description,
-        coverImageUrl: courseRow.cover_image_url,
+        coverImageUrl: courseRow.coverImageUrl,
         status: courseRow.status,
-        isFree: courseRow.is_free,
+        isFree: Boolean(courseRow.isFree),
         price: Number(courseRow.price) || 0,
       });
       setChapters(nextChapters);
@@ -203,7 +205,7 @@ export default function CourseDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [courseId, message, supabase]);
+  }, [courseId, message]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -217,13 +219,16 @@ export default function CourseDetailPage() {
         return;
       }
 
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single<UserProfile>();
-
-      if (error || !profile?.is_admin) {
+      try {
+        const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+          '/api/platform/me/profile',
+        );
+        if (!profile?.is_admin) {
+          setHasPermission(false);
+          setIsCheckingAuth(false);
+          return;
+        }
+      } catch {
         setHasPermission(false);
         setIsCheckingAuth(false);
         return;
@@ -242,30 +247,28 @@ export default function CourseDetailPage() {
     setSettingsSaving(true);
 
     try {
-      const { data: updated, error } = await supabase
-        .from('courses')
-        .update({
-          title: values.title,
-          description: values.description,
-          cover_image_url: values.coverImageUrl || null,
-          status: values.status,
-          is_free: values.isFree,
-          price: values.isFree ? 0 : values.price,
-        } as never)
-        .eq('id', courseId)
-        .select('id, title, description, cover_image_url, status, is_free, price')
-        .single();
-
-      if (error) throw error;
-      const updatedCourse = updated as CourseRow;
+      const { course: updated } = await platformBrowser<{ course: UpdatedCourseRow }>(
+        `/api/platform/courses/${courseId}`,
+        {
+          method: 'PATCH',
+          body: {
+            title: values.title,
+            description: values.description,
+            coverImageUrl: values.coverImageUrl || null,
+            status: values.status,
+            isFree: values.isFree,
+            price: values.isFree ? 0 : values.price,
+          },
+        },
+      );
       setCourse({
-        id: updatedCourse.id,
-        title: updatedCourse.title,
-        description: updatedCourse.description,
-        coverImageUrl: updatedCourse.cover_image_url,
-        status: updatedCourse.status,
-        isFree: updatedCourse.is_free,
-        price: Number(updatedCourse.price) || 0,
+        id: updated.id,
+        title: updated.title,
+        description: updated.description,
+        coverImageUrl: updated.cover_image_url,
+        status: updated.status,
+        isFree: Boolean(updated.is_free),
+        price: Number(updated.price) || 0,
       });
       message.success('课程设置已保存');
       setSettingsModalOpen(false);
@@ -302,24 +305,23 @@ export default function CourseDetailPage() {
 
     try {
       if (chapterModalMode === 'create') {
-        const { error } = await supabase
-          .from('chapters')
-          .insert({
-            course_id: courseId,
+        await platformBrowser('/api/platform/admin/chapters', {
+          method: 'POST',
+          body: {
+            courseId,
             title: values.title,
-            sort_order: values.sortOrder ?? chapters.length,
-          } as never);
-        if (error) throw error;
+            sortOrder: values.sortOrder ?? chapters.length,
+          },
+        });
         message.success('章节已创建');
       } else if (editingChapterId) {
-        const { error } = await supabase
-          .from('chapters')
-          .update({
+        await platformBrowser(`/api/platform/admin/chapters/${editingChapterId}`, {
+          method: 'PATCH',
+          body: {
             title: values.title,
-            sort_order: values.sortOrder ?? 0,
-          } as never)
-          .eq('id', editingChapterId);
-        if (error) throw error;
+            sortOrder: values.sortOrder ?? 0,
+          },
+        });
         message.success('章节已更新');
       }
 
@@ -340,11 +342,9 @@ export default function CourseDetailPage() {
       okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
-        const { error } = await supabase
-          .from('chapters')
-          .delete()
-          .eq('id', chapter.id);
-        if (error) throw error;
+        await platformBrowser(`/api/platform/admin/chapters/${chapter.id}`, {
+          method: 'DELETE',
+        });
         message.success('章节已删除');
         loadCourseDetail();
       },

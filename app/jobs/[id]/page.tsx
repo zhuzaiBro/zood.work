@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { platformPublic, PlatformError } from "@/lib/platform/client";
 import JobContactPanel from "@/components/jobs/JobContactPanel";
 import type { Metadata } from "next";
 
@@ -28,14 +28,22 @@ type JobDetail = {
   tags: unknown;
 };
 
+async function loadJob(id: string) {
+  try {
+    const { job } = await platformPublic<{ job: JobDetail | null }>(
+      `/api/platform/jobs/${encodeURIComponent(id)}`,
+    );
+    return job ?? null;
+  } catch (error) {
+    if (error instanceof PlatformError && error.status === 404) return null;
+    console.error("Load job detail failed:", error);
+    return null;
+  }
+}
+
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await (supabase as any)
-    .from("job_listings")
-    .select("title, company_name, location, office_mode_name, description")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await loadJob(id);
 
   const title = data?.title
     ? `${data.title} - ${data.company_name || "岗位详情"}`
@@ -56,36 +64,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function JobDetailPage({ params }: { params: Params }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: job, error } = await (supabase as any)
-    .from("job_listings")
-    .select(
-      `
-      id,
-      title,
-      company_name,
-      company_logo,
-      company_website,
-      location,
-      office_mode_name,
-      work_type_name,
-      min_salary,
-      max_salary,
-      source_created_at,
-      last_synced_at,
-      description,
-      requirements,
-      benefits,
-      extra_content,
-      tags
-    `
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const job = await loadJob(id);
 
-  if (error) {
-    console.error("Load job detail failed:", error);
-  }
   if (!job) {
     notFound();
   }

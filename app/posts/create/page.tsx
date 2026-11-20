@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
+import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { uploadPostBanner } from '@/lib/uploadPostBanner'
 import Skeleton from '@/components/ui/Skeleton'
 import Link from 'next/link'
@@ -89,11 +90,15 @@ export default function CreatePostPage() {
 
   useEffect(() => {
     const fetchCategories = async () => {
-      const supabase = createClient()
-      const { data } = await supabase.from('post_cates').select('*').order('name')
-
-      if (data) {
-        setCategories(data)
+      try {
+        const { categories: rows } = await platformBrowser<{ categories: Category[] }>(
+          '/api/platform/categories',
+        )
+        setCategories(
+          [...(rows ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'zh')),
+        )
+      } catch (categoryError) {
+        console.error('Error fetching categories:', categoryError)
       }
     }
 
@@ -231,21 +236,24 @@ export default function CreatePostPage() {
     try {
       const supabase = createClient()
 
-      const { data: existingPost } = await supabase
-        .from('posts')
-        .select('id')
-        .eq('slug', slug)
-        .single()
-
-      if (existingPost) {
-        setError('文章别名已存在，请使用其他别名')
-        setIsSubmitting(false)
-        return
+      try {
+        const { post: existingPost } = await platformBrowser<{ post: { id: string } | null }>(
+          `/api/platform/posts/by-slug?slug=${encodeURIComponent(slug.trim())}`,
+        )
+        if (existingPost) {
+          setError('文章别名已存在，请使用其他别名')
+          setIsSubmitting(false)
+          return
+        }
+      } catch (lookupError) {
+        if (!(lookupError instanceof PlatformError) || lookupError.status !== 404) {
+          throw lookupError
+        }
       }
 
       let bannerPublicUrl: string | null = null
       if (bannerFile) {
-        const up = await uploadPostBanner(supabase, user.id, bannerFile)
+        const up = await uploadPostBanner(supabase as never, user.id, bannerFile)
         if ('error' in up) {
           setError(up.error)
           setIsSubmitting(false)
@@ -254,50 +262,39 @@ export default function CreatePostPage() {
         bannerPublicUrl = up.publicUrl
       }
 
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .insert([
-          {
-            title: title.trim(),
-            slug: slug.trim(),
-            content: markdown,
-            excerpt: excerpt.trim() || null,
-            banner: bannerPublicUrl,
-            author_id: user.id,
-            published: willPublish,
-            is_public: isPublic,
-          },
-        ] as any)
-        .select()
-        .single()
+      const { post } = await platformBrowser<{ post: { id: string; slug: string } }>('/api/platform/posts', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          slug: slug.trim(),
+          content: markdown,
+          excerpt: excerpt.trim() || null,
+          banner: bannerPublicUrl,
+          published: willPublish,
+          is_public: isPublic,
+        },
+      })
 
-      if (postError) throw postError
-      if (!postData) throw new Error('创建文章失败')
-
-      const post = postData as any
+      if (!post) throw new Error('创建文章失败')
 
       if (selectedCategories.length > 0) {
-        const relations = selectedCategories.map((cateId) => ({
-          post_id: post.id,
-          cate_id: cateId,
-        }))
-
-        const { error: relError } = await supabase
-          .from('post_cate_relations')
-          .insert(relations as any)
-
-        if (relError) {
-          console.error('Error creating category relations:', relError)
-        }
+        await platformBrowser(`/api/platform/posts/${post.id}/categories`, {
+          method: 'PUT',
+          body: { categoryIds: selectedCategories },
+        })
       }
 
       clearLocalDraft()
-      router.push(`/posts/${post.slug}`)
+      router.push(`/posts/${post.slug || slug.trim()}`)
       router.refresh()
     } catch (err: any) {
       console.error('Error creating post:', err)
-      if (err.code === '42501') {
-        setError('发布失败：posts 表的 RLS 策略不允许当前用户写入，请先执行 .sql/setup_posts_rls.sql')
+      if (err instanceof PlatformError && (err.code === '42501' || err.status === 409)) {
+        setError(
+          err.status === 409
+            ? '文章别名已存在，请使用其他别名'
+            : '发布失败：posts 表的 RLS 策略不允许当前用户写入，请先执行 .sql/setup_posts_rls.sql',
+        )
       } else {
         setError(err.message || '发布失败，请重试')
       }

@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-
-function escapeIlike(value: string) {
-  return value.replace(/[%_\\]/g, '\\$&');
-}
+import { platformPublic } from '@/lib/platform/client';
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() ?? '';
@@ -16,29 +12,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '搜索关键词过长' }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const pattern = `%${escapeIlike(q)}%`;
-
-  const { data, error } = await supabase
-    .from('interview_question')
-    .select(`
-      id,
-      title,
-      content,
-      difficulty,
-      is_vip,
-      collection_id,
-      interview_collections (
-        title
-      )
-    `)
-    .or(`title.ilike.${pattern},content.ilike.${pattern}`)
-    .order('sort', { ascending: true })
-    .limit(50);
-
-  if (error) {
-    console.error('搜索面试题失败:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  let data: Array<{
+    id: string;
+    title: string;
+    content: string | null;
+    difficulty: string | null;
+    is_vip: boolean | null;
+    collection_id: string | null;
+    interview_collections: { title: string } | null;
+  }> = [];
+  try {
+    const result = await platformPublic<{ questions: typeof data }>(
+      `/api/platform/interview/questions/search?q=${encodeURIComponent(q)}`,
+    );
+    data = result.questions ?? [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '搜索面试题失败';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const keywords = q.toLowerCase().split(/\s+/).filter(Boolean);

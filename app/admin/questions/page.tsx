@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
-import { UserProfile } from '@/types/user';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import Skeleton from '@/components/ui/Skeleton';
 import {
@@ -101,13 +101,16 @@ export default function QuestionsManagePage() {
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single<UserProfile>();
-
-    if (profileError || !profile?.is_admin) {
+    try {
+      const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+        '/api/platform/me/profile',
+      );
+      if (!profile?.is_admin) {
+        setHasPermission(false);
+        setIsCheckingAuth(false);
+        return;
+      }
+    } catch {
       setHasPermission(false);
       setIsCheckingAuth(false);
       return;
@@ -120,58 +123,67 @@ export default function QuestionsManagePage() {
   };
 
   const loadCollections = async () => {
-    const { data, error: loadError } = await supabase
-      .from('interview_collections')
-      .select('*')
-      .order('sort', { ascending: true });
-
-    if (loadError) {
+    try {
+      const home = await platformBrowser<{
+        tags: { slug: string }[] | null;
+        collections: Collection[] | null;
+      }>('/api/platform/interview');
+      const tags = home.tags ?? [];
+      const pages = tags.length
+        ? await Promise.all(
+            tags.map((tag) =>
+              platformBrowser<{ collections: Collection[] | null }>(
+                `/api/platform/interview?tag=${encodeURIComponent(tag.slug)}`,
+              ),
+            ),
+          )
+        : [{ collections: home.collections }];
+      const merged = new Map<string, Collection>();
+      for (const page of pages) {
+        for (const collection of page.collections ?? []) {
+          merged.set(collection.id, collection);
+        }
+      }
+      setCollections(
+        [...merged.values()].sort(
+          (a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.title.localeCompare(b.title),
+        ),
+      );
+    } catch (loadError) {
       console.error('加载题集失败:', loadError);
-      return;
     }
-
-    setCollections(data || []);
   };
 
   const loadQuestions = async () => {
     setIsLoadingQuestions(true);
 
-    let query = supabase
-      .from('interview_question')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (filterCollectionId) {
-      query = query.eq('collection_id', filterCollectionId);
-    }
-
-    if (searchKeyword.trim()) {
-      query = query.ilike('title', `%${searchKeyword}%`);
-    }
-
-    const { data, error: loadError } = await query;
-
-    if (loadError) {
+    try {
+      const params = new URLSearchParams();
+      if (filterCollectionId) params.set('collectionId', filterCollectionId);
+      const keyword = searchKeyword.trim();
+      if (keyword) params.set('q', keyword);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const { questions: rows } = await platformBrowser<{ questions: Question[] | null }>(
+        `/api/platform/admin/interview/questions${suffix}`,
+      );
+      setQuestions(rows ?? []);
+    } catch (loadError) {
       console.error('加载题目失败:', loadError);
-      message.error('加载题目失败');
-    } else {
-      setQuestions(data || []);
+      message.error(loadError instanceof Error ? loadError.message : '加载题目失败');
+    } finally {
+      setIsLoadingQuestions(false);
     }
-
-    setIsLoadingQuestions(false);
   };
 
   const handleDeleteQuestion = async (questionId: string) => {
-    const { error: deleteError } = await supabase
-      .from('interview_question')
-      .delete()
-      .eq('id', questionId);
-
-    if (deleteError) {
-      message.error('删除失败: ' + deleteError.message);
-    } else {
+    try {
+      await platformBrowser(`/api/platform/admin/interview/questions/${questionId}`, {
+        method: 'DELETE',
+      });
       message.success('题目已删除');
       loadQuestions();
+    } catch (deleteError) {
+      message.error('删除失败: ' + (deleteError instanceof Error ? deleteError.message : '未知错误'));
     }
   };
 
@@ -232,42 +244,37 @@ export default function QuestionsManagePage() {
     setIsSavingQuestion(true);
 
     const payload = {
-      collection_id: values.collection_id,
       title: values.title.trim(),
       content: values.content.trim(),
       difficulty: values.difficulty,
-      is_vip: values.is_vip,
-      vip_level_required: values.is_vip ? values.vip_level_required : null,
+      collectionId: values.collection_id,
+      isVip: values.is_vip,
       sort: normalizeSort(values.sort),
+      vipLevelRequired: values.is_vip ? values.vip_level_required : null,
     };
 
-    if (questionModalMode === 'create') {
-      const { error: insertError } = await supabase
-        .from('interview_question')
-        // @ts-expect-error - Supabase type inference issue with insert method
-        .insert(payload);
-
-      if (insertError) {
-        message.error('创建失败: ' + insertError.message);
-      } else {
+    try {
+      if (questionModalMode === 'create') {
+        await platformBrowser('/api/platform/admin/interview/questions', {
+          method: 'POST',
+          body: payload,
+        });
         message.success('题目已创建');
-        setQuestionModalOpen(false);
-        loadQuestions();
-      }
-    } else if (editingQuestionId) {
-      const { error: saveError } = await supabase
-        .from('interview_question')
-        // @ts-expect-error - Supabase type inference issue with update method
-        .update(payload)
-        .eq('id', editingQuestionId);
-
-      if (saveError) {
-        message.error('保存失败: ' + saveError.message);
-      } else {
+      } else if (editingQuestionId) {
+        await platformBrowser(`/api/platform/admin/interview/questions/${editingQuestionId}`, {
+          method: 'PATCH',
+          body: payload,
+        });
         message.success('题目已更新');
-        setQuestionModalOpen(false);
-        loadQuestions();
+      } else {
+        setIsSavingQuestion(false);
+        return;
       }
+      setQuestionModalOpen(false);
+      loadQuestions();
+    } catch (saveError) {
+      const action = questionModalMode === 'create' ? '创建失败: ' : '保存失败: ';
+      message.error(action + (saveError instanceof Error ? saveError.message : '未知错误'));
     }
 
     setIsSavingQuestion(false);
@@ -444,24 +451,24 @@ export default function QuestionsManagePage() {
       const question = parsedData[i];
       setUploadProgress({ current: i + 1, total: parsedData.length });
 
-      const { error: insertError } = await supabase
-        .from('interview_question')
-        // @ts-expect-error - Supabase type inference issue with insert method
-        .insert({
-          collection_id: selectedCollectionId,
-          title: question.title,
-          content: question.content,
-          is_vip: question.is_vip,
-          difficulty: question.difficulty,
-          vip_level_required: question.vip_level_required,
-          sort: question.sort,
+      try {
+        await platformBrowser('/api/platform/admin/interview/questions', {
+          method: 'POST',
+          body: {
+            title: question.title,
+            content: question.content,
+            difficulty: question.difficulty,
+            collectionId: selectedCollectionId,
+            isVip: question.is_vip,
+            sort: question.sort,
+            vipLevelRequired: question.vip_level_required,
+          },
         });
-
-      if (insertError) {
-        failCount++;
-        errors.push(`第 ${i + 1} 条 "${question.title}": ${insertError.message}`);
-      } else {
         successCount++;
+      } catch (insertError) {
+        failCount++;
+        const reason = insertError instanceof Error ? insertError.message : '导入失败';
+        errors.push(`第 ${i + 1} 条 "${question.title}": ${reason}`);
       }
     }
 

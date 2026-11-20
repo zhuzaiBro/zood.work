@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { platformServer, PlatformError } from '@/lib/platform/server';
 import {
   compactSessionId,
   sendTelegramMessage,
@@ -31,38 +32,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '会话身份不匹配' }, { status: 403 });
     }
 
+    let siteMessage: { id: string };
+    try {
+      const saved = await platformServer<{ message: { id: string } }>('/api/platform/messages', {
+        method: 'POST',
+        body: { sessionId, content, pageUrl },
+      });
+      siteMessage = saved.message;
+    } catch (error) {
+      if (error instanceof PlatformError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+
+    if (!siteMessage?.id) {
+      throw new Error('保存消息失败');
+    }
+
     const admin = createAdminClient();
-    const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
-    const { count: recentMessageCount, error: rateLimitError } = await admin
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('session_id', sessionId)
-      .eq('sender_type', 'user')
-      .gte('created_at', oneMinuteAgo);
-
-    if (rateLimitError) throw new Error(rateLimitError.message);
-    if ((recentMessageCount ?? 0) >= 5) {
-      return NextResponse.json(
-        { error: '发送得有点快，请稍后再试' },
-        { status: 429 }
-      );
-    }
-
-    const { data: siteMessage, error: insertError } = await admin
-      .from('messages')
-      .insert({
-        session_id: sessionId,
-        user_id: user?.id ?? null,
-        sender_type: 'user',
-        content,
-      })
-      .select('*')
-      .single();
-
-    if (insertError || !siteMessage) {
-      throw new Error(insertError?.message || '保存消息失败');
-    }
-
     const { data: supportAdmins, error: adminError } = await admin
       .from('telegram_support_admins')
       .select('chat_id')

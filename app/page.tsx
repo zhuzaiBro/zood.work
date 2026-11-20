@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { platformPublic } from '@/lib/platform/client'
 import PostCard from '@/components/PostCard'
 import Link from 'next/link'
 import TronHeroSection from '@/components/TronHeroSection'
@@ -17,41 +17,24 @@ export const metadata: Metadata = {
 }
 
 export default async function Home() {
-  const supabase = await createClient()
+  let posts: any[] | null = null
+  let publishedCount: number | null = null
+  let categories: any[] | null = null
+  let error: { message: string } | null = null
 
-  const [
-    { data: posts, error },
-    { count: publishedCount },
-    { data: categories },
-  ] = await Promise.all([
-    supabase
-      .from('posts')
-      .select(`
-        *,
-        author:user_profiles!fk_user_profiles_posts (
-          username,
-          display_name,
-          avatar_url
-        )
-      `)
-      .eq('published', true)
-      .eq('is_public', true)
-      .order('created_at', { ascending: false })
-      .limit(10),
-    supabase
-      .from('posts')
-      .select('*', { count: 'exact', head: true })
-      .eq('published', true)
-      .eq('is_public', true),
-    supabase
-      .from('post_cates')
-      .select('*')
-      .order('name'),
-  ])
-
-  // 如果出错，返回错误信息（但仍保留背景效果）
-  if (error) {
-    console.error('Error fetching posts:', error)
+  try {
+    const [postsResult, categoriesResult] = await Promise.all([
+      platformPublic<{ posts: any[]; count: number }>('/api/platform/posts?limit=10'),
+      platformPublic<{ categories: any[] }>('/api/platform/categories'),
+    ])
+    posts = postsResult.posts ?? []
+    publishedCount = postsResult.count ?? posts.length
+    categories = [...(categoriesResult.categories ?? [])].sort((a, b) =>
+      String(a.name ?? '').localeCompare(String(b.name ?? ''), 'zh'),
+    )
+  } catch (loadError) {
+    console.error('Error fetching posts:', loadError)
+    error = { message: loadError instanceof Error ? loadError.message : '加载文章失败' }
   }
 
   return (

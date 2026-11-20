@@ -1,35 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import type { Database } from '@/types/database.types';
+import { createAdminClient } from '@/lib/supabase/server';
+import { requireAdminRequest } from '@/lib/admin/requireAdmin';
 import { buildDefaultUserProfile } from '@/lib/user-profiles';
 
 const MIN_VIP_LEVEL = 0;
 const MAX_VIP_LEVEL = 5;
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { error: NextResponse.json({ error: '未登录' }, { status: 401 }) };
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('user_profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single<Pick<Database['public']['Tables']['user_profiles']['Row'], 'is_admin'>>();
-
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: '无权访问' }, { status: 403 }) };
-  }
-
-  return { user };
-}
-
+// No platform endpoint creates another user's profile or reads auth.users.
 async function ensureUserProfile(adminClient: ReturnType<typeof createAdminClient>, userId: string) {
   const { data: profile, error: profileError } = await adminClient
     .from('user_profiles')
@@ -67,8 +44,8 @@ async function ensureUserProfile(adminClient: ReturnType<typeof createAdminClien
 
 export async function PATCH(request: NextRequest) {
   try {
-    const auth = await requireAdmin();
-    if ('error' in auth && auth.error) return auth.error;
+    const auth = await requireAdminRequest();
+    if ('response' in auth) return auth.response;
 
     const body = await request.json();
     const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
@@ -104,6 +81,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 });
     }
 
+  // No platform endpoint updates another user's vip_level.
   const { data: updatedProfile, error: updateError } = await adminClient
       .from('user_profiles')
       .update({ vip_level: vipLevel, vip_expires_at: null })
@@ -121,6 +99,7 @@ export async function PATCH(request: NextRequest) {
       && vipLevel > 0
     ) {
       const now = new Date().toISOString();
+      // No platform endpoint updates membership_consultation_requests.
       await (adminClient as any)
         .from('membership_consultation_requests')
         .update({

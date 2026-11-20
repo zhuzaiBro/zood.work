@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { platformBrowser, PlatformError } from "@/lib/platform/client";
 
 type QuestionFavoriteButtonProps = {
   questionId: string;
@@ -48,15 +49,20 @@ export default function QuestionFavoriteButton({
       }
 
       setUserId(user.id);
-      const { data } = await supabase
-        .from("interview_question_favorites")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("question_id", questionId)
-        .maybeSingle();
+      try {
+        const { favorite } = await platformBrowser<{ favorite: boolean }>(
+          `/api/platform/me/favorites/${encodeURIComponent(questionId)}`,
+        );
+        if (!cancelled) {
+          setIsFavorite(Boolean(favorite));
+        }
+      } catch {
+        if (!cancelled) {
+          setIsFavorite(false);
+        }
+      }
 
       if (!cancelled) {
-        setIsFavorite(Boolean(data));
         setIsLoading(false);
       }
     }
@@ -76,38 +82,24 @@ export default function QuestionFavoriteButton({
 
     setIsLoading(true);
     setMessage("");
-    const supabase = createClient() as any;
 
-    if (isFavorite) {
-      const { error } = await supabase
-        .from("interview_question_favorites")
-        .delete()
-        .eq("user_id", userId)
-        .eq("question_id", questionId);
-
-      if (error) {
-        setMessage(error.message || "取消收藏失败");
-      } else {
+    try {
+      if (isFavorite) {
+        await platformBrowser(`/api/platform/me/favorites/${encodeURIComponent(questionId)}`, {
+          method: "DELETE",
+        });
         setIsFavorite(false);
         setMessage("已取消收藏");
-      }
-    } else {
-      const { error } = await supabase
-        .from("interview_question_favorites")
-        .upsert(
-          {
-            user_id: userId,
-            question_id: questionId,
-          },
-          { onConflict: "user_id,question_id" }
-        );
-
-      if (error) {
-        setMessage(error.message || "收藏失败");
       } else {
+        await platformBrowser(`/api/platform/me/favorites/${encodeURIComponent(questionId)}`, {
+          method: "PUT",
+        });
         setIsFavorite(true);
         setMessage("已收藏到个人中心");
       }
+    } catch (error) {
+      const fallback = isFavorite ? "取消收藏失败" : "收藏失败";
+      setMessage(error instanceof PlatformError ? error.message || fallback : fallback);
     }
 
     setIsLoading(false);

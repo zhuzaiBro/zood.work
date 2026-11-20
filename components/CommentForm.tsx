@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { platformBrowser } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 
 interface CommentFormProps {
@@ -36,16 +37,14 @@ export default function CommentForm({ postId, parentId, onCancel }: CommentFormP
         return
       }
 
-      const { error: submitError } = await supabase
-        .from('post_comments')
-        .insert({
-          post_id: postId,
-          user_id: user.id,
+      await platformBrowser('/api/platform/comments', {
+        method: 'POST',
+        body: {
+          postId,
           content: content.trim(),
-          parent_id: parentId || null,
-        })
-
-      if (submitError) throw submitError
+          parentId: parentId || null,
+        },
+      })
 
       setContent('')
       router.refresh()
