@@ -34,6 +34,12 @@ export interface AdminUserStudyRow {
   recentStudyAt: string | null;
 }
 
+export interface AdminUsersPage {
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface AdminUsersResponse {
   users: AdminUserStudyRow[];
   summary: {
@@ -44,10 +50,34 @@ export interface AdminUsersResponse {
     todayStudySeconds: number;
     yesterdayStudySeconds: number;
   };
+  page: AdminUsersPage;
   ranges: {
     today: { label: string; start: string; end: string };
     yesterday: { label: string; start: string; end: string };
   };
+}
+
+export type AdminUserSort = 'created_at' | 'today' | 'yesterday' | 'total' | 'videos';
+
+export interface AdminUserListQuery {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: AdminUserSort;
+  order?: 'asc' | 'desc';
+}
+
+export function adminUserListQuery(query: AdminUserListQuery = {}) {
+  const params = new URLSearchParams();
+  const page = query.page && query.page > 0 ? query.page : 1;
+  const pageSize = query.pageSize && query.pageSize > 0 ? Math.min(query.pageSize, 50) : 12;
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const keyword = query.q?.trim();
+  if (keyword) params.set('q', keyword);
+  if (query.sort) params.set('sort', query.sort);
+  if (query.order) params.set('order', query.order);
+  return params.toString();
 }
 
 const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -75,9 +105,9 @@ function getShanghaiDayRange(dayOffset: number) {
 }
 
 export async function loadAdminUserStudyData(
-  _unused?: unknown,
+  query: AdminUserListQuery = {},
 ): Promise<AdminUsersResponse> {
-  const response = await fetch('/api/admin/users', { cache: 'no-store' });
+  const response = await fetch(`/api/admin/users?${adminUserListQuery(query)}`, { cache: 'no-store' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error((body as { error?: string }).error || '加载用户学习统计失败');
