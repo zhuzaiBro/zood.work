@@ -1,7 +1,9 @@
 import { Suspense } from 'react';
 import { platformPublic } from '@/lib/platform/client';
 import TagFilter from '@/components/interview/TagFilter';
+import RoleFilter from '@/components/interview/RoleFilter';
 import CollectionCard from '@/components/interview/CollectionCard';
+import { interviewJob, interviewJobs } from '@/lib/interview-jobs';
 import InterviewQuestionSearch from '@/components/interview/InterviewQuestionSearch';
 import QuestionContributionForm from '@/components/interview/QuestionContributionForm';
 import { Database } from '@/types/database.types';
@@ -48,18 +50,23 @@ function readQuestionCount(questionCounts: unknown, collectionId: string) {
 export default async function InterviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tag?: string; q?: string }>;
+  searchParams: Promise<{ tag?: string; q?: string; role?: string }>;
 }) {
   const params = await searchParams;
   const currentTagSlug = params.tag;
+  const requestedJob = interviewJob(params.role);
+  const unknownJob = Boolean(params.role) && !requestedJob;
+  const activeJob = requestedJob ?? interviewJobs[0];
+  const technical = activeJob.slug === 'programmer' && !unknownJob;
   const searchQuery = params.q?.trim() ?? '';
   const isSearching = searchQuery.length > 0;
 
   let tags: Tag[] = [];
   let collections: Collection[] = [];
   let questionCounts: unknown = null;
+  let loadError = '';
 
-  try {
+  if (technical) try {
     const query = new URLSearchParams();
     if (currentTagSlug) query.set('tag', currentTagSlug);
     const suffix = query.toString() ? `?${query.toString()}` : '';
@@ -73,6 +80,7 @@ export default async function InterviewPage({
     questionCounts = result.questionCounts;
   } catch (error) {
     console.error('Load interview index failed:', error);
+    loadError = '题库暂时没有加载出来';
   }
 
   return (
@@ -92,8 +100,13 @@ export default async function InterviewPage({
           </Suspense>
 
           <Suspense fallback={null}>
-            <TagFilter tags={tags || []} />
+            <RoleFilter activeSlug={unknownJob ? '' : activeJob.slug} />
           </Suspense>
+          {technical && (
+            <Suspense fallback={null}>
+              <TagFilter tags={tags || []} />
+            </Suspense>
+          )}
         </div>
       </div>
 
@@ -101,16 +114,28 @@ export default async function InterviewPage({
         {!isSearching && (
           <>
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">按专题开始练习</p>
-              <span className="text-xs text-slate-400">共 {collections?.length ?? 0} 个题集</span>
+              <p className="text-sm font-medium text-slate-500">
+                {unknownJob ? '岗位' : technical ? '程序员 · 按技术方向练习' : activeJob.name}
+              </p>
+              <span className="text-xs text-slate-400">共 {technical ? collections.length : 0} 个题集</span>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {collections?.map((collection) => (
+              {technical && collections.map((collection) => (
                 <CollectionCard key={collection.id} collection={collection} questionCount={readQuestionCount(questionCounts, collection.id)} />
               ))}
-              {(!collections || collections.length === 0) && (
+              {technical && loadError && (
+                <div className="col-span-full py-12 text-center text-rose-600">
+                  {loadError}
+                </div>
+              )}
+              {technical && !loadError && collections.length === 0 && (
                 <div className="col-span-full py-12 text-center text-gray-500">
                   暂无面试题集
+                </div>
+              )}
+              {!technical && (
+                <div className="col-span-full rounded-lg border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-slate-500">
+                  {unknownJob ? '没有这个岗位' : `「${activeJob.name}」还没有面试题`}
                 </div>
               )}
             </div>
