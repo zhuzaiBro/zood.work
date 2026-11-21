@@ -146,11 +146,20 @@ export default function TronHeroSection({
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 50)
     camera.position.set(0, 0.06, 10.6)
 
-    const renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      powerPreference: 'high-performance',
-    })
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        powerPreference: 'high-performance',
+      })
+      if (!renderer.getContext()) {
+        renderer.dispose()
+        return
+      }
+    } catch {
+      return
+    }
     renderer.setClearColor(0x000000, 0)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     container.appendChild(renderer.domElement)
@@ -653,8 +662,8 @@ export default function TronHeroSection({
   const stats = [
     { label: '学习笔记', value: formatCount(publishedCount) },
     { label: '知识专题', value: formatCount(categoryCount) },
-    { label: '主线方向', value: 'Web3 + AI' },
-    { label: '社区实践', value: 'Build in Public' },
+    { label: '主线方向', value: 'AI应用 · 出海实战' },
+    { label: '社区实践', value: '作品与求职' },
   ]
 
   return (
@@ -692,8 +701,7 @@ export default function TronHeroSection({
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-8 text-[#9fb2d1] sm:text-lg">
-              这里沉淀 Web3 工程、AI 应用开发、智能合约、全栈项目和面试经验。
-              从学习路线到真实项目复盘，一起把新技术变成能交付的作品。
+              分享 AI 工具与产品实践、跨境业务经验和海外求职方法，从作品积累到面试准备，一起探索面向全球的机会。
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4">
@@ -701,13 +709,13 @@ export default function TronHeroSection({
                 href="/courses"
                 className="inline-flex items-center rounded-full bg-[linear-gradient(135deg,#5f82ff,#8fe7ff)] px-7 py-3 text-sm font-semibold text-[#04101f] shadow-[0_20px_45px_rgba(86,145,255,0.28)] transition-transform duration-200 hover:-translate-y-0.5"
               >
-                开始学习
+                探索实战内容
               </Link>
               <Link
                 href="/posts/create"
                 className="inline-flex items-center rounded-full border border-[#223966] bg-[#081224]/82 px-7 py-3 text-sm font-semibold text-[#e5efff] shadow-[0_12px_30px_rgba(5,10,22,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
               >
-                发布笔记
+                分享出海经验
               </Link>
             </div>
           </div>

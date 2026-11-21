@@ -10,7 +10,7 @@ export const revalidate = 60 // 每60秒重新验证
 export const metadata: Metadata = {
   title: { absolute: siteShareTitle },
   description: homeDescription,
-  keywords: ['agent学习路线', '油条TV', 'web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', 'Web3开发', 'AI Agent'],
+  keywords: ['zood.work', 'AI出海社区', 'AI工具', '跨境业务', '海外求职', '面试准备'],
   alternates: {
     canonical: '/',
   },
@@ -49,13 +49,13 @@ export default async function Home() {
           <div className="mb-8 flex items-end justify-between gap-4">
             <div>
               <p className="text-sm font-medium uppercase tracking-[0.22em] text-[#82dfff]">
-                Community Notes
+                实践记录
               </p>
               <h2 className="mt-2 text-3xl font-bold tracking-normal text-[#f5f8ff]">
-                Web3 与 AI 开发笔记
+                社区笔记
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[#8da2c4]">
-                收集学习路线、工程实践、合约开发、AI 应用和面试复盘，适合想从前后端进入新技术栈的开发者慢慢啃。
+                已发布的笔记按原标题列在这里。
               </p>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default async function Home() {
               <div className="mb-6 rounded-2xl border border-[#172846] bg-[#07101f]/82 p-6 shadow-[0_18px_45px_rgba(0,0,0,0.2)] backdrop-blur-sm">
                 <h2 className="mb-4 text-xl font-bold text-[#f5f8ff]">社区定位</h2>
                 <p className="leading-7 text-[#9fb2d1]">
-                  面向想学习 Web3、AI 应用开发和全栈工程的开发者。这里更关注能跑起来的项目、可复用的经验和真实踩坑记录。
+                  分享 AI 工具与产品实践、跨境业务经验和海外求职方法，从作品积累到面试准备，一起探索面向全球的机会。
                 </p>
               </div>
 
@@ -97,7 +97,7 @@ export default async function Home() {
                   简历优化 Agent
                 </h2>
                 <p className="mt-3 leading-7 text-[#9fb2d1]">
-                  用 LangChain.js 和 LangGraph.js 跑一条简历分析、策略规划、改写输出的 Agent 流程。
+                  打开现有简历优化工具，整理求职材料。
                 </p>
                 <Link
                   href="/resume-agent"
@@ -112,14 +112,14 @@ export default async function Home() {
                   Learning Maps
                 </p>
                 <h2 className="mt-2 text-xl font-bold text-[#f5f8ff]">
-                  热门学习与职业路线
+                  现有入口
                 </h2>
                 <div className="mt-4 space-y-3 text-sm leading-6">
                   {[
-                    ['Agent 学习路线', '/courses', '从模型调用、工具链到 LangGraph Agent 实战。'],
-                    ['Web3 学习', '/courses', '合约、钱包、DApp、全栈项目一步步补齐。'],
-                    ['CEX 项目与交易所攻略', '/interview', '沉淀交易所业务、面试题和项目复盘。'],
-                    ['远程工作与远程攻略', '/jobs', '筛选 Web3 / AI 远程岗位，再用简历 Agent 做准备。'],
+                    ['AI 工具与产品实践', '/courses', '进入现有课程，按原课程内容查看。'],
+                    ['面试准备', '/interview', '进入现有题库，题目和分类保持原样。'],
+                    ['求职材料', '/resume-agent', '打开现有简历优化工具，整理求职材料。'],
+                    ['岗位信息', '/jobs', '查看已经同步的岗位列表。'],
                   ].map(([title, href, desc]) => (
                     <Link
                       key={title}

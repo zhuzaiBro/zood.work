@@ -71,19 +71,23 @@ export default function Header() {
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center text-header-sky transition-colors hover:text-sky-800"
+            className={`flex min-w-0 items-center gap-2 transition-colors ${
+              lightContentPage || !isDarkImmersivePage
+                ? "text-slate-900 hover:text-sky-800"
+                : "text-white hover:text-sky-100"
+            }`}
             onClick={closeMobileMenu}
-            aria-label="油条TV首页"
+            aria-label="AI出海"
           >
             <Image
-              src="/logo.png"
-              alt="油条TV"
-              width={1888}
-              height={463}
-              className="h-12 w-auto sm:h-14"
+              src="/brand/zood-mark.png"
+              alt=""
+              width={690}
+              height={748}
+              className="h-9 w-auto sm:h-10"
               priority
-              unoptimized
             />
+            <span className="truncate text-base font-black tracking-tight">AI出海</span>
           </Link>
 
           {/* 桌面端菜单 */}
@@ -92,7 +96,7 @@ export default function Header() {
               首页
             </Link> */}
             <LazyLink href="/courses" className={linkClass}>
-              学 Web3 / AI
+              学习与实战
             </LazyLink>
             <LazyLink href="/interview" className={linkClass}>
               面试题库
@@ -158,7 +162,7 @@ export default function Header() {
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              学 Web3 / AI
+              学习与实战
             </LazyLink>
             <LazyLink
               href="/interview"

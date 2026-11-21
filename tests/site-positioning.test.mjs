@@ -8,7 +8,8 @@ const layout = readFileSync(new URL('../app/layout.tsx', import.meta.url), 'utf8
 
 test('site positioning is the exact phrase', () => {
   assert.match(positioning, /export const sitePositioning = 'AI出海社区'/)
-  assert.match(positioning, /export const siteShareTitle = '油条TV - AI出海社区'/)
+  assert.match(positioning, /export const siteShareTitle = 'zood\.work - AI出海社区'/)
+  assert.match(positioning, /分享 AI 工具与产品实践、跨境业务经验和海外求职方法/)
   assert.equal(positioning.includes('AI 出海'), false)
   assert.equal(positioning.includes('Web3学习、Agent学习路线'), false)
 })
