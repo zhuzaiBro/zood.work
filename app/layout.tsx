@@ -3,6 +3,7 @@ import { Inter, Micro_5 } from 'next/font/google'
 import './globals.css'
 import AuthProvider from '@/components/AuthProvider'
 import AppShell from '@/components/AppShell'
+import { shareDescription, siteShareTitle } from '@/lib/site-positioning'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   applicationName: '油条TV',
   title: {
     template: '%s | 油条TV - AI出海社区',
-    default: '油条TV - Web3学习、Agent学习路线与远程工作攻略',
+    default: siteShareTitle,
   },
   description: '油条TV（水煮油条）是面向开发者的 AI出海社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作和远程攻略。',
   keywords: ['agent学习路线', '油条TV', 'web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', '水煮油条', 'zood', 'Web3前后端转型', 'web3面试', 'Web3开发', 'AI Agent', '区块链', '全栈开发'],
@@ -30,8 +31,8 @@ export const metadata: Metadata = {
   },
   category: 'technology',
   openGraph: {
-    title: '油条TV - Web3学习、Agent学习路线与远程工作攻略',
-    description: '面向开发者的 AI出海社区，覆盖 agent学习路线、cex项目复盘、交易所攻略、远程工作和面试题库。',
+    title: siteShareTitle,
+    description: shareDescription,
     url: 'https://zood.work',
     siteName: '油条TV - 水煮油条',
     locale: 'zh_CN',
@@ -47,8 +48,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: '油条TV - Web3学习、Agent学习路线与远程工作攻略',
-    description: 'Web3学习、CEX项目、交易所攻略、远程工作和简历优化 Agent。',
+    title: siteShareTitle,
+    description: shareDescription,
     creator: '@zood_shuizhu',
     images: ['/zood.jpg'],
   },

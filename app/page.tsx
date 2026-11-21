@@ -2,14 +2,14 @@ import { platformPublic } from '@/lib/platform/client'
 import PostCard from '@/components/PostCard'
 import Link from 'next/link'
 import TronHeroSection from '@/components/TronHeroSection'
+import { homeDescription, siteShareTitle } from '@/lib/site-positioning'
 import type { Metadata } from 'next'
 
 export const revalidate = 60 // 每60秒重新验证
 
 export const metadata: Metadata = {
-  title: '油条TV - Web3学习、Agent学习路线与交易所攻略',
-  description:
-    '油条TV（水煮油条）的 AI出海社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作与远程攻略。',
+  title: { absolute: siteShareTitle },
+  description: homeDescription,
   keywords: ['agent学习路线', '油条TV', 'web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', 'Web3开发', 'AI Agent'],
   alternates: {
     canonical: '/',
