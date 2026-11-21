@@ -24,7 +24,6 @@ export default function Header() {
   const lightContentPage = isLightContentPage(pathname);
   const isDarkImmersivePage =
     pathname === "/" ||
-    pathname === "/faucet" ||
     pathname === "/interview" ||
     pathname === "/learning-test" ||
     pathname.startsWith("/jobs");
@@ -104,9 +103,6 @@ export default function Header() {
             <LazyLink href="/resume-agent" className={linkClass}>
               简历优化
             </LazyLink>
-            <LazyLink href="/faucet" className={linkClass}>
-              测试币
-            </LazyLink>
 
             {/* 用户信息或登录按钮 */}
             {isLoading ? (
@@ -184,13 +180,6 @@ export default function Header() {
               onClick={closeMobileMenu}
             >
               简历优化
-            </LazyLink>
-            <LazyLink
-              href="/faucet"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              测试币
             </LazyLink>
             {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
               分类

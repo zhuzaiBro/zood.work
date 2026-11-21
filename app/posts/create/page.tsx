@@ -66,6 +66,8 @@ export default function CreatePostPage() {
 
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
+  const [slugTouched, setSlugTouched] = useState(false)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const [excerpt, setExcerpt] = useState('')
   const [bannerFile, setBannerFile] = useState<File | null>(null)
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
@@ -78,13 +80,14 @@ export default function CreatePostPage() {
   const [isPublic, setIsPublic] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [categoryError, setCategoryError] = useState('')
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false)
   const [showSettings, setShowSettings] = useState(true)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login')
+      router.replace('/login?redirect=/posts/create')
     }
   }, [isAuthenticated, authLoading, router])
 
@@ -97,8 +100,10 @@ export default function CreatePostPage() {
         setCategories(
           [...(rows ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'zh')),
         )
-      } catch (categoryError) {
-        console.error('Error fetching categories:', categoryError)
+        setCategoryError('')
+      } catch (fetchError) {
+        console.error('Error fetching categories:', fetchError)
+        setCategoryError('分类暂时没有加载出来，文章仍可以先保存')
       }
     }
 
@@ -114,12 +119,15 @@ export default function CreatePostPage() {
       const rawDraft = window.localStorage.getItem(DRAFT_KEY)
       if (rawDraft) {
         const draft = JSON.parse(rawDraft) as Partial<DraftState>
-        setTitle(draft.title ?? '')
-        setSlug(draft.slug ?? '')
+        const restoredTitle = draft.title ?? ''
+        const restoredSlug = draft.slug ?? ''
+        setTitle(restoredTitle)
+        setSlug(restoredSlug || generateSlug(restoredTitle) || (restoredTitle ? `post-${Date.now().toString(36)}` : ''))
         setExcerpt(draft.excerpt ?? '')
         setContent(draft.content ?? '')
         setMarkdown(draft.markdown ?? '')
         setSelectedCategories(draft.selectedCategories ?? [])
+        setSlugTouched(Boolean(draft.slug))
         setPublished(draft.published ?? false)
         setIsPublic(draft.isPublic ?? true)
         setLastSavedAt(new Date())
@@ -180,11 +188,22 @@ export default function CreatePostPage() {
     }
   }
 
+  useEffect(() => {
+    const node = titleRef.current
+    if (!node) return
+    node.style.height = 'auto'
+    node.style.height = `${node.scrollHeight}px`
+  }, [title, isAuthenticated])
+
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle)
-    if (!slug || slug === generateSlug(title)) {
-      setSlug(generateSlug(newTitle))
+    if (slugTouched) return
+    const nextSlug = generateSlug(newTitle)
+    if (nextSlug) {
+      setSlug(nextSlug)
+      return
     }
+    setSlug((current) => current || `post-${Date.now().toString(36)}`)
   }
 
   const handleEditorChange = (html: string, md: string) => {
@@ -217,7 +236,7 @@ export default function CreatePostPage() {
     }
 
     if (!slug.trim()) {
-      setError('请输入文章别名')
+      setError('请填写文章 URL')
       return
     }
 
@@ -336,13 +355,24 @@ export default function CreatePostPage() {
   }
 
   if (!isAuthenticated) {
-    return null
+    return (
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <h1 className="text-2xl font-bold text-slate-900">写文章需要先登录</h1>
+        <p className="mt-3 text-sm text-slate-500">登录后会回到这个编辑页。</p>
+        <Link
+          href="/login?redirect=/posts/create"
+          className="mt-6 inline-flex rounded-full bg-[#1f6feb] px-5 py-2 text-sm font-bold text-white"
+        >
+          去登录
+        </Link>
+      </div>
+    )
   }
 
   return (
-      <div className="-mt-20 min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-20 text-slate-900">
+      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] text-slate-900">
         <form onSubmit={(e) => handleSubmit(e)} className="min-h-screen">
-        <div className="sticky top-20 z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
+        <div className="sticky top-[var(--site-header-height)] z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
               <Link
@@ -388,6 +418,11 @@ export default function CreatePostPage() {
               </button>
             </div>
           </div>
+          {error ? (
+            <p role="alert" className="mx-auto max-w-7xl px-4 pb-3 text-sm font-medium text-rose-600 sm:px-6 lg:px-8">
+              {error}
+            </p>
+          ) : null}
         </div>
 
         <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
@@ -405,15 +440,20 @@ export default function CreatePostPage() {
               </div>
 
               <textarea
+                ref={titleRef}
+                id="post-title"
+                name="title"
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
                 placeholder="无标题"
                 rows={1}
                 disabled={isSubmitting}
-                className="mb-3 block min-h-[76px] w-full resize-none border-0 bg-transparent text-5xl font-black leading-tight tracking-tight text-slate-950 outline-none placeholder:text-slate-300 disabled:opacity-60"
+                className="mb-3 block w-full resize-none overflow-hidden border-0 bg-transparent text-4xl font-black leading-tight tracking-tight text-slate-950 outline-none placeholder:text-slate-300 disabled:opacity-60 sm:text-5xl"
               />
 
               <textarea
+                id="post-excerpt"
+                name="excerpt"
                 value={excerpt}
                 onChange={(e) => setExcerpt(e.target.value)}
                 placeholder="添加摘要，让读者快速知道这篇文章解决什么问题..."
@@ -468,7 +508,10 @@ export default function CreatePostPage() {
                       id="slug"
                       type="text"
                       value={slug}
-                      onChange={(e) => setSlug(e.target.value)}
+                      onChange={(e) => {
+                        setSlugTouched(true)
+                        setSlug(e.target.value)
+                      }}
                       placeholder="article-slug"
                       disabled={isSubmitting}
                       className="w-full bg-transparent font-mono text-sm text-slate-700 outline-none placeholder:text-slate-300 disabled:opacity-60"
@@ -510,6 +553,10 @@ export default function CreatePostPage() {
                     {bannerPreviewUrl ? '更换封面图' : '上传封面图'}
                   </button>
                 </div>
+
+                {categoryError ? (
+                  <p className="text-xs font-medium text-amber-700">{categoryError}</p>
+                ) : null}
 
                 {categories.length > 0 ? (
                   <div>
@@ -566,7 +613,7 @@ export default function CreatePostPage() {
             </div>
 
             {error ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+              <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
                 {error}
               </div>
             ) : null}
