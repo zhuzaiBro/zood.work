@@ -684,11 +684,11 @@ export default function TronHeroSection({
           <div className="relative z-10 max-w-2xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#20345c] bg-[#07101f]/80 px-4 py-2 text-sm font-medium text-[#cbe5ff] shadow-[0_10px_30px_rgba(54,100,255,0.12)] backdrop-blur">
               <span className="h-2 w-2 rounded-full bg-[#8ee7ff]" />
-              Web3 x AI Dev Community
+              AI出海社区
             </div>
 
             <h1 className="max-w-[12ch] text-4xl font-black leading-[0.96] tracking-normal text-[#f5f8ff] sm:text-6xl sm:leading-[0.92] lg:text-7xl">
-              Web3 与 AI 开发社区
+              AI出海社区
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-8 text-[#9fb2d1] sm:text-lg">

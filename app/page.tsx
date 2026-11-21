@@ -9,7 +9,7 @@ export const revalidate = 60 // 每60秒重新验证
 export const metadata: Metadata = {
   title: '油条TV - Web3学习、Agent学习路线与交易所攻略',
   description:
-    '油条TV（水煮油条）的 Web3 与 AI 开发学习社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作与远程攻略。',
+    '油条TV（水煮油条）的 AI出海社区，沉淀 agent学习路线、web3学习、cex项目复盘、交易所攻略、远程工作与远程攻略。',
   keywords: ['agent学习路线', '油条TV', 'web3学习', 'cex项目', '交易所攻略', '远程工作', '远程攻略', 'Web3开发', 'AI Agent'],
   alternates: {
     canonical: '/',
