@@ -152,7 +152,7 @@ export default function Header() {
 
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
+          <div className="md:hidden absolute top-full left-0 right-0 max-h-[min(24rem,calc(100vh-var(--site-header-height)-4.5rem))] overflow-y-auto bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
             <LazyLink
               href="/courses"
               className={mobileLinkClass}

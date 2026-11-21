@@ -1352,7 +1352,7 @@ export default function Editor({
                 )}
 
                 {menuBlockId === block.id ? (
-                  <div className="absolute left-0 top-10 z-40 max-h-72 w-56 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
+                  <div className="relative z-10 mt-2 max-h-60 w-full max-w-xs overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70">
                     {blockOptions.map((option) => (
                       <button
                         key={option.type}
@@ -1383,7 +1383,7 @@ export default function Editor({
                 ) : null}
 
                 {slashBlockId === block.id ? (
-                  <div className="absolute left-0 top-10 z-30 max-h-72 w-[260px] overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-300/50">
+                  <div className="relative z-10 mt-2 max-h-60 w-full max-w-xs overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-300/50">
                     <p className="px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
                       快捷插入
                     </p>

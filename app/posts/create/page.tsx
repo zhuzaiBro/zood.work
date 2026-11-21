@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { browserUser } from '@/lib/auth/session'
 import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { uploadPostBanner } from '@/lib/uploadPostBanner'
+import { deriveAutoSlug, slugWasEdited } from '@/lib/post-slug'
 import Skeleton from '@/components/ui/Skeleton'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -41,6 +42,7 @@ type DraftState = {
   selectedCategories: string[]
   published: boolean
   isPublic: boolean
+  slugTouched?: boolean
 }
 
 function formatSavedTime(date: Date | null) {
@@ -51,15 +53,6 @@ function formatSavedTime(date: Date | null) {
   })
 }
 
-function generateSlug(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
 export default function CreatePostPage() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
@@ -67,6 +60,7 @@ export default function CreatePostPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [slugTouched, setSlugTouched] = useState(false)
+  const slugFallbackRef = useRef('')
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const [excerpt, setExcerpt] = useState('')
   const [bannerFile, setBannerFile] = useState<File | null>(null)
@@ -121,13 +115,20 @@ export default function CreatePostPage() {
         const draft = JSON.parse(rawDraft) as Partial<DraftState>
         const restoredTitle = draft.title ?? ''
         const restoredSlug = draft.slug ?? ''
+        const restoredTouched = slugWasEdited(draft)
+        const restored = deriveAutoSlug(restoredTitle, {
+          touched: restoredTouched,
+          slug: restoredSlug,
+          fallback: !restoredTouched && restoredSlug.startsWith('post-') ? restoredSlug : '',
+        })
         setTitle(restoredTitle)
-        setSlug(restoredSlug || generateSlug(restoredTitle) || (restoredTitle ? `post-${Date.now().toString(36)}` : ''))
+        setSlug(restored.slug)
+        slugFallbackRef.current = restored.fallback
         setExcerpt(draft.excerpt ?? '')
         setContent(draft.content ?? '')
         setMarkdown(draft.markdown ?? '')
         setSelectedCategories(draft.selectedCategories ?? [])
-        setSlugTouched(Boolean(draft.slug))
+        setSlugTouched(restoredTouched)
         setPublished(draft.published ?? false)
         setIsPublic(draft.isPublic ?? true)
         setLastSavedAt(new Date())
@@ -152,6 +153,7 @@ export default function CreatePostPage() {
         selectedCategories,
         published,
         isPublic,
+        slugTouched,
       }
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
       setLastSavedAt(new Date())
@@ -168,6 +170,7 @@ export default function CreatePostPage() {
     published,
     isPublic,
     hasRestoredDraft,
+    slugTouched,
   ])
 
   useEffect(() => {
@@ -197,13 +200,13 @@ export default function CreatePostPage() {
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle)
-    if (slugTouched) return
-    const nextSlug = generateSlug(newTitle)
-    if (nextSlug) {
-      setSlug(nextSlug)
-      return
-    }
-    setSlug((current) => current || `post-${Date.now().toString(36)}`)
+    const next = deriveAutoSlug(newTitle, {
+      touched: slugTouched,
+      slug,
+      fallback: slugFallbackRef.current,
+    })
+    slugFallbackRef.current = next.fallback
+    if (next.slug !== slug) setSlug(next.slug)
   }
 
   const handleEditorChange = (html: string, md: string) => {
@@ -373,8 +376,8 @@ export default function CreatePostPage() {
       <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] text-slate-900">
         <form onSubmit={(e) => handleSubmit(e)} className="min-h-screen">
         <div className="sticky top-[var(--site-header-height)] z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-2 sm:h-16 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-0 lg:px-8">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <Link
                 href="/"
                 className="rounded-full px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
@@ -392,7 +395,7 @@ export default function CreatePostPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="hidden shrink-0 items-center gap-2 sm:flex">
               <button
                 type="button"
                 onClick={() => setShowSettings((value) => !value)}
@@ -425,7 +428,7 @@ export default function CreatePostPage() {
           ) : null}
         </div>
 
-        <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
+        <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-28 pt-8 sm:px-6 sm:pb-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
           <section className="min-w-0">
             <div className="mx-auto max-w-4xl rounded-[28px] bg-white px-6 py-8 shadow-[0_18px_80px_rgba(15,23,42,0.06)] ring-1 ring-black/5 sm:px-10 lg:px-14">
               <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -626,6 +629,31 @@ export default function CreatePostPage() {
             </div>
           </aside>
         </main>
+        <div className="fixed inset-x-0 bottom-0 z-[70] flex items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:hidden">
+          <button
+            type="button"
+            onClick={() => setShowSettings((value) => !value)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600"
+          >
+            设置
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e as any, false)}
+            disabled={isSubmitting}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+          >
+            {isSubmitting ? '保存中...' : '存草稿'}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e as any, true)}
+            disabled={isSubmitting}
+            className="ml-auto rounded-full bg-[#1f6feb] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {isSubmitting ? '发布中...' : '发布'}
+          </button>
+        </div>
       </form>
     </div>
   )
