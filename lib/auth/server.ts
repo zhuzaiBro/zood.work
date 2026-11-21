@@ -1,11 +1,14 @@
-import { cookies } from 'next/headers'
-import { SESSION_COOKIE, userFromToken } from '@/lib/auth/session'
+import { createClient } from '@/lib/supabase/server'
 
 export async function serverAccessToken() {
-  const jar = await cookies()
-  return jar.get(SESSION_COOKIE)?.value ?? null
+  const supabase = await createClient()
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token ?? null
 }
 
 export async function serverUser() {
-  return userFromToken(await serverAccessToken())
+  const supabase = await createClient()
+  const { data } = await supabase.auth.getUser()
+  if (!data.user) return null
+  return { id: data.user.id, email: data.user.email, created_at: data.user.created_at }
 }

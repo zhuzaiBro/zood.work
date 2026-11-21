@@ -1,4 +1,4 @@
-import { readBrowserToken } from '@/lib/auth/session';
+import { browserAccessToken } from '@/lib/auth/session';
 import type { Database } from '@/types/database.types';
 import { videoApiUrl } from '@/lib/videoApi';
 
@@ -32,7 +32,7 @@ export type VideoListResult = {
 };
 
 export async function getVideoApiAuthHeaders(): Promise<Record<string, string>> {
-  const token = readBrowserToken();
+  const token = await browserAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

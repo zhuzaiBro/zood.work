@@ -1,11 +1,11 @@
-import { readBrowserToken } from '@/lib/auth/session'
+import { browserAccessToken } from '@/lib/auth/session'
 import { platformBaseUrl } from '@/lib/platform/http'
 
 export async function uploadPlatformFile(bucket: string, file: File) {
   const body = new FormData()
   body.set('bucket', bucket)
   body.set('file', file)
-  const token = readBrowserToken()
+  const token = await browserAccessToken()
   const response = await fetch(`${platformBaseUrl()}/api/platform/uploads`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},

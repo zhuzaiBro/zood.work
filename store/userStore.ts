@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, UserProfile, UserState } from '@/types/user'
-import { browserUser } from '@/lib/auth/session'
+import { createClient } from '@/lib/supabase/client'
 import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { buildDefaultUserProfile } from '@/lib/user-profiles'
 
@@ -78,8 +78,24 @@ export const useUserStore = create<UserStore>()(
         }, 1500) // 1.5秒超时
 
         try {
-          const user = await browserUser()
-          if (!user) {
+          const supabase = createClient()
+
+          // 检查环境变量是否正确配置
+          if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+            console.error('Supabase environment variables not configured')
+            set({ isLoading: false })
+            clearTimeout(timeoutId)
+            return
+          }
+
+          // 1. 获取当前用户 Session
+          const { data: { user }, error: userError } = await supabase.auth.getUser()
+          
+          if (userError) {
+            console.error('Failed to get user:', userError)
+          }
+          
+          if (userError || !user) {
             // 验证失败或无用户，清除状态
             if (state.isAuthenticated) {
                // 只有在之前认为是登录状态时才执行清理，避免不必要的重渲染

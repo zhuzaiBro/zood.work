@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Hls from "hls.js";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { readBrowserToken } from "@/lib/auth/session";
+import { browserAccessToken } from "@/lib/auth/session";
 import { platformBrowser } from "@/lib/platform/client";
 import type { Database } from "@/types/database.types";
 import { useAuth } from "@/hooks/useAuth";
@@ -1036,7 +1036,7 @@ export default function CoursePlayer({
       destroyHls();
       setIsVideoReady(false);
       setPlayerStatus("正在获取播放授权...");
-      const token = readBrowserToken();
+      const token = await browserAccessToken();
       if (!token) {
         clearVideoPlayer();
         setPlayerStatus("请先登录后观看视频");
