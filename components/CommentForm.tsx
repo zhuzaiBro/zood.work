@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { browserUser } from '@/lib/auth/session'
+import { platformBrowser } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 
 interface CommentFormProps {
@@ -28,24 +29,21 @@ export default function CommentForm({ postId, parentId, onCancel }: CommentFormP
     setIsSubmitting(true)
 
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await browserUser()
 
       if (!user) {
         setError('请先登录')
         return
       }
 
-      const { error: submitError } = await supabase
-        .from('post_comments')
-        .insert({
-          post_id: postId,
-          user_id: user.id,
+      await platformBrowser('/api/platform/comments', {
+        method: 'POST',
+        body: {
+          postId,
           content: content.trim(),
-          parent_id: parentId || null,
-        })
-
-      if (submitError) throw submitError
+          parentId: parentId || null,
+        },
+      })
 
       setContent('')
       router.refresh()

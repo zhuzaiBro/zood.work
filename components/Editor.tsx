@@ -501,7 +501,7 @@ function getBlockLabel(type: BlockType) {
 
 function getTextareaClass(type: BlockType) {
   const base =
-    'block w-full resize-none overflow-hidden border-0 bg-transparent outline-none disabled:opacity-60'
+    'block w-full resize-none overflow-hidden border-0 bg-transparent outline-none placeholder:text-slate-300 disabled:opacity-60'
 
   switch (type) {
     case 'h1':
@@ -599,6 +599,7 @@ function splitPastedTextIntoSegments(text: string) {
 export default function Editor({
   value = '',
   onChange,
+  placeholder = '输入 / 插入标题、列表或代码，也可以直接开始写',
 }: EditorProps) {
   const [blocks, setBlocks] = useState<Block[]>(() => parseInitialBlocks(value))
   const [activeBlockId, setActiveBlockId] = useState(() => blocks[0]?.id ?? '')
@@ -1037,7 +1038,7 @@ export default function Editor({
   }
 
   return (
-    <div className="relative min-h-[620px] rounded-[28px] bg-white px-3 py-10 text-slate-900">
+    <div className="relative min-h-[240px] rounded-[28px] bg-white px-1 py-4 text-slate-900 sm:px-3">
       <div className="space-y-1">
         {blocks.map((block, index) => {
           const isActive = block.id === activeBlockId
@@ -1050,7 +1051,7 @@ export default function Editor({
               key={block.id}
               onDragOver={(event) => handleDragOver(event, block.id)}
               onDrop={(event) => handleDrop(event, block.id)}
-              className={`group relative -mx-12 grid grid-cols-[48px_minmax(0,1fr)] rounded-xl px-2 py-1 transition ${
+              className={`group relative grid grid-cols-[40px_minmax(0,1fr)] rounded-xl px-1 py-1 transition ${
                 isActive ? 'bg-[#edf2ff]' : 'hover:bg-slate-50'
               } ${isDragging ? 'scale-[0.99] opacity-45' : ''} ${
                 isDragTarget ? 'bg-blue-50' : ''
@@ -1335,11 +1336,12 @@ export default function Editor({
                       textareasRef.current[block.id] = node
                     }}
                     value={block.text}
+                    name={`block-${block.id}`}
                     onFocus={() => setActiveBlockId(block.id)}
                     onChange={(event) => updateBlockText(block.id, event.target.value)}
                     onKeyDown={(event) => handleKeyDown(event, block)}
                     onPaste={(event) => handlePaste(event, block)}
-                    placeholder=""
+                    placeholder={index === 0 && !block.text ? placeholder : ''}
                     rows={1}
                     className={`${getTextareaClass(block.type)} ${
                       block.type === 'bullet' || block.type === 'numbered' || block.type === 'todo'
@@ -1350,35 +1352,38 @@ export default function Editor({
                 )}
 
                 {menuBlockId === block.id ? (
-                  <div className="absolute left-[-64px] top-[-66px] z-40 flex w-max max-w-[calc(100vw-120px)] items-center gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
+                  <div className="relative z-10 mt-2 max-h-60 w-full max-w-xs overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70">
                     {blockOptions.map((option) => (
                       <button
                         key={option.type}
                         type="button"
                         onClick={() => changeBlockType(block.id, option.type)}
-                        className={`grid h-12 min-w-12 place-items-center rounded-2xl px-3 text-lg font-bold transition ${
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
                           block.type === option.type
                             ? 'bg-blue-100 text-blue-600'
-                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                         }`}
                         title={option.name}
                       >
-                        {option.label}
+                        <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-xs">
+                          {option.label}
+                        </span>
+                        {option.name}
                       </button>
                     ))}
                     <button
                       type="button"
                       onClick={() => insertBlockAfter(block.id)}
-                      className="grid h-12 min-w-12 place-items-center rounded-2xl px-3 text-lg font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                      title="在下方添加"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                     >
-                      +
+                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-xs">+</span>
+                      在下方添加
                     </button>
                   </div>
                 ) : null}
 
                 {slashBlockId === block.id ? (
-                  <div className="absolute left-0 top-10 z-30 w-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-300/50">
+                  <div className="relative z-10 mt-2 max-h-60 w-full max-w-xs overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-300/50">
                     <p className="px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
                       快捷插入
                     </p>
@@ -1426,7 +1431,7 @@ export default function Editor({
       <button
         type="button"
         onClick={() => insertBlockAfter(blocks[blocks.length - 1].id)}
-        className="mt-2 block min-h-[220px] w-full cursor-text rounded-2xl border-0 bg-transparent text-left outline-none transition hover:bg-slate-50/70 focus-visible:ring-2 focus-visible:ring-blue-100"
+        className="mt-2 block min-h-16 w-full cursor-text rounded-2xl border-0 bg-transparent text-left outline-none transition hover:bg-slate-50/70 focus-visible:ring-2 focus-visible:ring-blue-100"
         aria-label="点击下方空白处添加文本块"
       />
     </div>

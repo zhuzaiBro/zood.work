@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "telegram:setup": "bun run scripts/setup_telegram_webhook.ts",
-    "upload-questions": "bun run scripts/upload_questions_from_csv.ts"
+    "upload-questions": "bun run scripts/upload_questions_from_csv.ts",
+    "test:data-access": "node scripts/check-direct-supabase-query.mjs && node --experimental-strip-types tests/platform-http.integration.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",

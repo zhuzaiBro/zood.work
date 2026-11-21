@@ -3,8 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
-import { createClient } from '@/lib/supabase/client'
+import { browserUser } from '@/lib/auth/session'
+import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { uploadPostBanner } from '@/lib/uploadPostBanner'
+import { deriveAutoSlug, slugWasEdited } from '@/lib/post-slug'
 import Skeleton from '@/components/ui/Skeleton'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -40,6 +42,7 @@ type DraftState = {
   selectedCategories: string[]
   published: boolean
   isPublic: boolean
+  slugTouched?: boolean
 }
 
 function formatSavedTime(date: Date | null) {
@@ -50,21 +53,15 @@ function formatSavedTime(date: Date | null) {
   })
 }
 
-function generateSlug(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
 export default function CreatePostPage() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
 
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
+  const [slugTouched, setSlugTouched] = useState(false)
+  const slugFallbackRef = useRef('')
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const [excerpt, setExcerpt] = useState('')
   const [bannerFile, setBannerFile] = useState<File | null>(null)
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
@@ -77,23 +74,30 @@ export default function CreatePostPage() {
   const [isPublic, setIsPublic] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [categoryError, setCategoryError] = useState('')
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false)
   const [showSettings, setShowSettings] = useState(true)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login')
+      router.replace('/login?redirect=/posts/create')
     }
   }, [isAuthenticated, authLoading, router])
 
   useEffect(() => {
     const fetchCategories = async () => {
-      const supabase = createClient()
-      const { data } = await supabase.from('post_cates').select('*').order('name')
-
-      if (data) {
-        setCategories(data)
+      try {
+        const { categories: rows } = await platformBrowser<{ categories: Category[] }>(
+          '/api/platform/categories',
+        )
+        setCategories(
+          [...(rows ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'zh')),
+        )
+        setCategoryError('')
+      } catch (fetchError) {
+        console.error('Error fetching categories:', fetchError)
+        setCategoryError('分类暂时没有加载出来，文章仍可以先保存')
       }
     }
 
@@ -109,12 +113,22 @@ export default function CreatePostPage() {
       const rawDraft = window.localStorage.getItem(DRAFT_KEY)
       if (rawDraft) {
         const draft = JSON.parse(rawDraft) as Partial<DraftState>
-        setTitle(draft.title ?? '')
-        setSlug(draft.slug ?? '')
+        const restoredTitle = draft.title ?? ''
+        const restoredSlug = draft.slug ?? ''
+        const restoredTouched = slugWasEdited(draft)
+        const restored = deriveAutoSlug(restoredTitle, {
+          touched: restoredTouched,
+          slug: restoredSlug,
+          fallback: !restoredTouched && restoredSlug.startsWith('post-') ? restoredSlug : '',
+        })
+        setTitle(restoredTitle)
+        setSlug(restored.slug)
+        slugFallbackRef.current = restored.fallback
         setExcerpt(draft.excerpt ?? '')
         setContent(draft.content ?? '')
         setMarkdown(draft.markdown ?? '')
         setSelectedCategories(draft.selectedCategories ?? [])
+        setSlugTouched(restoredTouched)
         setPublished(draft.published ?? false)
         setIsPublic(draft.isPublic ?? true)
         setLastSavedAt(new Date())
@@ -139,6 +153,7 @@ export default function CreatePostPage() {
         selectedCategories,
         published,
         isPublic,
+        slugTouched,
       }
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
       setLastSavedAt(new Date())
@@ -155,6 +170,7 @@ export default function CreatePostPage() {
     published,
     isPublic,
     hasRestoredDraft,
+    slugTouched,
   ])
 
   useEffect(() => {
@@ -175,11 +191,22 @@ export default function CreatePostPage() {
     }
   }
 
+  useEffect(() => {
+    const node = titleRef.current
+    if (!node) return
+    node.style.height = 'auto'
+    node.style.height = `${node.scrollHeight}px`
+  }, [title, isAuthenticated])
+
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle)
-    if (!slug || slug === generateSlug(title)) {
-      setSlug(generateSlug(newTitle))
-    }
+    const next = deriveAutoSlug(newTitle, {
+      touched: slugTouched,
+      slug,
+      fallback: slugFallbackRef.current,
+    })
+    slugFallbackRef.current = next.fallback
+    if (next.slug !== slug) setSlug(next.slug)
   }
 
   const handleEditorChange = (html: string, md: string) => {
@@ -212,7 +239,7 @@ export default function CreatePostPage() {
     }
 
     if (!slug.trim()) {
-      setError('请输入文章别名')
+      setError('请填写文章 URL')
       return
     }
 
@@ -229,23 +256,24 @@ export default function CreatePostPage() {
     setIsSubmitting(true)
 
     try {
-      const supabase = createClient()
-
-      const { data: existingPost } = await supabase
-        .from('posts')
-        .select('id')
-        .eq('slug', slug)
-        .single()
-
-      if (existingPost) {
-        setError('文章别名已存在，请使用其他别名')
-        setIsSubmitting(false)
-        return
+      try {
+        const { post: existingPost } = await platformBrowser<{ post: { id: string } | null }>(
+          `/api/platform/posts/by-slug?slug=${encodeURIComponent(slug.trim())}`,
+        )
+        if (existingPost) {
+          setError('文章别名已存在，请使用其他别名')
+          setIsSubmitting(false)
+          return
+        }
+      } catch (lookupError) {
+        if (!(lookupError instanceof PlatformError) || lookupError.status !== 404) {
+          throw lookupError
+        }
       }
 
       let bannerPublicUrl: string | null = null
       if (bannerFile) {
-        const up = await uploadPostBanner(supabase, user.id, bannerFile)
+        const up = await uploadPostBanner(bannerFile)
         if ('error' in up) {
           setError(up.error)
           setIsSubmitting(false)
@@ -254,50 +282,39 @@ export default function CreatePostPage() {
         bannerPublicUrl = up.publicUrl
       }
 
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .insert([
-          {
-            title: title.trim(),
-            slug: slug.trim(),
-            content: markdown,
-            excerpt: excerpt.trim() || null,
-            banner: bannerPublicUrl,
-            author_id: user.id,
-            published: willPublish,
-            is_public: isPublic,
-          },
-        ] as any)
-        .select()
-        .single()
+      const { post } = await platformBrowser<{ post: { id: string; slug: string } }>('/api/platform/posts', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          slug: slug.trim(),
+          content: markdown,
+          excerpt: excerpt.trim() || null,
+          banner: bannerPublicUrl,
+          published: willPublish,
+          is_public: isPublic,
+        },
+      })
 
-      if (postError) throw postError
-      if (!postData) throw new Error('创建文章失败')
-
-      const post = postData as any
+      if (!post) throw new Error('创建文章失败')
 
       if (selectedCategories.length > 0) {
-        const relations = selectedCategories.map((cateId) => ({
-          post_id: post.id,
-          cate_id: cateId,
-        }))
-
-        const { error: relError } = await supabase
-          .from('post_cate_relations')
-          .insert(relations as any)
-
-        if (relError) {
-          console.error('Error creating category relations:', relError)
-        }
+        await platformBrowser(`/api/platform/posts/${post.id}/categories`, {
+          method: 'PUT',
+          body: { categoryIds: selectedCategories },
+        })
       }
 
       clearLocalDraft()
-      router.push(`/posts/${post.slug}`)
+      router.push(`/posts/${post.slug || slug.trim()}`)
       router.refresh()
     } catch (err: any) {
       console.error('Error creating post:', err)
-      if (err.code === '42501') {
-        setError('发布失败：posts 表的 RLS 策略不允许当前用户写入，请先执行 .sql/setup_posts_rls.sql')
+      if (err instanceof PlatformError && (err.code === '42501' || err.status === 409)) {
+        setError(
+          err.status === 409
+            ? '文章别名已存在，请使用其他别名'
+            : '发布失败：posts 表的 RLS 策略不允许当前用户写入，请先执行 .sql/setup_posts_rls.sql',
+        )
       } else {
         setError(err.message || '发布失败，请重试')
       }
@@ -341,15 +358,26 @@ export default function CreatePostPage() {
   }
 
   if (!isAuthenticated) {
-    return null
+    return (
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <h1 className="text-2xl font-bold text-slate-900">写文章需要先登录</h1>
+        <p className="mt-3 text-sm text-slate-500">登录后会回到这个编辑页。</p>
+        <Link
+          href="/login?redirect=/posts/create"
+          className="mt-6 inline-flex rounded-full bg-[#1f6feb] px-5 py-2 text-sm font-bold text-white"
+        >
+          去登录
+        </Link>
+      </div>
+    )
   }
 
   return (
-      <div className="-mt-20 min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-20 text-slate-900">
+      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] text-slate-900">
         <form onSubmit={(e) => handleSubmit(e)} className="min-h-screen">
-        <div className="sticky top-20 z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
+        <div className="sticky top-[var(--site-header-height)] z-40 bg-[#f7fafe]/88 backdrop-blur-xl">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-2 sm:h-16 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-0 lg:px-8">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <Link
                 href="/"
                 className="rounded-full px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
@@ -367,7 +395,7 @@ export default function CreatePostPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="hidden shrink-0 items-center gap-2 sm:flex">
               <button
                 type="button"
                 onClick={() => setShowSettings((value) => !value)}
@@ -393,9 +421,14 @@ export default function CreatePostPage() {
               </button>
             </div>
           </div>
+          {error ? (
+            <p role="alert" className="mx-auto max-w-7xl px-4 pb-3 text-sm font-medium text-rose-600 sm:px-6 lg:px-8">
+              {error}
+            </p>
+          ) : null}
         </div>
 
-        <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
+        <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-28 pt-8 sm:px-6 sm:pb-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
           <section className="min-w-0">
             <div className="mx-auto max-w-4xl rounded-[28px] bg-white px-6 py-8 shadow-[0_18px_80px_rgba(15,23,42,0.06)] ring-1 ring-black/5 sm:px-10 lg:px-14">
               <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -410,15 +443,20 @@ export default function CreatePostPage() {
               </div>
 
               <textarea
+                ref={titleRef}
+                id="post-title"
+                name="title"
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
                 placeholder="无标题"
                 rows={1}
                 disabled={isSubmitting}
-                className="mb-3 block min-h-[76px] w-full resize-none border-0 bg-transparent text-5xl font-black leading-tight tracking-tight text-slate-950 outline-none placeholder:text-slate-300 disabled:opacity-60"
+                className="mb-3 block w-full resize-none overflow-hidden border-0 bg-transparent text-4xl font-black leading-tight tracking-tight text-slate-950 outline-none placeholder:text-slate-300 disabled:opacity-60 sm:text-5xl"
               />
 
               <textarea
+                id="post-excerpt"
+                name="excerpt"
                 value={excerpt}
                 onChange={(e) => setExcerpt(e.target.value)}
                 placeholder="添加摘要，让读者快速知道这篇文章解决什么问题..."
@@ -473,7 +511,10 @@ export default function CreatePostPage() {
                       id="slug"
                       type="text"
                       value={slug}
-                      onChange={(e) => setSlug(e.target.value)}
+                      onChange={(e) => {
+                        setSlugTouched(true)
+                        setSlug(e.target.value)
+                      }}
                       placeholder="article-slug"
                       disabled={isSubmitting}
                       className="w-full bg-transparent font-mono text-sm text-slate-700 outline-none placeholder:text-slate-300 disabled:opacity-60"
@@ -515,6 +556,10 @@ export default function CreatePostPage() {
                     {bannerPreviewUrl ? '更换封面图' : '上传封面图'}
                   </button>
                 </div>
+
+                {categoryError ? (
+                  <p className="text-xs font-medium text-amber-700">{categoryError}</p>
+                ) : null}
 
                 {categories.length > 0 ? (
                   <div>
@@ -571,7 +616,7 @@ export default function CreatePostPage() {
             </div>
 
             {error ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+              <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
                 {error}
               </div>
             ) : null}
@@ -584,6 +629,31 @@ export default function CreatePostPage() {
             </div>
           </aside>
         </main>
+        <div className="fixed inset-x-0 bottom-0 z-[70] flex items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:hidden">
+          <button
+            type="button"
+            onClick={() => setShowSettings((value) => !value)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600"
+          >
+            设置
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e as any, false)}
+            disabled={isSubmitting}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+          >
+            {isSubmitting ? '保存中...' : '存草稿'}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e as any, true)}
+            disabled={isSubmitting}
+            className="ml-auto rounded-full bg-[#1f6feb] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {isSubmitting ? '发布中...' : '发布'}
+          </button>
+        </div>
       </form>
     </div>
   )

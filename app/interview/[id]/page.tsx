@@ -1,5 +1,5 @@
-import { createAdminClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
+import { platformPublic, PlatformError } from '@/lib/platform/client';
 import { unstable_cache } from 'next/cache';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -25,44 +25,20 @@ export const dynamic = 'force-static';
 
 const getCollectionPageData = unstable_cache(
   async (id: string) => {
-    const supabase = createAdminClient();
-    const [collectionResult, questionsResult] = await Promise.all([
-      supabase
-        .from('interview_collections')
-        .select('id, title, description, icon')
-        .eq('id', id)
-        .maybeSingle(),
-      supabase
-        .from('interview_question')
-        .select(`
-          id,
-          title,
-          difficulty,
-          is_vip,
-          vip_level_required,
-          sort,
-          created_at,
-          interview_question_tags (
-            interview_tags (
-              id,
-              name
-            )
-          )
-        `)
-        .eq('collection_id', id)
-        .order('sort', { ascending: true })
-        .order('created_at', { ascending: true }),
-    ]);
-
-    if (collectionResult.error) throw collectionResult.error;
-    if (questionsResult.error) throw questionsResult.error;
+    const data = await platformPublic<{
+      collection: Collection | null;
+      questions: Question[];
+    }>(`/api/platform/interview/collections/${id}`, { cache: 'force-cache' });
 
     return {
-      collection: collectionResult.data as Collection | null,
-      questions: (questionsResult.data ?? []) as Question[],
+      collection: data.collection,
+      questions: (data.questions ?? []).map((question) => ({
+        ...question,
+        interview_question_tags: question.interview_question_tags ?? [],
+      })),
     };
   },
-  ['interview-collection-page-v2'],
+  ['interview-collection-page-v3'],
   { revalidate: 300, tags: ['interview-collections'] },
 );
 
@@ -72,7 +48,17 @@ export default async function CollectionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { collection, questions } = await getCollectionPageData(id);
+  let collection: Collection | null = null;
+  let questions: Question[] = [];
+  try {
+    const loaded = await getCollectionPageData(id);
+    collection = loaded.collection;
+    questions = loaded.questions ?? [];
+  } catch (error) {
+    if (!(error instanceof PlatformError) || error.status !== 404) {
+      console.error('Load interview collection failed:', error);
+    }
+  }
 
   if (!collection) {
     notFound();

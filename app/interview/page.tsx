@@ -1,7 +1,9 @@
 import { Suspense } from 'react';
-import { createClient } from '@/lib/supabase/server';
+import { platformPublic } from '@/lib/platform/client';
 import TagFilter from '@/components/interview/TagFilter';
+import RoleFilter from '@/components/interview/RoleFilter';
 import CollectionCard from '@/components/interview/CollectionCard';
+import { interviewJob, interviewJobs } from '@/lib/interview-jobs';
 import InterviewQuestionSearch from '@/components/interview/InterviewQuestionSearch';
 import QuestionContributionForm from '@/components/interview/QuestionContributionForm';
 import { Database } from '@/types/database.types';
@@ -20,83 +22,65 @@ export const metadata: Metadata = {
   },
 };
 
+function readQuestionCount(questionCounts: unknown, collectionId: string) {
+  if (!questionCounts) return 0;
+
+  if (Array.isArray(questionCounts)) {
+    const row = questionCounts.find((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const record = item as Record<string, unknown>;
+      return record.collection_id === collectionId || record.id === collectionId;
+    }) as Record<string, unknown> | undefined;
+    const count = row?.count ?? row?.question_count ?? row?.total;
+    return typeof count === 'number' ? count : Number(count) || 0;
+  }
+
+  if (typeof questionCounts === 'object') {
+    const value = (questionCounts as Record<string, unknown>)[collectionId];
+    if (typeof value === 'number') return value;
+    if (value && typeof value === 'object') {
+      const count = (value as Record<string, unknown>).count;
+      return typeof count === 'number' ? count : Number(count) || 0;
+    }
+  }
+
+  return 0;
+}
+
 export default async function InterviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tag?: string; q?: string }>;
+  searchParams: Promise<{ tag?: string; q?: string; role?: string }>;
 }) {
-  const supabase = await createClient();
   const params = await searchParams;
   const currentTagSlug = params.tag;
+  const requestedJob = interviewJob(params.role);
+  const unknownJob = Boolean(params.role) && !requestedJob;
+  const activeJob = requestedJob ?? interviewJobs[0];
+  const technical = activeJob.slug === 'programmer' && !unknownJob;
   const searchQuery = params.q?.trim() ?? '';
   const isSearching = searchQuery.length > 0;
 
-  // 1. Fetch all tags for the filter list
-  const { data: tags } = await supabase
-    .from('interview_tags')
-    .select('*')
-    .order('sort', { ascending: true })
-    .order('created_at', { ascending: true });
+  let tags: Tag[] = [];
+  let collections: Collection[] = [];
+  let questionCounts: unknown = null;
+  let loadError = '';
 
-  // 2. Fetch collections based on filter
-  let collections: Collection[] | null = [];
-  const questionCountByCollection = new Map<string, number>();
-
-  // Default to first tag if no tag provided
-  const effectiveTagSlug = currentTagSlug || (tags && tags.length > 0 ? (tags[0] as { slug: string }).slug : null);
-
-  if (effectiveTagSlug) {
-    // If a tag is selected, we need to find collections associated with this tag.
-    // First, get the tag ID.
-    const { data: currentTag } = await supabase
-      .from('interview_tags')
-      .select('id')
-      .eq('slug', effectiveTagSlug)
-      .single();
-
-    if (currentTag) {
-      // Then get collection IDs from the junction table
-      const { data: relations } = await supabase
-        .from('interview_collection_tags')
-        .select('collection_id')
-        .eq('tag_id', (currentTag as { id: string }).id);
-
-      if (relations && relations.length > 0) {
-        const collectionIds = relations.map((r: { collection_id: string }) => r.collection_id);
-        const { data } = await supabase
-          .from('interview_collections')
-          .select('*')
-          .in('id', collectionIds)
-          .order('sort', { ascending: true })
-          .order('created_at', { ascending: false });
-        collections = data;
-      }
-    }
-  } else {
-    // Fallback if no tags exist at all
-    const { data } = await supabase
-      .from('interview_collections')
-      .select('*')
-      .order('sort', { ascending: true })
-      .order('created_at', { ascending: false });
-    collections = data;
-  }
-
-  if (collections?.length) {
-    const collectionIds = collections.map((collection) => collection.id);
-    const { data: questionRows } = await supabase
-      .from('interview_question')
-      .select('collection_id')
-      .in('collection_id', collectionIds);
-
-    const typedQuestionRows = (questionRows ?? []) as Array<{ collection_id: string | null }>;
-    for (const row of typedQuestionRows) {
-      if (!row.collection_id) continue;
-      questionCountByCollection.set(
-        row.collection_id,
-        (questionCountByCollection.get(row.collection_id) ?? 0) + 1,
-      );
-    }
+  if (technical) try {
+    const query = new URLSearchParams();
+    if (currentTagSlug) query.set('tag', currentTagSlug);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const result = await platformPublic<{
+      tags: Tag[] | null;
+      collections: Collection[] | null;
+      questionCounts: unknown;
+    }>(`/api/platform/interview${suffix}`);
+    tags = result.tags ?? [];
+    collections = result.collections ?? [];
+    questionCounts = result.questionCounts;
+  } catch (error) {
+    console.error('Load interview index failed:', error);
+    loadError = '题库暂时没有加载出来';
   }
 
   return (
@@ -116,8 +100,13 @@ export default async function InterviewPage({
           </Suspense>
 
           <Suspense fallback={null}>
-            <TagFilter tags={tags || []} />
+            <RoleFilter activeSlug={unknownJob ? '' : activeJob.slug} />
           </Suspense>
+          {technical && (
+            <Suspense fallback={null}>
+              <TagFilter tags={tags || []} />
+            </Suspense>
+          )}
         </div>
       </div>
 
@@ -125,16 +114,28 @@ export default async function InterviewPage({
         {!isSearching && (
           <>
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">按专题开始练习</p>
-              <span className="text-xs text-slate-400">共 {collections?.length ?? 0} 个题集</span>
+              <p className="text-sm font-medium text-slate-500">
+                {unknownJob ? '岗位' : technical ? '程序员 · 按技术方向练习' : activeJob.name}
+              </p>
+              <span className="text-xs text-slate-400">共 {technical ? collections.length : 0} 个题集</span>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {collections?.map((collection) => (
-                <CollectionCard key={collection.id} collection={collection} questionCount={questionCountByCollection.get(collection.id) ?? 0} />
+              {technical && collections.map((collection) => (
+                <CollectionCard key={collection.id} collection={collection} questionCount={readQuestionCount(questionCounts, collection.id)} />
               ))}
-              {(!collections || collections.length === 0) && (
+              {technical && loadError && (
+                <div className="col-span-full py-12 text-center text-rose-600">
+                  {loadError}
+                </div>
+              )}
+              {technical && !loadError && collections.length === 0 && (
                 <div className="col-span-full py-12 text-center text-gray-500">
                   暂无面试题集
+                </div>
+              )}
+              {!technical && (
+                <div className="col-span-full rounded-lg border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-slate-500">
+                  {unknownJob ? '没有这个岗位' : `「${activeJob.name}」还没有面试题`}
                 </div>
               )}
             </div>

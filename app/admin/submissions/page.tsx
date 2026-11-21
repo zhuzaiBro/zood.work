@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
+import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
-import { UserProfile } from '@/types/user';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
 import Skeleton from '@/components/ui/Skeleton';
 import {
@@ -85,7 +85,6 @@ function getStatusMeta(status: string) {
 
 export default function AdminSubmissionsPage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message } = App.useApp();
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -100,22 +99,23 @@ export default function AdminSubmissionsPage() {
   const checkAuth = async () => {
     setIsCheckingAuth(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await browserUser();
 
     if (!user) {
       router.push('/login?redirect=/admin/submissions');
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single<UserProfile>();
-
-    if (profileError || !profile?.is_admin) {
+    try {
+      const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+        '/api/platform/me/profile',
+      );
+      if (!profile?.is_admin) {
+        setHasPermission(false);
+        setIsCheckingAuth(false);
+        return;
+      }
+    } catch {
       setHasPermission(false);
       setIsCheckingAuth(false);
       return;
@@ -129,31 +129,22 @@ export default function AdminSubmissionsPage() {
   const loadSubmissions = async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('interview_question_submissions')
-      .select(`
-        *,
-        user_profiles (
-          id,
-          username,
-          display_name,
-          avatar_url
-        ),
-        interview_collections (
-          id,
-          title
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      message.error(error.message || '加载投稿列表失败');
+    try {
+      const { submissions: rows } = await platformBrowser<{ submissions: SubmissionRow[] | null }>(
+        '/api/platform/admin/interview/submissions',
+      );
+      setSubmissions(
+        (rows ?? []).map((row) => ({
+          ...row,
+          tags: row.tags ?? [],
+          user_profiles: Array.isArray(row.user_profiles) ? row.user_profiles[0] ?? null : row.user_profiles ?? null,
+        })),
+      );
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载投稿列表失败');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSubmissions((data ?? []) as SubmissionRow[]);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -199,15 +190,11 @@ export default function AdminSubmissionsPage() {
     setOpeningAttachmentId(record.id);
 
     try {
-      const { data, error } = await supabase.storage
-        .from(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET)
-        .createSignedUrl(record.attachment_path, 60 * 10);
-
-      if (error || !data?.signedUrl) {
-        throw new Error(error?.message || '生成附件访问链接失败');
+      if (record.attachment_path.startsWith('http')) {
+        window.open(record.attachment_path, '_blank', 'noopener,noreferrer');
+        return;
       }
-
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      throw new Error('这份附件只有旧的存储元数据，文件内容不在本地，无法打开');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '打开附件失败');
     } finally {

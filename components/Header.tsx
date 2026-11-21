@@ -24,7 +24,6 @@ export default function Header() {
   const lightContentPage = isLightContentPage(pathname);
   const isDarkImmersivePage =
     pathname === "/" ||
-    pathname === "/faucet" ||
     pathname === "/interview" ||
     pathname === "/learning-test" ||
     pathname.startsWith("/jobs");
@@ -72,19 +71,23 @@ export default function Header() {
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center text-header-sky transition-colors hover:text-sky-800"
+            className={`flex min-w-0 items-center gap-2 transition-colors ${
+              lightContentPage || !isDarkImmersivePage
+                ? "text-slate-900 hover:text-sky-800"
+                : "text-white hover:text-sky-100"
+            }`}
             onClick={closeMobileMenu}
-            aria-label="油条TV首页"
+            aria-label="AI出海"
           >
             <Image
-              src="/logo.png"
-              alt="油条TV"
-              width={1888}
-              height={463}
-              className="h-12 w-auto sm:h-14"
+              src="/brand/zood-mark.png"
+              alt=""
+              width={690}
+              height={748}
+              className="h-9 w-auto sm:h-10"
               priority
-              unoptimized
             />
+            <span className="truncate text-base font-black tracking-tight">AI出海</span>
           </Link>
 
           {/* 桌面端菜单 */}
@@ -93,7 +96,7 @@ export default function Header() {
               首页
             </Link> */}
             <LazyLink href="/courses" className={linkClass}>
-              学 Web3 / AI
+              学习与实战
             </LazyLink>
             <LazyLink href="/interview" className={linkClass}>
               面试题库
@@ -103,9 +106,6 @@ export default function Header() {
             </LazyLink>
             <LazyLink href="/resume-agent" className={linkClass}>
               简历优化
-            </LazyLink>
-            <LazyLink href="/faucet" className={linkClass}>
-              测试币
             </LazyLink>
 
             {/* 用户信息或登录按钮 */}
@@ -156,13 +156,13 @@ export default function Header() {
 
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
+          <div className="md:hidden absolute top-full left-0 right-0 max-h-[min(24rem,calc(100vh-var(--site-header-height)-4.5rem))] overflow-y-auto bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
             <LazyLink
               href="/courses"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              学 Web3 / AI
+              学习与实战
             </LazyLink>
             <LazyLink
               href="/interview"
@@ -184,13 +184,6 @@ export default function Header() {
               onClick={closeMobileMenu}
             >
               简历优化
-            </LazyLink>
-            <LazyLink
-              href="/faucet"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              测试币
             </LazyLink>
             {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
               分类

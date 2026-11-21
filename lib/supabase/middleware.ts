@@ -54,8 +54,13 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl || supabaseUrl.includes('amnksdnwvwmmmvqoxzyj') || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return supabaseResponse
+  }
+
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {

@@ -2,7 +2,8 @@
 
 import { ChangeEvent, FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
+import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET,
@@ -189,13 +190,12 @@ export default function QuestionContributionForm() {
     }
 
     setIsSubmitting(true);
-
-    const supabase = createClient() as any;
     let uploadedAttachmentPath: string | null = null;
-    let insertError: { code?: string; message?: string } | null = null;
+    let attachmentName: string | null = null;
+    let attachmentMimeType: string | null = null;
 
     if (attachmentFile) {
-      const uploadResult = await uploadInterviewSubmissionAttachment(supabase, user.id, attachmentFile);
+      const uploadResult = await uploadInterviewSubmissionAttachment(attachmentFile);
 
       if ('error' in uploadResult) {
         setIsSubmitting(false);
@@ -204,60 +204,42 @@ export default function QuestionContributionForm() {
       }
 
       uploadedAttachmentPath = uploadResult.path;
-
-      const { error } = await supabase
-        .from('interview_question_submissions')
-        .insert({
-          user_id: user.id,
-          title: title.trim(),
-          content: content.trim(),
-          tags,
-          source: source.trim() || null,
-          contact: contact.trim() || null,
-          attachment_name: uploadResult.fileName,
-          attachment_path: uploadResult.path,
-          attachment_mime_type: uploadResult.mimeType,
-          attachment_size_bytes: uploadResult.size,
-        });
-
-      insertError = error;
-    } else {
-      const { error } = await supabase
-        .from('interview_question_submissions')
-        .insert({
-          user_id: user.id,
-          title: title.trim(),
-          content: content.trim(),
-          tags,
-          source: source.trim() || null,
-          contact: contact.trim() || null,
-        });
-
-      insertError = error;
+      attachmentName = uploadResult.fileName;
+      attachmentMimeType = uploadResult.mimeType;
     }
 
-    setIsSubmitting(false);
-
-    if (insertError) {
-      if (uploadedAttachmentPath) {
-        await supabase.storage
-          .from(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET)
-          .remove([uploadedAttachmentPath]);
-      }
-
-      if (insertError.code === '42501') {
+    try {
+      await platformBrowser('/api/platform/interview/submissions', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          content: content.trim(),
+          contact: contact.trim() || null,
+          source: source.trim() || null,
+          tags,
+          attachment_path: uploadedAttachmentPath,
+          attachment_name: attachmentName,
+          attachment_mime_type: attachmentMimeType,
+        },
+      });
+    } catch (submitError) {
+      setIsSubmitting(false);
+      const code = submitError instanceof PlatformError ? submitError.code : undefined;
+      if (code === '42501') {
         setError('投稿权限还没有初始化，请先执行 .sql/setup_interview_contributions.sql。');
         return;
       }
 
-      if (insertError.code === 'PGRST204') {
+      if (code === 'PGRST204') {
         setError('投稿附件字段尚未初始化，请在 Supabase 执行 .sql/add_interview_submission_attachments.sql。');
         return;
       }
 
-      setError(insertError.message || '提交失败，请稍后再试。');
+      setError(submitError instanceof Error ? submitError.message : '提交失败，请稍后再试。');
       return;
     }
+
+    setIsSubmitting(false);
 
     resetForm();
     setSuccess('投递已收到，管理员整理后会归入合适的专题或题集。');

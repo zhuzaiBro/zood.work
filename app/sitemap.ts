@@ -1,5 +1,5 @@
-import { createAdminClient } from '@/lib/supabase/server'
 import { MetadataRoute } from 'next'
+import { platformPublic } from '@/lib/platform/client'
 
 export const revalidate = 86400
 
@@ -91,80 +91,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.6,
     },
-    {
-      url: `${BASE_URL}/faucet`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
   ]
 
   try {
-    const supabase = createAdminClient()
-
-    const [
-      posts,
-      categories,
-      courses,
-      collections,
-      questions,
-      tags,
-      jobs,
-    ] = await Promise.all([
-      fetchAllPages<PostSitemapRow>((from, to) =>
-        supabase
-          .from('posts')
-          .select('slug, updated_at')
-          .eq('published', true)
-          .eq('is_public', true)
-          .order('updated_at', { ascending: false })
-          .range(from, to)
-      ),
-      fetchAllPages<CategorySitemapRow>((from, to) =>
-        supabase
-          .from('post_cates')
-          .select('slug, created_at')
-          .order('created_at', { ascending: false })
-          .range(from, to)
-      ),
-      fetchAllPages<CourseSitemapRow>((from, to) =>
-        supabase
-          .from('courses')
-          .select('id, updated_at')
-          .eq('status', 'published')
-          .order('updated_at', { ascending: false })
-          .range(from, to)
-      ),
-      fetchAllPages<CollectionSitemapRow>((from, to) =>
-        supabase
-          .from('interview_collections')
-          .select('id, updated_at')
-          .order('updated_at', { ascending: false })
-          .range(from, to)
-      ),
-      fetchAllPages<QuestionSitemapRow>((from, to) =>
-        supabase
-          .from('interview_question')
-          .select('id, updated_at')
-          .order('updated_at', { ascending: false })
-          .range(from, to)
-      ),
-      fetchAllPages<TagSitemapRow>((from, to) =>
-        supabase
-          .from('interview_tags')
-          .select('slug, created_at')
-          .order('sort', { ascending: true })
-          .order('created_at', { ascending: true })
-          .range(from, to)
-      ),
-      fetchAllPages<JobSitemapRow>((from, to) =>
-        supabase
-          .from('job_listings')
-          .select('id, updated_at, last_synced_at')
-          .order('updated_at', { ascending: false, nullsFirst: false })
-          .range(from, to)
-      ),
-    ])
+    const data = await platformPublic<{
+      posts: PostSitemapRow[]
+      categories: CategorySitemapRow[]
+      courses: CourseSitemapRow[]
+      collections: Array<{ id: string; created_at: string | null }>
+      questions: QuestionSitemapRow[]
+      tags: TagSitemapRow[]
+      jobs: JobSitemapRow[]
+    }>('/api/platform/sitemap')
+    const posts = data.posts ?? []
+    const categories = data.categories ?? []
+    const courses = data.courses ?? []
+    const collections = (data.collections ?? []).map((collection) => ({
+      id: collection.id,
+      updated_at: collection.created_at ?? '',
+    }))
+    const questions = data.questions ?? []
+    const tags = data.tags ?? []
+    const jobs = data.jobs ?? []
 
     const postPages: SitemapEntry[] = posts.map((post) => ({
       url: `${BASE_URL}/posts/${post.slug}`,

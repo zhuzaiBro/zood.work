@@ -3,7 +3,6 @@
 import { useProfile, useIsAuthenticated, useIsAdmin } from '@/store/userStore'
 import LazyLink from '@/components/LazyLink'
 import { useState, useRef, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/hooks/useAuth'

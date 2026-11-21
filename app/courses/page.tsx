@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import CourseCatalog, { type CourseCatalogItem } from '@/components/courses/CourseCatalog';
-import { createClient } from '@/lib/supabase/server';
 import { getPublishedCoursesWithStats } from '@/lib/courses/getPublishedCoursesWithStats';
 
 export const metadata: Metadata = {
@@ -19,19 +18,6 @@ export default async function CoursesPage() {
     courses = await getPublishedCoursesWithStats();
   } catch (error) {
     console.error('获取课程统计失败:', error);
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from('courses')
-      .select('id, title, description, cover_image_url, price, is_free, status, created_at')
-      .eq('status', 'published')
-      .order('created_at', { ascending: false });
-
-    const fallbackCourses = (data ?? []) as Array<Omit<CourseCatalogItem, 'lessonCount' | 'totalDuration'>>;
-    courses = fallbackCourses.map((course) => ({
-      ...course,
-      lessonCount: 0,
-      totalDuration: 0,
-    }));
   }
 
   return <CourseCatalog courses={courses} />;

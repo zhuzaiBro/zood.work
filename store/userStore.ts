@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, UserProfile, UserState } from '@/types/user'
 import { createClient } from '@/lib/supabase/client'
+import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { buildDefaultUserProfile } from '@/lib/user-profiles'
 
 interface UserStore extends UserState {
@@ -116,40 +117,34 @@ export const useUserStore = create<UserStore>()(
           }
 
           // 3. 获取最新的 Profile
-          const { data: profile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', user.id)
-            .maybeSingle()
-
-          if (profileError) {
-            console.error('Failed to get profile:', profileError)
+          let profile: UserProfile | null = null
+          try {
+            const result = await platformBrowser<{ profile: UserProfile | null }>('/api/platform/me/profile')
+            profile = result.profile ?? null
+          } catch (profileError) {
+            if (!(profileError instanceof PlatformError) || profileError.status !== 404) {
+              console.error('Failed to get profile:', profileError)
+            }
           }
 
           if (profile) {
             set({ profile, isLoading: false })
           } else {
             const fallbackProfile = buildDefaultUserProfile(user)
-            const { data: insertedProfile, error: insertProfileError } = await supabase
-              .from('user_profiles')
-              .insert(fallbackProfile as never)
-              .select('*')
-              .maybeSingle()
-
-            if (insertProfileError && insertProfileError.code !== '23505') {
+            try {
+              const result = await platformBrowser<{ profile: UserProfile | null }>('/api/platform/me/profile', {
+                method: 'PUT',
+                body: {
+                  username: fallbackProfile.username,
+                  display_name: fallbackProfile.display_name,
+                  avatar_url: fallbackProfile.avatar_url,
+                  bio: fallbackProfile.bio,
+                },
+              })
+              set({ profile: result.profile ?? null, isLoading: false })
+            } catch (insertProfileError) {
               console.error('Failed to create missing profile:', insertProfileError)
               set({ profile: null, isLoading: false })
-            } else {
-              const ensuredProfile = insertedProfile ?? (
-                await supabase
-                  .from('user_profiles')
-                  .select('*')
-                  .eq('id', user.id)
-                  .maybeSingle()
-              ).data
-
-              // 避免继续使用 localStorage 里其他账号的旧 profile
-              set({ profile: ensuredProfile ?? null, isLoading: false })
             }
           }
 

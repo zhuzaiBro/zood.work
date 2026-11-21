@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/database.types'
+import { uploadPlatformFile } from '@/lib/platform/uploads'
 
 export const POST_BANNERS_BUCKET = 'post-banners'
 
@@ -19,8 +18,6 @@ function extForMime(mime: string): string {
 }
 
 export async function uploadPostBanner(
-  supabase: SupabaseClient<Database>,
-  userId: string,
   file: File
 ): Promise<{ publicUrl: string } | { error: string }> {
   if (!ALLOWED_TYPES.has(file.type)) {
@@ -29,26 +26,7 @@ export async function uploadPostBanner(
   if (file.size > MAX_BYTES) {
     return { error: '封面图不能超过 5MB' }
   }
-
-  const ext = extForMime(file.type)
-  const id =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const path = `${userId}/${Date.now()}-${id}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from(POST_BANNERS_BUCKET)
-    .upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type,
-    })
-
-  if (uploadError) {
-    return { error: uploadError.message }
-  }
-
-  const { data } = supabase.storage.from(POST_BANNERS_BUCKET).getPublicUrl(path)
-  return { publicUrl: data.publicUrl }
+  const uploaded = await uploadPlatformFile(POST_BANNERS_BUCKET, file)
+  if (uploaded.error || !uploaded.publicUrl) return { error: uploaded.error || '上传失败' }
+  return { publicUrl: uploaded.publicUrl }
 }

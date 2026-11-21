@@ -16,7 +16,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, StopOutlined, UserAddOutlined } from '@ant-design/icons';
 import Skeleton from '@/components/ui/Skeleton';
-import { createClient } from '@/lib/supabase/client';
+import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
 
 type ProfileRow = Pick<
@@ -84,7 +84,6 @@ export default function CourseAccessModal({
   onAccessChange,
 }: CourseAccessModalProps) {
   const { message, modal } = App.useApp();
-  const supabase = createClient();
   const [accessUsers, setAccessUsers] = useState<CourseAccessUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>();
@@ -94,26 +93,16 @@ export default function CourseAccessModal({
     if (!courseId) return;
     setLoading(true);
     try {
-      const [profilesResult, enrollmentsResult] = await Promise.all([
-        supabase
-          .from('user_profiles')
-          .select('id, username, display_name, avatar_url, is_admin, created_at')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('course_enrollments')
-          .select('id, course_id, user_id, source, status, granted_at, revoked_at, note, created_at, updated_at')
-          .eq('course_id', courseId)
-          .order('created_at', { ascending: false }),
-      ]);
+      const access = await platformBrowser<{
+        profiles: ProfileRow[];
+        enrollments: EnrollmentRow[];
+      }>(`/api/platform/admin/courses/${courseId}/access`);
 
-      if (profilesResult.error) throw profilesResult.error;
-      if (enrollmentsResult.error) throw enrollmentsResult.error;
-
-      const enrollmentRows = (enrollmentsResult.data ?? []) as EnrollmentRow[];
+      const enrollmentRows = access.enrollments ?? [];
       const enrollmentsByUserId = new Map(
         enrollmentRows.map((enrollment) => [enrollment.user_id, enrollment]),
       );
-      const profileRows = (profilesResult.data ?? []) as ProfileRow[];
+      const profileRows = access.profiles ?? [];
       const users: CourseAccessUser[] = profileRows.map((profile) => {
         const enrollment = enrollmentsByUserId.get(profile.id);
         return {
@@ -150,7 +139,7 @@ export default function CourseAccessModal({
     } finally {
       setLoading(false);
     }
-  }, [courseId, message, supabase]);
+  }, [courseId, message]);
 
   useEffect(() => {
     if (open) {
@@ -174,24 +163,10 @@ export default function CourseAccessModal({
 
     setGrantingUserId(userId);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('登录状态失效，请重新登录');
-
-      const { error } = await supabase
-        .from('course_enrollments')
-        .upsert({
-          course_id: courseId,
-          user_id: userId,
-          source: 'manual',
-          status: 'active',
-          granted_by: user.id,
-          granted_at: new Date().toISOString(),
-          revoked_by: null,
-          revoked_at: null,
-        } as never, { onConflict: 'course_id,user_id' });
-      if (error) throw error;
+      await platformBrowser(`/api/platform/admin/courses/${courseId}/access`, {
+        method: 'POST',
+        body: { userId },
+      });
       message.success('课程已开通');
       setSelectedUserId(undefined);
       await loadAccess();
@@ -213,21 +188,9 @@ export default function CourseAccessModal({
       onOk: async () => {
         setGrantingUserId(record.id);
         try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (!user) throw new Error('登录状态失效，请重新登录');
-
-          const { error } = await supabase
-            .from('course_enrollments')
-            .update({
-              status: 'revoked',
-              revoked_by: user.id,
-              revoked_at: new Date().toISOString(),
-            } as never)
-            .eq('course_id', courseId)
-            .eq('user_id', record.id);
-          if (error) throw error;
+          await platformBrowser(`/api/platform/admin/courses/${courseId}/access/${record.id}`, {
+            method: 'DELETE',
+          });
           message.success('已撤销课程开通');
           await loadAccess();
           onAccessChange?.();

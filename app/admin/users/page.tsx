@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
+import { platformBrowser } from '@/lib/platform/client';
 import {
   loadAdminUserStudyData,
+  type AdminUserSort,
   type AdminUsersResponse,
   type AdminUserStudyRow,
 } from '@/lib/admin/userStudyClient';
@@ -26,6 +28,8 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { SorterResult } from 'antd/es/table/interface';
+import type { TablePaginationConfig } from 'antd';
 import {
   ClockCircleOutlined,
   ReloadOutlined,
@@ -66,41 +70,62 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
+type ListQuery = {
+  page: number;
+  q: string;
+  sort: AdminUserSort;
+  order: 'asc' | 'desc';
+};
+
+const studySortKeys = {
+  todayStudySeconds: 'today',
+  yesterdayStudySeconds: 'yesterday',
+  totalStudySeconds: 'total',
+  uniqueVideoCount: 'videos',
+} as const;
+
 export default function AdminUsersPage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [repairingProfiles, setRepairingProfiles] = useState(false);
   const [hasPermission, setHasPermission] = useState(true);
   const [keyword, setKeyword] = useState('');
+  const [listQuery, setListQuery] = useState<ListQuery>({ page: 1, q: '', sort: 'created_at', order: 'desc' });
   const [data, setData] = useState<AdminUsersResponse | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const allowedRef = useRef(false);
+  const listQueryRef = useRef(listQuery);
+  listQueryRef.current = listQuery;
 
-  const loadUsers = async () => {
+  const loadUsers = async (query = listQueryRef.current) => {
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await browserUser();
       if (!user) {
         router.push('/login?redirect=/admin/users');
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .maybeSingle();
-      const adminProfile = profile as { is_admin?: boolean | null } | null;
-      if (profileError || !adminProfile?.is_admin) {
-        setHasPermission(false);
-        return;
+      if (!allowedRef.current) {
+        const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+          '/api/platform/me/profile',
+        );
+        if (!profile?.is_admin) {
+          setHasPermission(false);
+          return;
+        }
+        allowedRef.current = true;
       }
 
-      const result = await loadAdminUserStudyData(supabase);
+      const result = await loadAdminUserStudyData({
+        page: query.page,
+        pageSize: 12,
+        q: query.q,
+        sort: query.sort,
+        order: query.order,
+      });
       setHasPermission(true);
       setData(result);
     } catch (error) {
@@ -111,9 +136,17 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
-    loadUsers();
+    const timer = window.setTimeout(() => {
+      const next = keyword.trim();
+      setListQuery((current) => (current.q === next ? current : { ...current, q: next, page: 1 }));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword]);
+
+  useEffect(() => {
+    loadUsers(listQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [listQuery]);
 
   const repairMissingProfiles = async () => {
     setRepairingProfiles(true);
@@ -136,21 +169,6 @@ export default function AdminUsersPage() {
       setRepairingProfiles(false);
     }
   };
-
-  const filteredUsers = useMemo(() => {
-    const value = keyword.trim().toLowerCase();
-    if (!value) return data?.users ?? [];
-
-    return (data?.users ?? []).filter((item) => {
-      return [
-        item.id,
-        item.username,
-        item.email ?? '',
-        item.phone ?? '',
-        item.displayName ?? '',
-      ].some((field) => field.toLowerCase().includes(value));
-    });
-  }, [data?.users, keyword]);
 
   const updateMembership = async (userId: string, vipLevel: number) => {
     setUpdatingUserId(userId);
@@ -234,21 +252,24 @@ export default function AdminUsersPage() {
       title: `今天学习${data?.ranges.today.label ? ` (${data.ranges.today.label})` : ''}`,
       dataIndex: 'todayStudySeconds',
       key: 'todayStudySeconds',
-      sorter: (a, b) => a.todayStudySeconds - b.todayStudySeconds,
+      sorter: true,
+      sortOrder: listQuery.sort === 'today' ? (listQuery.order === 'asc' ? 'ascend' : 'descend') : null,
       render: (seconds: number) => <Text strong>{formatDuration(seconds)}</Text>,
     },
     {
       title: `昨天学习${data?.ranges.yesterday.label ? ` (${data.ranges.yesterday.label})` : ''}`,
       dataIndex: 'yesterdayStudySeconds',
       key: 'yesterdayStudySeconds',
-      sorter: (a, b) => a.yesterdayStudySeconds - b.yesterdayStudySeconds,
+      sorter: true,
+      sortOrder: listQuery.sort === 'yesterday' ? (listQuery.order === 'asc' ? 'ascend' : 'descend') : null,
       render: (seconds: number) => formatDuration(seconds),
     },
     {
       title: '两日合计',
       dataIndex: 'totalStudySeconds',
       key: 'totalStudySeconds',
-      sorter: (a, b) => a.totalStudySeconds - b.totalStudySeconds,
+      sorter: true,
+      sortOrder: listQuery.sort === 'total' ? (listQuery.order === 'asc' ? 'ascend' : 'descend') : null,
       render: (seconds: number) => (
         seconds > 0 ? <Tag color="geekblue">{formatDuration(seconds)}</Tag> : '-'
       ),
@@ -258,7 +279,8 @@ export default function AdminUsersPage() {
       dataIndex: 'uniqueVideoCount',
       key: 'uniqueVideoCount',
       width: 110,
-      sorter: (a, b) => a.uniqueVideoCount - b.uniqueVideoCount,
+      sorter: true,
+      sortOrder: listQuery.sort === 'videos' ? (listQuery.order === 'asc' ? 'ascend' : 'descend') : null,
       render: (count: number) => `${count} 个`,
     },
     {
@@ -357,7 +379,7 @@ export default function AdminUsersPage() {
           >
             {repairingProfiles ? '同步中' : '同步 Auth 用户'}
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={loadUsers} disabled={loading}>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadUsers()} disabled={loading}>
             {loading ? '刷新中' : '刷新'}
           </Button>
         </Space>
@@ -425,12 +447,32 @@ export default function AdminUsersPage() {
         <Table
           rowKey="id"
           columns={columns}
-          dataSource={filteredUsers}
-          loading={false}
+          dataSource={data?.users ?? []}
+          loading={loading}
           scroll={{ x: 1400 }}
           locale={{ emptyText: <Empty description="暂无用户学习数据" /> }}
+          onChange={(pagination: TablePaginationConfig, _filters, sorter: SorterResult<AdminUserStudyRow> | SorterResult<AdminUserStudyRow>[]) => {
+            const current = Array.isArray(sorter) ? sorter[0] : sorter;
+            const columnKey = typeof current?.columnKey === 'string' ? current.columnKey : '';
+            const nextSort = current?.order && columnKey in studySortKeys
+              ? studySortKeys[columnKey as keyof typeof studySortKeys]
+              : 'created_at';
+            const nextOrder = current?.order === 'ascend' ? 'asc' : 'desc';
+            setListQuery((prev) => {
+              const sortChanged = nextSort !== prev.sort || nextOrder !== prev.order;
+              return {
+                ...prev,
+                sort: nextSort,
+                order: nextOrder,
+                page: sortChanged ? 1 : pagination.current ?? 1,
+              };
+            });
+          }}
           pagination={{
+            current: data?.page?.page ?? listQuery.page,
             pageSize: 12,
+            total: data?.page?.total ?? 0,
+            showSizeChanger: false,
             showTotal: (total) => `共 ${total} 位用户`,
           }}
         />

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -70,189 +70,38 @@ export default function ProfilePage() {
       setIsDashboardLoading(true)
       setDashboardError('')
 
-      const supabase = createClient() as any
-      const [
-        enrollmentsResult,
-        purchaseRequestsResult,
-        progressResult,
-        favoritesResult,
-        submissionsResult,
-        resumeRecordsResult,
-      ] = await Promise.all([
-        supabase
-          .from('course_enrollments')
-          .select(`
-            id,
-            course_id,
-            status,
-            source,
-            granted_at,
-            expires_at,
-            note,
-            courses (
-              id,
-              title,
-              description,
-              cover_image_url,
-              price,
-              is_free
-            )
-          `)
-          .eq('user_id', userId)
-          .order('granted_at', { ascending: false }),
-        supabase
-          .from('course_purchase_requests')
-          .select('id, course_id, course_title, course_price, status, admin_note, contacted_at, paid_at, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('lesson_progress')
-          .select(`
-            id,
-            course_id,
-            lesson_id,
-            current_seconds,
-            duration_seconds,
-            progress_percent,
-            is_completed,
-            last_watched_at,
-            lessons (
-              id,
-              title
-            ),
-            courses (
-              id,
-              title
-            )
-          `)
-          .eq('user_id', userId)
-          .order('last_watched_at', { ascending: false }),
-        supabase
-          .from('interview_question_favorites')
-          .select(`
-            id,
-            created_at,
-            interview_question (
-              id,
-              title,
-              content,
-              difficulty,
-              collection_id
-            )
-          `)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('interview_question_submissions')
-          .select('id, title, content, tags, status, admin_note, created_at, updated_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('resume_optimization_records')
-          .select('id, target_role, score, positioning, rewritten_summary, keywords, resume_html, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-      ])
-
-      if (cancelled) return
-
-      const errors = [
-        enrollmentsResult.error,
-        purchaseRequestsResult.error,
-        progressResult.error,
-        favoritesResult.error,
-        submissionsResult.error,
-        resumeRecordsResult.error,
-      ].filter(Boolean)
-
-      if (errors.length > 0) {
-        setDashboardError(
-          `部分数据加载失败：${errors
-            .map((error: { message?: string }) => error.message)
-            .filter(Boolean)
-            .slice(0, 2)
-            .join('；')}`
-        )
-      }
-
-      const enrollments = enrollmentsResult.data ?? []
-      const purchaseRequests = purchaseRequestsResult.data ?? []
-      const progressRows = progressResult.data ?? []
-      const courseIds = Array.from(
-        new Set(
-          [
-            ...enrollments.map((item: any) => item.course_id),
-            ...purchaseRequests.map((item: any) => item.course_id),
-            ...progressRows.map((item: any) => item.course_id),
-          ].filter(Boolean)
-        )
-      )
-
-      let courses: any[] = []
-      let lessonCountsByCourse: Record<string, number> = {}
-
-      if (courseIds.length > 0) {
-        const [coursesResult, chaptersResult] = await Promise.all([
-          supabase
-            .from('courses')
-            .select('id, title, description, cover_image_url, price, is_free, status')
-            .in('id', courseIds),
-          supabase
-            .from('chapters')
-            .select('id, course_id')
-            .in('course_id', courseIds),
-        ])
+      try {
+        const data = await platformBrowser<{
+          enrollments: any[]
+          purchaseRequests: any[]
+          progress: any[]
+          favorites: any[]
+          submissions: any[]
+          resumeRecords: any[]
+        }>('/api/platform/me/center')
 
         if (cancelled) return
 
-        if (coursesResult.error || chaptersResult.error) {
-          setDashboardError((current) =>
-            [current, coursesResult.error?.message, chaptersResult.error?.message]
-              .filter(Boolean)
-              .join('；')
-          )
-        }
+        const enrollments = data.enrollments ?? []
+        const progressRows = data.progress ?? []
 
-        courses = coursesResult.data ?? []
-        const chapters = chaptersResult.data ?? []
-        const chapterToCourse = new Map(
-          chapters.map((chapter: any) => [chapter.id, chapter.course_id])
-        )
-        const chapterIds = chapters.map((chapter: any) => chapter.id)
-
-        if (chapterIds.length > 0) {
-          const lessonsResult = await supabase
-            .from('lessons')
-            .select('id, chapter_id')
-            .in('chapter_id', chapterIds)
-
-          if (cancelled) return
-
-          if (lessonsResult.error) {
-            setDashboardError((current) =>
-              [current, lessonsResult.error?.message].filter(Boolean).join('；')
-            )
-          }
-
-          ;(lessonsResult.data ?? []).forEach((lesson: any) => {
-            const courseId = chapterToCourse.get(lesson.chapter_id)
-            if (!courseId) return
-            lessonCountsByCourse[courseId] = (lessonCountsByCourse[courseId] ?? 0) + 1
-          })
-        }
+        setDashboardData({
+          enrollments,
+          purchaseRequests: data.purchaseRequests ?? [],
+          progress: progressRows,
+          courses: collectEmbeddedCourses(enrollments, progressRows),
+          lessonCountsByCourse: {},
+          favorites: data.favorites ?? [],
+          submissions: data.submissions ?? [],
+          resumeRecords: data.resumeRecords ?? [],
+        })
+      } catch (error) {
+        if (cancelled) return
+        const message = error instanceof PlatformError ? error.message : '数据加载失败'
+        setDashboardError(message)
+      } finally {
+        if (!cancelled) setIsDashboardLoading(false)
       }
-
-      setDashboardData({
-        enrollments,
-        purchaseRequests,
-        progress: progressRows,
-        courses,
-        lessonCountsByCourse,
-        favorites: favoritesResult.data ?? [],
-        submissions: submissionsResult.data ?? [],
-        resumeRecords: resumeRecordsResult.data ?? [],
-      })
-      setIsDashboardLoading(false)
     }
 
     void loadDashboardData()
@@ -292,51 +141,35 @@ export default function ProfilePage() {
       return
     }
 
-    console.log('开始保存个人资料...')
-    console.log('环境变量检查:', {
-      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    })
-
     setIsSubmitting(true)
     
     try {
-      const supabase = createClient()
-      console.log('Supabase 客户端创建成功')
-
-      const updateData = {
-        id: user.id,
+      const profileBody = {
         username: formData.username,
         display_name: formData.display_name,
-        bio: formData.bio,
         avatar_url: formData.avatar_url,
-        updated_at: new Date().toISOString(),
+        bio: formData.bio,
       }
-      
-      console.log('准备更新数据:', updateData)
-
-      // 使用 upsert 操作：如果记录不存在则插入，存在则更新
-      const { data, error } = await supabase
-        .from('user_profiles')
-        // @ts-expect-error - Supabase type inference issue with upsert method
-        .upsert(updateData, {
-          onConflict: 'id', // 根据 id 字段判断是否冲突
+      let saved: any = null
+      try {
+        const updated = await platformBrowser<{ profile: any }>('/api/platform/me/profile', {
+          method: 'PATCH',
+          body: profileBody,
         })
-        .select()
-        .single()
-
-      console.log('Supabase 响应:', { data, error })
-
-      if (error) {
-        console.error('Supabase 错误详情:', error)
-        throw new Error(`保存失败: ${error.message || '未知错误'}`)
+        saved = updated.profile
+      } catch (updateError) {
+        if (!(updateError instanceof PlatformError) || updateError.status !== 404) {
+          throw updateError
+        }
+        const created = await platformBrowser<{ profile: any }>('/api/platform/me/profile', {
+          method: 'PUT',
+          body: profileBody,
+        })
+        saved = created.profile
       }
 
-      // 更新 Zustand store
-      if (data) {
-        console.log('更新 store:', data)
-        setProfile(data as any)
+      if (saved) {
+        setProfile(saved)
       }
 
       setIsEditDialogOpen(false)
@@ -347,7 +180,6 @@ export default function ProfilePage() {
       alert(errorMessage)
     } finally {
       setIsSubmitting(false)
-      console.log('保存流程结束')
     }
   }
 
@@ -998,6 +830,19 @@ export default function ProfilePage() {
       />
     </div>
   )
+}
+
+function collectEmbeddedCourses(enrollments: any[], progressRows: any[]) {
+  const coursesById = new Map<string, any>()
+  enrollments.forEach((enrollment) => {
+    const course = relationOne(enrollment.courses)
+    if (course?.id) coursesById.set(course.id, course)
+  })
+  progressRows.forEach((row) => {
+    const course = relationOne(row.courses)
+    if (course?.id) coursesById.set(course.id, { ...coursesById.get(course.id), ...course })
+  })
+  return Array.from(coursesById.values())
 }
 
 function relationOne<T = any>(value: T | T[] | null | undefined): T | null {
