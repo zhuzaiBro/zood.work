@@ -8,6 +8,7 @@ type PlatformOptions = {
   body?: unknown
   token?: string | null
   cache?: RequestCache
+  headers?: HeadersInit
 }
 
 export async function browserAccessToken() {

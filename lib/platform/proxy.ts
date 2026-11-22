@@ -6,10 +6,12 @@ export async function proxyPlatform(request: NextRequest, path: string) {
     const token = await serverAccessToken()
     const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
     const body = hasBody ? await request.json().catch(() => ({})) : undefined
+    const marker = request.headers.get('x-zood-request')
     const payload = await platformRequest(path, {
       method: request.method,
       body,
       token,
+      headers: marker ? { 'X-Zood-Request': marker } : undefined,
     })
     return NextResponse.json(payload)
   } catch (error) {

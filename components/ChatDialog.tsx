@@ -1,8 +1,10 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { platformBrowser } from '@/lib/platform/client';
+import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import { getChatSessionId } from '@/lib/chatSession';
+import { subscribeSupportBroadcast } from '@/lib/support/browserChannel';
+import { mergeChatMessages, messageFromBroadcast } from '@/lib/support/chatRealtime';
 import { useUser } from '@/store/userStore';
 import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
@@ -34,6 +36,11 @@ export default function ChatDialog() {
     setSessionId(getChatSessionId(user?.id));
   }, [user?.id]);
 
+  useEffect(() => {
+    setMessages([]);
+    setError('');
+  }, [sessionId]);
+
   const scrollToBottom = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
@@ -46,7 +53,7 @@ export default function ChatDialog() {
       const { messages: rows } = await platformBrowser<{ messages: ChatMessage[] }>(
         `/api/platform/messages?sessionId=${encodeURIComponent(sessionId)}`,
       );
-      setMessages(rows ?? []);
+      setMessages((current) => mergeChatMessages(current, rows ?? []));
       setError('');
     } catch {
       setError('消息加载失败，请稍后重试');
@@ -67,18 +74,71 @@ export default function ChatDialog() {
 
   useEffect(() => {
     if (!open || !sessionId) return;
-    let timer = 0;
     let stopped = false;
-    const tick = () => {
+    let closeChannel: (() => Promise<void>) | null = null;
+    let refreshTimer = 0;
+
+    const connect = async () => {
+      if (closeChannel) {
+        const previous = closeChannel;
+        closeChannel = null;
+        await previous();
+      }
       if (stopped) return;
-      void reloadMessages();
-      const hidden = document.visibilityState === 'hidden';
-      timer = window.setTimeout(tick, hidden ? 20000 : 4000);
+      try {
+        const ticket = await platformBrowser<{ topic?: string; token?: string; expiresAt?: string }>(
+          '/api/platform/messages/realtime',
+          {
+            method: 'POST',
+            body: { sessionId },
+            headers: { 'X-Zood-Request': 'support-realtime' },
+          },
+        );
+        if (stopped || !ticket.topic?.startsWith('support.v1.') || ticket.topic.includes(sessionId) || !ticket.token) {
+          return;
+        }
+        const opened = await subscribeSupportBroadcast({
+          topic: ticket.topic,
+          token: ticket.token,
+          onMessage: (payload) => {
+            if (stopped) return;
+            const message = messageFromBroadcast(payload, sessionId);
+            if (!message) return;
+            setMessages((current) => mergeChatMessages(current, [message]));
+          },
+          onStatus: (status) => {
+            if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              void reloadMessages();
+            }
+          },
+        });
+        if (stopped) {
+          await opened();
+          return;
+        }
+        closeChannel = opened;
+        const expires = ticket.expiresAt ? Date.parse(ticket.expiresAt) : Number.NaN;
+        if (Number.isFinite(expires)) {
+          const delay = Math.min(Math.max(expires - Date.now() - 60_000, 30_000), 9 * 60_000);
+          refreshTimer = window.setTimeout(() => {
+            void connect();
+          }, delay);
+        }
+      } catch (realtimeError) {
+        if (realtimeError instanceof PlatformError && realtimeError.status === 503) return;
+      }
     };
-    timer = window.setTimeout(tick, 4000);
+
+    void connect();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reloadMessages();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       stopped = true;
-      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearTimeout(refreshTimer);
+      void closeChannel?.();
     };
   }, [open, reloadMessages, sessionId]);
 

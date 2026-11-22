@@ -5,6 +5,7 @@ import {
   InboxOutlined,
   FileTextOutlined,
   HomeOutlined,
+  CustomerServiceOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
   VideoCameraOutlined,
@@ -40,6 +41,11 @@ const menuItems = [
     key: '/admin/purchaseRequests',
     icon: <ShoppingCartOutlined />,
     label: <Link href="/admin/purchaseRequests">咨询管理</Link>,
+  },
+  {
+    key: '/admin/support',
+    icon: <CustomerServiceOutlined />,
+    label: <Link href="/admin/support">客服配置</Link>,
   },
 ];
 

@@ -22,9 +22,12 @@ type PlatformOptions = {
   body?: unknown
   token?: string | null
   cache?: RequestCache
+  headers?: HeadersInit
 }
 
-export async function platformRequest<T = any>(path: string, options: PlatformOptions = {}): Promise<T> {
+const blockedHeaders = new Set(['authorization', 'cookie', 'host'])
+
+export function platformHeaders(options: PlatformOptions) {
   const headers = new Headers({ Accept: 'application/json' })
   if (options.body !== undefined) {
     headers.set('Content-Type', 'application/json')
@@ -32,6 +35,16 @@ export async function platformRequest<T = any>(path: string, options: PlatformOp
   if (options.token) {
     headers.set('Authorization', `Bearer ${options.token}`)
   }
+  const extra = new Headers(options.headers)
+  extra.forEach((value, key) => {
+    if (blockedHeaders.has(key.toLowerCase())) return
+    headers.set(key, value)
+  })
+  return headers
+}
+
+export async function platformRequest<T = any>(path: string, options: PlatformOptions = {}): Promise<T> {
+  const headers = platformHeaders(options)
 
   const requestInit: RequestInit & { next?: { revalidate: number } } = {
     method: options.method || 'GET',
