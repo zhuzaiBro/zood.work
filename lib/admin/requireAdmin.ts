@@ -1,32 +1,33 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { platformServer, PlatformError } from '@/lib/platform/server';
 
 export async function requireAdminRequest() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  try {
+    const { profile } = await platformServer<{ profile: { id: string; is_admin?: boolean | null } | null }>(
+      '/api/platform/me/profile',
+    );
 
-  if (userError || !user) {
+    if (!profile?.is_admin) {
+      return {
+        response: NextResponse.json({ error: '无权访问' }, { status: 403 }),
+      };
+    }
+
+    return { user: { id: profile.id } };
+  } catch (error) {
+    if (error instanceof PlatformError && error.status === 401) {
+      return {
+        response: NextResponse.json({ error: '未登录' }, { status: 401 }),
+      };
+    }
+    if (error instanceof PlatformError && (error.status === 403 || error.status === 404)) {
+      return {
+        response: NextResponse.json({ error: '无权访问' }, { status: 403 }),
+      };
+    }
+    const message = error instanceof Error ? error.message : '服务器错误';
     return {
-      response: NextResponse.json({ error: '未登录' }, { status: 401 }),
+      response: NextResponse.json({ error: message }, { status: 500 }),
     };
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('user_profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const adminProfile = profile as { is_admin?: boolean | null } | null;
-
-  if (profileError || !adminProfile?.is_admin) {
-    return {
-      response: NextResponse.json({ error: '无权访问' }, { status: 403 }),
-    };
-  }
-
-  return { supabase, user };
 }

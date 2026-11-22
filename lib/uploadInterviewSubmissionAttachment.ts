@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/database.types'
+import { uploadPlatformFile } from '@/lib/platform/uploads'
 
 export const INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET = 'interview-submission-attachments'
 export const INTERVIEW_SUBMISSION_ATTACHMENT_ACCEPT =
@@ -35,8 +34,6 @@ export function validateInterviewSubmissionAttachment(file: File): string | null
 }
 
 export async function uploadInterviewSubmissionAttachment(
-  supabase: SupabaseClient<Database, any, any, any, any>,
-  userId: string,
   file: File,
 ): Promise<
   | {
@@ -53,43 +50,12 @@ export async function uploadInterviewSubmissionAttachment(
     return { error: validationError }
   }
 
-  const ext = getFileExt(file)
-  const id =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const path = `${userId}/${Date.now()}-${id}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET)
-    .upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type || 'application/octet-stream',
-    })
-
-  if (uploadError) {
-    const message = uploadError.message.toLowerCase()
-
-    if (message.includes('bucket') && message.includes('not found')) {
-      return { error: '附件存储未初始化，请先执行 .sql/setup_interview_submission_storage.sql。' }
-    }
-
-    if (
-      message.includes('row-level security') ||
-      message.includes('permission') ||
-      message.includes('unauthorized')
-    ) {
-      return { error: '附件上传权限未初始化，请先执行 .sql/setup_interview_submission_storage.sql。' }
-    }
-
-    return { error: uploadError.message }
-  }
-
+  const uploaded = await uploadPlatformFile(INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET, file)
+  if (uploaded.error) return { error: uploaded.error }
   return {
-    fileName: file.name,
+    fileName: uploaded.fileName || file.name,
     mimeType: file.type || 'application/octet-stream',
-    path,
+    path: uploaded.publicUrl || uploaded.path || '',
     size: file.size,
   }
 }

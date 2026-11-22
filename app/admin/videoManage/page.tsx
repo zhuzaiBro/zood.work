@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { UserProfile } from '@/types/user';
+import { browserUser } from '@/lib/auth/session';
+import { platformBrowser } from '@/lib/platform/client';
 import CourseFormModal, { CourseFormValues } from '@/components/admin/CourseFormModal';
 import CourseListTable, { type CourseRow } from '@/components/admin/CourseListTable';
 import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
@@ -22,7 +22,6 @@ const { Title, Text } = Typography;
 
 export default function VideoManagePage() {
   const router = useRouter();
-  const supabase = createClient();
   const { message } = App.useApp();
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -39,22 +38,23 @@ export default function VideoManagePage() {
 
   const checkAuth = async () => {
     setIsCheckingAuth(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await browserUser();
 
     if (!user) {
       router.push('/login?redirect=/admin/videoManage');
       return;
     }
 
-    const { data: profile, error } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single<UserProfile>();
-
-    if (error || !profile?.is_admin) {
+    try {
+      const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
+        '/api/platform/me/profile',
+      );
+      if (!profile?.is_admin) {
+        setHasPermission(false);
+        setIsCheckingAuth(false);
+        return;
+      }
+    } catch {
       setHasPermission(false);
       setIsCheckingAuth(false);
       return;
@@ -68,17 +68,15 @@ export default function VideoManagePage() {
   const loadCourses = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('courses')
-        .select('id, title, description, cover_image_url, price, is_free, status, sort_order, created_at, updated_at')
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
+      const { courses: rows } = await platformBrowser<{ courses: CourseRow[] | null }>(
+        '/api/platform/courses?status=all&scope=admin',
+      );
 
       setCourses(
-        (data || []).map((course: CourseRow) => ({
+        (rows ?? []).map((course) => ({
           ...course,
+          price: Number(course.price) || 0,
+          is_free: Boolean(course.is_free),
           sort_order: course.sort_order ?? 0,
         })),
       );
@@ -95,29 +93,21 @@ export default function VideoManagePage() {
       const title = values.title.trim();
       if (!title) throw new Error('课程标题不能为空');
 
-      const { count, error: countError } = await supabase
-        .from('courses')
-        .select('id', { count: 'exact', head: true });
-
-      if (countError) throw countError;
-
-      const { data: course, error } = await supabase
-        .from('courses')
-        .insert({
-          title,
-          description: values.description?.trim() || null,
-          sort_order: count ?? 0,
-        } as never)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { course } = await platformBrowser<{ course: { id?: string } | null }>(
+        '/api/platform/admin/courses',
+        {
+          method: 'POST',
+          body: {
+            title,
+            description: values.description?.trim() || null,
+          },
+        },
+      );
       message.success('课程创建成功');
       setCreateModalOpen(false);
       await loadCourses();
-      const createdCourse = course as { id?: string } | null;
-      if (createdCourse?.id) {
-        router.push(`/admin/videoManage/${createdCourse.id}`);
+      if (course?.id) {
+        router.push(`/admin/videoManage/${course.id}`);
       }
     } catch (error) {
       message.error(error instanceof Error ? error.message : '创建课程失败');

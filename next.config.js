@@ -8,6 +8,9 @@ const nextConfig = {
   },
   // 启用 standalone 输出模式以支持 Docker
   output: "standalone",
+  // qiniu 通过 urllib 可选加载 proxy-agent。Turbopack 会把这个可选 require
+  // 当成构建错误，而 Vercel 的 Next.js 16 默认使用 Turbopack。
+  serverExternalPackages: ["qiniu", "urllib"],
   // 增加 body 大小限制（用于文件上传）
   experimental: {
     serverActions: {

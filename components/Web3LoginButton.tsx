@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 import { buildDefaultUserProfile } from '@/lib/user-profiles'
 
@@ -65,22 +66,31 @@ export default function Web3LoginButton() {
         throw new Error('登录失败，请重试')
       }
 
-      // 检查是否需要创建用户资料
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .eq('id', data.user.id)
-        .maybeSingle()
+      // 确保平台用户资料存在。登录态仍由 Supabase Auth 维护。
+      let existingProfile: { id?: string } | null = null
+      try {
+        const result = await platformBrowser<{ profile: { id?: string } | null }>('/api/platform/me/profile')
+        existingProfile = result.profile
+      } catch (profileError) {
+        if (!(profileError instanceof PlatformError) || profileError.status !== 404) {
+          console.error('读取用户资料失败:', profileError)
+        }
+      }
 
-      if (!profile) {
+      if (!existingProfile) {
         const profileData = buildDefaultUserProfile(data.user)
-        const { error: insertError } = await supabase
-          .from('user_profiles')
-          .insert(profileData as never)
-
-        if (insertError) {
+        try {
+          await platformBrowser('/api/platform/me/profile', {
+            method: 'PUT',
+            body: {
+              username: profileData.username,
+              display_name: profileData.display_name,
+              avatar_url: profileData.avatar_url,
+              bio: profileData.bio,
+            },
+          })
+        } catch (insertError) {
           console.error('创建用户资料失败:', insertError)
-          // 不抛出错误，用户仍然可以登录
         }
       }
 

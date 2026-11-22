@@ -2,6 +2,7 @@
 
 import { useUserStore, useUser, useProfile, useIsAuthenticated, useIsLoading } from '@/store/userStore'
 import { createClient } from '@/lib/supabase/client'
+import { platformBrowser } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
 
 /**
@@ -32,18 +33,13 @@ export function useAuth() {
   const refreshProfile = async () => {
     if (!user) return null
 
-    const supabase = createClient()
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+    const { profile: nextProfile } = await platformBrowser<{ profile: any }>('/api/platform/me/profile')
 
-    if (profile) {
-      setProfile(profile)
+    if (nextProfile) {
+      setProfile(nextProfile)
     }
 
-    return profile
+    return nextProfile
   }
 
   /**
@@ -52,22 +48,25 @@ export function useAuth() {
   const updateUserProfile = async (updates: any) => {
     if (!user) return { error: new Error('未登录') }
 
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id)
-      .select()
-      .single()
-
-    if (!error && data) {
-      updateProfile(data)
+    const body: Record<string, unknown> = {}
+    for (const key of ['username', 'display_name', 'avatar_url', 'bio'] as const) {
+      if (updates && Object.prototype.hasOwnProperty.call(updates, key)) {
+        body[key] = updates[key]
+      }
     }
 
-    return { data, error }
+    try {
+      const { profile: nextProfile } = await platformBrowser<{ profile: any }>('/api/platform/me/profile', {
+        method: 'PATCH',
+        body,
+      })
+      if (nextProfile) {
+        updateProfile(nextProfile)
+      }
+      return { data: nextProfile, error: null }
+    } catch (error) {
+      return { data: null, error }
+    }
   }
 
   /**

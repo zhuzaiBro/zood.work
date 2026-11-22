@@ -1,5 +1,12 @@
-import type { User } from '@supabase/supabase-js'
 import type { Database } from '@/types/database.types'
+
+type User = {
+  id: string
+  email?: string | null
+  phone?: string | null
+  user_metadata?: Record<string, any> | null
+  identities?: Array<{ identity_data?: Record<string, any> | null }> | null
+}
 
 type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert']
 

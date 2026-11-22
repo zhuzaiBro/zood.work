@@ -1,4 +1,3 @@
-import type { createClient } from '@/lib/supabase/client';
 import { videoApiUrl } from '@/lib/videoApi';
 import {
   fetchVideoApiJson,
@@ -7,12 +6,11 @@ import {
   type UploadProgressState,
 } from '@/lib/admin/videoApiClient';
 
-type BrowserSupabaseClient = ReturnType<typeof createClient>;
+type BrowserSupabaseClient = { auth?: unknown };
 
 export type { UploadProgressState };
 
 export async function uploadLessonVideo(options: {
-  supabase: BrowserSupabaseClient;
   videoFile: File;
   lessonTitle: string;
   lessonDescription: string;
@@ -28,7 +26,6 @@ export async function uploadLessonVideo(options: {
   onChunkProgress?: (state: UploadProgressState) => void;
 }) {
   const {
-    supabase,
     videoFile,
     lessonTitle,
     lessonDescription,
@@ -48,7 +45,7 @@ export async function uploadLessonVideo(options: {
     throw new Error('外部视频 API 当前仅支持 .mp4 文件');
   }
 
-  const authHeaders = await getVideoApiAuthHeaders(supabase);
+  const authHeaders = await getVideoApiAuthHeaders();
   const chunkSize = 5 * 1024 * 1024;
 
   const init = await fetchVideoApiJson<{

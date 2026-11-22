@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { platformPublic, PlatformError } from "@/lib/platform/client";
 import JobContactPanel from "@/components/jobs/JobContactPanel";
 import type { Metadata } from "next";
 
@@ -28,14 +28,22 @@ type JobDetail = {
   tags: unknown;
 };
 
+async function loadJob(id: string) {
+  try {
+    const { job } = await platformPublic<{ job: JobDetail | null }>(
+      `/api/platform/jobs/${encodeURIComponent(id)}`,
+    );
+    return job ?? null;
+  } catch (error) {
+    if (error instanceof PlatformError && error.status === 404) return null;
+    console.error("Load job detail failed:", error);
+    return null;
+  }
+}
+
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await (supabase as any)
-    .from("job_listings")
-    .select("title, company_name, location, office_mode_name, description")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await loadJob(id);
 
   const title = data?.title
     ? `${data.title} - ${data.company_name || "岗位详情"}`
@@ -56,36 +64,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function JobDetailPage({ params }: { params: Params }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: job, error } = await (supabase as any)
-    .from("job_listings")
-    .select(
-      `
-      id,
-      title,
-      company_name,
-      company_logo,
-      company_website,
-      location,
-      office_mode_name,
-      work_type_name,
-      min_salary,
-      max_salary,
-      source_created_at,
-      last_synced_at,
-      description,
-      requirements,
-      benefits,
-      extra_content,
-      tags
-    `
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const job = await loadJob(id);
 
-  if (error) {
-    console.error("Load job detail failed:", error);
-  }
   if (!job) {
     notFound();
   }
@@ -103,7 +83,6 @@ export default async function JobDetailPage({ params }: { params: Params }) {
     <main className="-mt-20 min-h-screen bg-[#050b18] text-white">
       <section className="relative overflow-hidden px-4 pb-12 pt-32 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(117,192,247,0.24),transparent_34%),radial-gradient(circle_at_90%_8%,rgba(45,212,191,0.16),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_52%,#061827_100%)]" />
-        <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(rgba(117,192,247,0.26)_1px,transparent_1px)] [background-size:22px_22px]" />
 
         <div className="relative mx-auto max-w-6xl">
           <Link

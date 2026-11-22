@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { platformPublic, PlatformError } from '@/lib/platform/client'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -16,24 +16,22 @@ interface PageProps {
   params: Promise<{ slug: string }>
 }
 
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+async function loadPost(slug: string) {
+  try {
+    const { post } = await platformPublic<{ post: any }>(
+      `/api/platform/posts/by-slug?slug=${encodeURIComponent(slug)}`,
+    )
+    return post ?? null
+  } catch (error) {
+    if (error instanceof PlatformError && error.status === 404) return null
+    console.error('Error fetching post:', error)
+    return null
+  }
 }
 
 export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params
-  const supabase = await createClient()
-
-  let query = supabase
-    .from('posts')
-    .select('title, excerpt, banner')
-    .eq('published', true)
-    .eq('is_public', true)
-
-  query = isUuid(slug) ? query.or(`slug.eq.${slug},id.eq.${slug}`) : query.eq('slug', slug)
-
-  const { data: post } = await query.single()
-  const postMeta = post as any
+  const postMeta = await loadPost(slug)
 
   return {
     title: postMeta?.title || '文章详情',
@@ -46,42 +44,21 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function PostPage({ params }: PageProps) {
   const { slug } = await params
-  const supabase = await createClient()
+  const postData = await loadPost(slug)
 
-  let query = supabase
-    .from('posts')
-    .select(`
-      *,
-      author:user_profiles!fk_user_profiles_posts (
-        username,
-        display_name,
-        avatar_url,
-        bio
-      )
-    `)
-    .eq('published', true)
-    .eq('is_public', true)
-
-  query = isUuid(slug) ? query.or(`slug.eq.${slug},id.eq.${slug}`) : query.eq('slug', slug)
-
-  const { data: post, error } = await query.single()
-
-  if (error || !post) {
+  if (!postData) {
     notFound()
   }
 
-  const postData = post as any
-
-  const { data: categories } = await supabase
-    .from('post_cate_relations')
-    .select(`
-      post_cates (
-        id,
-        name,
-        slug
-      )
-    `)
-    .eq('post_id', postData.id)
+  let categories: any[] = []
+  try {
+    const result = await platformPublic<{ categories: any[] }>(
+      `/api/platform/posts/${encodeURIComponent(postData.id)}/categories`,
+    )
+    categories = result.categories ?? []
+  } catch (error) {
+    console.error('Error fetching post categories:', error)
+  }
 
   return (
     <div className="-mt-20 min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] pt-20 text-slate-900">

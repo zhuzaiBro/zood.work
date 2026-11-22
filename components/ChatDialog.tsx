@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { platformBrowser } from '@/lib/platform/client';
 import { getChatSessionId } from '@/lib/chatSession';
 import { useUser } from '@/store/userStore';
 import Skeleton from '@/components/ui/Skeleton';
@@ -40,25 +40,25 @@ export default function ChatDialog() {
     el.scrollTop = el.scrollHeight;
   }, []);
 
+  const reloadMessages = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const { messages: rows } = await platformBrowser<{ messages: ChatMessage[] }>(
+        `/api/platform/messages?sessionId=${encodeURIComponent(sessionId)}`,
+      );
+      setMessages(rows ?? []);
+      setError('');
+    } catch {
+      setError('消息加载失败，请稍后重试');
+    }
+  }, [sessionId]);
+
   const loadMessages = useCallback(async () => {
     if (!sessionId) return;
     setLoading(true);
-    setError('');
-
-    const supabase = createClient();
-    const { data, error: loadError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-
-    if (loadError) {
-      setError('消息加载失败，请稍后重试');
-    } else {
-      setMessages(data ?? []);
-    }
+    await reloadMessages();
     setLoading(false);
-  }, [sessionId]);
+  }, [reloadMessages, sessionId]);
 
   useEffect(() => {
     if (!open || !sessionId) return;
@@ -67,32 +67,20 @@ export default function ChatDialog() {
 
   useEffect(() => {
     if (!open || !sessionId) return;
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`chat-${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const incoming = payload.new as ChatMessage;
-          setMessages((prev) => {
-            if (prev.some((item) => item.id === incoming.id)) return prev;
-            return [...prev, incoming];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+    let timer = 0;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      void reloadMessages();
+      const hidden = document.visibilityState === 'hidden';
+      timer = window.setTimeout(tick, hidden ? 20000 : 4000);
     };
-  }, [open, sessionId]);
+    timer = window.setTimeout(tick, 4000);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, reloadMessages, sessionId]);
 
   useEffect(() => {
     if (open) scrollToBottom();
@@ -107,26 +95,18 @@ export default function ChatDialog() {
     setError('');
 
     try {
-      const response = await fetch('/api/chat/messages', {
+      await platformBrowser('/api/platform/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           sessionId,
           content,
           pageUrl: window.location.href,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setError(payload?.error || '发送失败，请稍后重试');
-      } else {
-        setInput('');
-      }
-    } catch {
-      setError('发送失败，请稍后重试');
+      setInput('');
+      await reloadMessages();
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : '发送失败，请稍后重试');
     } finally {
       setSending(false);
     }

@@ -5,30 +5,35 @@ import LazyLink from "@/components/LazyLink";
 import Image from "next/image";
 import UserAvatar from "./UserAvatar";
 import {
-  useIsLoading,
+  useAuthResolved,
   useIsAuthenticated,
   useProfile,
 } from "@/store/userStore";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { isLightContentPage } from "@/lib/layout";
+import {
+  siteHeaderAccountSlot,
+  siteHeaderSurface,
+  siteHeaderWordmarkTone,
+} from "@/lib/layout";
 
 export default function Header() {
-  const isLoading = useIsLoading();
+  const authResolved = useAuthResolved();
   const isAuthenticated = useIsAuthenticated();
   const profile = useProfile();
   const pathname = usePathname();
   const [isHero, setIsHero] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
-  const lightContentPage = isLightContentPage(pathname);
-  const isDarkImmersivePage =
-    pathname === "/" ||
-    pathname === "/faucet" ||
-    pathname === "/interview" ||
-    pathname === "/learning-test" ||
-    pathname.startsWith("/jobs");
-  const isImmersiveHero = isDarkImmersivePage && isHero;
+  const surface = siteHeaderSurface(pathname, isHero);
+  const surfaceClass =
+    surface === "hero"
+      ? "site-header-hero"
+      : surface === "dark"
+        ? "site-header-dark"
+        : "site-header-light";
+  const onDarkWordmark = siteHeaderWordmarkTone(pathname) === "on-dark";
+  const accountSlot = siteHeaderAccountSlot({ isAuthenticated, authResolved });
 
   useEffect(() => {
     const handleScroll = () => {
@@ -58,33 +63,29 @@ export default function Header() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 text-header-sky backdrop-blur-md ${
-        lightContentPage
-          ? "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
-        : isImmersiveHero
-          ? "bg-transparent border-transparent"
-        : isDarkImmersivePage
-          ? "border-b border-[#75c0f7]/10 bg-[#061225]/82 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
-        : "bg-[#f7fafe]/88 shadow-[0_14px_34px_rgba(148,163,184,0.08)]"
-      }`}
+      className={`${surfaceClass} fixed top-0 left-0 right-0 z-50 text-header-sky backdrop-blur-md transition-all duration-500`}
     >
       <nav className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center text-header-sky transition-colors hover:text-sky-800"
+            className={`flex min-w-0 items-center gap-2 transition-colors ${
+              onDarkWordmark
+                ? "text-white hover:text-sky-100"
+                : "text-slate-900 hover:text-sky-800"
+            }`}
             onClick={closeMobileMenu}
-            aria-label="油条TV首页"
+            aria-label="AI出海"
           >
             <Image
-              src="/logo.png"
-              alt="油条TV"
-              width={1888}
-              height={463}
-              className="h-12 w-auto sm:h-14"
+              src="/brand/zood-mark.png"
+              alt=""
+              width={690}
+              height={748}
+              className="h-9 w-auto sm:h-10"
               priority
-              unoptimized
             />
+            <span className="truncate text-base font-black tracking-tight">AI出海</span>
           </Link>
 
           {/* 桌面端菜单 */}
@@ -93,7 +94,7 @@ export default function Header() {
               首页
             </Link> */}
             <LazyLink href="/courses" className={linkClass}>
-              学 Web3 / AI
+              学习与实战
             </LazyLink>
             <LazyLink href="/interview" className={linkClass}>
               面试题库
@@ -104,12 +105,9 @@ export default function Header() {
             <LazyLink href="/resume-agent" className={linkClass}>
               简历优化
             </LazyLink>
-            <LazyLink href="/faucet" className={linkClass}>
-              测试币
-            </LazyLink>
 
             {/* 用户信息或登录按钮 */}
-            {isLoading ? (
+            {accountSlot === "pending" ? (
               <div className="w-20 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
             ) : (
               <UserAvatar />
@@ -156,13 +154,13 @@ export default function Header() {
 
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-[#f7fafe]/96 shadow-[0_18px_40px_rgba(148,163,184,0.14)] backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
+          <div className="site-header-drawer md:hidden absolute top-full left-0 right-0 max-h-[min(24rem,calc(100vh-var(--site-header-height)-4.5rem))] overflow-y-auto backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
             <LazyLink
               href="/courses"
               className={mobileLinkClass}
               onClick={closeMobileMenu}
             >
-              学 Web3 / AI
+              学习与实战
             </LazyLink>
             <LazyLink
               href="/interview"
@@ -185,19 +183,12 @@ export default function Header() {
             >
               简历优化
             </LazyLink>
-            <LazyLink
-              href="/faucet"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              测试币
-            </LazyLink>
             {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
               分类
             </Link> */}
 
             <div className="border-t border-slate-200/80 pt-4">
-              {isLoading ? (
+              {accountSlot === "pending" ? (
                 <div className="w-20 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
               ) : isAuthenticated && profile ? (
                 // 移动端登录后展示用户信息和折叠菜单

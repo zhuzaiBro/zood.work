@@ -23,6 +23,34 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Header surfaces. Tailwind drops opacity modifiers that are not on its
+   scale (`/82`, `/88`, `/96`), so these colors live in real CSS. */
+.site-header-light {
+  background-color: rgb(247 250 254 / 0.88);
+  box-shadow: 0 14px 34px rgb(148 163 184 / 0.08);
+}
+
+.site-header-hero {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.site-header-dark {
+  background-color: rgb(6 18 37 / 0.82);
+  border-bottom: 1px solid rgb(117 192 247 / 0.1);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.28);
+}
+
+.site-header-drawer {
+  background-color: rgb(247 250 254 / 0.96);
+  box-shadow: 0 18px 40px rgb(148 163 184 / 0.14);
+}
+
+.site-header-login {
+  background-color: rgb(255 255 255 / 0.88);
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

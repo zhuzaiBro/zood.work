@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { platformPublic, PlatformError } from "@/lib/platform/client";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -44,58 +44,38 @@ export default async function JobsPage({
   const remoteOnly = valueOf(params.remote) === "1";
   const page = Math.max(1, Number(valueOf(params.page) || "1") || 1);
 
-  const supabase = await createClient();
-  const db = supabase as any;
+  const search = new URLSearchParams();
+  if (keyword) search.set("q", keyword);
+  if (remoteOnly) search.set("remote", "1");
+  if (page > 1) search.set("page", String(page));
+  const query = search.toString();
 
-  let query = db
-    .from("job_listings")
-    .select(
-      `
-      id,
-      title,
-      company_name,
-      company_logo,
-      location,
-      office_mode_name,
-      work_type_name,
-      min_salary,
-      max_salary,
-      source_created_at,
-      last_synced_at,
-      description,
-      tags
-    `,
-      { count: "exact" }
-    )
-    .order("source_created_at", { ascending: false, nullsFirst: false })
-    .order("last_synced_at", { ascending: false });
+  let rows: JobListing[] = [];
+  let total = 0;
+  let pageSize = PAGE_SIZE;
+  let error: { message: string } | null = null;
 
-  if (keyword) {
-    const safeKeyword = keyword.replace(/[%_]/g, "\\$&");
-    query = query.or(
-      `title.ilike.%${safeKeyword}%,company_name.ilike.%${safeKeyword}%,description.ilike.%${safeKeyword}%`
-    );
+  try {
+    const result = await platformPublic<{
+      jobs: JobListing[];
+      count: number;
+      pageSize: number;
+    }>(query ? `/api/platform/jobs?${query}` : "/api/platform/jobs");
+    rows = result.jobs ?? [];
+    total = result.count ?? rows.length;
+    pageSize = result.pageSize || PAGE_SIZE;
+  } catch (loadError) {
+    error = {
+      message: loadError instanceof PlatformError ? loadError.message : "请求失败",
+    };
   }
 
-  if (remoteOnly) {
-    query = query.or(
-      "office_mode_name.ilike.%remote%,location.ilike.%remote%,location.ilike.%Anywhere%"
-    );
-  }
-
-  const from = (page - 1) * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
-  const { data: jobs, count, error } = await query.range(from, to);
-
-  const total = count ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const rows = (jobs ?? []) as JobListing[];
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <main className="-mt-20 min-h-screen bg-[#050b18] text-white">
       <section className="relative overflow-hidden px-4 pb-14 pt-32 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(117,192,247,0.28),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(45,212,191,0.18),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_48%,#061827_100%)]" />
-        <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(117,192,247,0.26)_1px,transparent_1px)] [background-size:22px_22px]" />
 
         <div className="relative mx-auto max-w-7xl">
           <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
