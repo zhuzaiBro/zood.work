@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { browserUser } from '@/lib/auth/session'
 
 type ReferralShareButtonProps = {
   sharePath: string
@@ -41,10 +41,7 @@ export default function ReferralShareButton({
 
   const handleShare = async () => {
     setStatus('copying')
-    const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const user = await browserUser()
 
     if (!user) {
       router.push(loginRedirect)

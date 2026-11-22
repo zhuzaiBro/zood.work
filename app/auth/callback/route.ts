@@ -1,5 +1,5 @@
-import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { claimInterviewReferralReward } from '@/lib/interview-referrals'
+import { createClient } from '@/lib/supabase/server'
+import { platformServer } from '@/lib/platform/server'
 import {
   INTERVIEW_REFERRAL_COLLECTION_COOKIE,
   INTERVIEW_REFERRAL_URL_COOKIE,
@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const { searchParams,  } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/'
@@ -21,22 +21,20 @@ export async function GET(request: NextRequest) {
       const {
         data: { user },
       } = await supabase.auth.getUser()
+      const referrerUserId = request.cookies.get(INTERVIEW_REFERRER_COOKIE)?.value ?? null
 
-      if (user) {
-        const referrerUserId = request.cookies.get(INTERVIEW_REFERRER_COOKIE)?.value ?? null
-        if (referrerUserId) {
-          try {
-            await claimInterviewReferralReward({
-              adminClient: createAdminClient(),
+      if (user && referrerUserId) {
+        try {
+          await platformServer('/api/platform/me/referrals/claim', {
+            method: 'POST',
+            body: {
               referrerUserId,
-              referredUser: user,
-              sourceCollectionId:
-                request.cookies.get(INTERVIEW_REFERRAL_COLLECTION_COOKIE)?.value ?? null,
+              sourceCollectionId: request.cookies.get(INTERVIEW_REFERRAL_COLLECTION_COOKIE)?.value ?? null,
               sourceUrl: request.cookies.get(INTERVIEW_REFERRAL_URL_COOKIE)?.value ?? null,
-            })
-          } catch (rewardError) {
-            console.error('Failed to claim interview referral reward:', rewardError)
-          }
+            },
+          })
+        } catch (rewardError) {
+          console.error('Failed to claim interview referral reward:', rewardError)
         }
       }
 
@@ -48,6 +46,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 返回用户到错误页面，并添加错误描述
   return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }

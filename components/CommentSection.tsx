@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { serverUser } from '@/lib/auth/server'
+import { platformServer } from '@/lib/platform/server'
 import CommentForm from '@/components/CommentForm'
 import CommentList from '@/components/CommentList'
 
@@ -7,23 +8,17 @@ interface CommentSectionProps {
 }
 
 export default async function CommentSection({ postId }: CommentSectionProps) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await serverUser()
 
-  // 获取评论
-  const { data: comments } = await supabase
-    .from('post_comments')
-    .select(`
-      *,
-      user_profiles!fk_post_comments_user (
-        username,
-        display_name,
-        avatar_url
-      )
-    `)
-    .eq('post_id', postId)
-    .eq('is_deleted', false)
-    .order('created_at', { ascending: true })
+  let comments: any[] | null = null
+  try {
+    const result = await platformServer<{ comments: any[] }>(
+      `/api/platform/posts/${encodeURIComponent(postId)}/comments`,
+    )
+    comments = result.comments ?? []
+  } catch (error) {
+    console.error('Error fetching comments:', error)
+  }
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-8">

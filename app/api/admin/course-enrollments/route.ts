@@ -1,38 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import type { Database } from '@/types/database.types';
+import { requireAdminRequest } from '@/lib/admin/requireAdmin';
+import { platformServer, PlatformError } from '@/lib/platform/server';
 
-type UserProfile = Pick<
-  Database['public']['Tables']['user_profiles']['Row'],
-  'id' | 'username' | 'display_name' | 'avatar_url' | 'vip_level' | 'is_admin' | 'created_at'
->;
-type CourseEnrollment = Database['public']['Tables']['course_enrollments']['Row'];
+type ProfileRow = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  is_admin: boolean | null;
+  created_at: string | null;
+  vip_level?: number | null;
+};
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+type EnrollmentRow = {
+  id: number;
+  course_id: string;
+  user_id: string;
+  source: string;
+  status: string;
+  granted_by?: string | null;
+  granted_at: string;
+  revoked_by?: string | null;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
-  if (userError || !user) {
-    return { error: NextResponse.json({ error: '未登录' }, { status: 401 }) };
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('user_profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single<Pick<UserProfile, 'is_admin'>>();
-
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: '无权访问' }, { status: 403 }) };
-  }
-
-  return { user };
-}
-
-function serializeEnrollment(enrollment: CourseEnrollment | null) {
+function serializeEnrollment(enrollment: EnrollmentRow | null) {
   if (!enrollment) return null;
 
   return {
@@ -41,74 +37,65 @@ function serializeEnrollment(enrollment: CourseEnrollment | null) {
     userId: enrollment.user_id,
     source: enrollment.source,
     status: enrollment.status,
-    grantedBy: enrollment.granted_by,
+    grantedBy: enrollment.granted_by ?? null,
     grantedAt: enrollment.granted_at,
-    revokedBy: enrollment.revoked_by,
-    revokedAt: enrollment.revoked_at,
-    expiresAt: enrollment.expires_at,
-    note: enrollment.note,
+    revokedBy: enrollment.revoked_by ?? null,
+    revokedAt: enrollment.revoked_at ?? null,
+    expiresAt: enrollment.expires_at ?? null,
+    note: enrollment.note ?? null,
     createdAt: enrollment.created_at,
     updatedAt: enrollment.updated_at,
   };
 }
 
+function platformFailure(error: unknown) {
+  if (error instanceof PlatformError) {
+    return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+  }
+  const message = error instanceof Error ? error.message : '服务器错误';
+  return NextResponse.json({ error: message }, { status: 500 });
+}
+
+async function loadAccess(courseId: string) {
+  return platformServer<{ profiles: ProfileRow[] | null; enrollments: EnrollmentRow[] | null }>(
+    `/api/platform/admin/courses/${courseId}/access`,
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAdmin();
-    if ('error' in auth && auth.error) return auth.error;
+    const auth = await requireAdminRequest();
+    if ('response' in auth) return auth.response;
 
     const courseId = request.nextUrl.searchParams.get('courseId');
     if (!courseId) {
       return NextResponse.json({ error: '缺少课程ID' }, { status: 400 });
     }
 
-    const adminClient = createAdminClient();
-
-    const { data: course, error: courseError } = await adminClient
-      .from('courses')
-      .select('id, title')
-      .eq('id', courseId)
-      .maybeSingle();
-
-    if (courseError) {
-      return NextResponse.json({ error: courseError.message }, { status: 500 });
+    let detail: { course?: { id: string; title: string } | null };
+    try {
+      detail = await platformServer<{ course?: { id: string; title: string } | null }>(
+        `/api/platform/courses/${courseId}`,
+      );
+    } catch (error) {
+      if (error instanceof PlatformError && error.status === 404) {
+        return NextResponse.json({ error: '课程不存在' }, { status: 404 });
+      }
+      throw error;
     }
 
-    if (!course) {
+    if (!detail.course) {
       return NextResponse.json({ error: '课程不存在' }, { status: 404 });
     }
 
-    const [profilesResult, enrollmentsResult] = await Promise.all([
-      adminClient
-        .from('user_profiles')
-        .select('id, username, display_name, avatar_url, vip_level, is_admin, created_at')
-        .order('created_at', { ascending: false }),
-      adminClient
-        .from('course_enrollments')
-        .select('*')
-        .eq('course_id', courseId)
-        .order('created_at', { ascending: false }),
-    ]);
-
-    const { data: profiles, error: profilesError } = profilesResult;
-
-    if (profilesError) {
-      return NextResponse.json({ error: profilesError.message }, { status: 500 });
-    }
-
-    const { data: enrollments, error: enrollmentError } = enrollmentsResult;
-
-    if (enrollmentError) {
-      return NextResponse.json({ error: enrollmentError.message }, { status: 500 });
-    }
-
-    const enrollmentsByUserId = new Map<string, CourseEnrollment>();
-    for (const enrollment of enrollments ?? []) {
+    const access = await loadAccess(courseId);
+    const enrollmentsByUserId = new Map<string, EnrollmentRow>();
+    for (const enrollment of access.enrollments ?? []) {
       enrollmentsByUserId.set(enrollment.user_id, enrollment);
     }
 
-    const users = (profiles ?? [])
-      .map((profile: UserProfile) => {
+    const users = (access.profiles ?? [])
+      .map((profile) => {
         const enrollment = enrollmentsByUserId.get(profile.id) ?? null;
         return {
           id: profile.id,
@@ -118,9 +105,9 @@ export async function GET(request: NextRequest) {
           displayName: profile.display_name,
           avatarUrl: profile.avatar_url,
           provider: null,
-          providers: [],
+          providers: [] as string[],
           isAdmin: Boolean(profile.is_admin),
-          vipLevel: profile.vip_level,
+          vipLevel: profile.vip_level ?? null,
           hasProfile: true,
           createdAt: profile.created_at,
           lastSignInAt: null,
@@ -136,103 +123,68 @@ export async function GET(request: NextRequest) {
       });
 
     return NextResponse.json({
-      course,
+      course: { id: detail.course.id, title: detail.course.title },
       users,
       summary: {
         userCount: users.length,
         activeCount: users.filter((item) => item.enrollment?.status === 'active').length,
         revokedCount: users.filter((item) => item.enrollment?.status === 'revoked').length,
       },
-      source: 'supabase-database',
+      source: 'platform-api',
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '服务器错误';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return platformFailure(error);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin();
-    if ('error' in auth && auth.error) return auth.error;
+    const auth = await requireAdminRequest();
+    if ('response' in auth) return auth.response;
 
     const body = await request.json();
     const courseId = String(body.courseId ?? '').trim();
     const userId = String(body.userId ?? '').trim();
-    const note = typeof body.note === 'string' ? body.note.trim() : null;
 
     if (!courseId || !userId) {
       return NextResponse.json({ error: '缺少课程ID或用户ID' }, { status: 400 });
     }
 
-    const adminClient = createAdminClient();
-
-    const { data: course, error: courseError } = await adminClient
-      .from('courses')
-      .select('id')
-      .eq('id', courseId)
-      .maybeSingle();
-
-    if (courseError) {
-      return NextResponse.json({ error: courseError.message }, { status: 500 });
+    try {
+      await platformServer(`/api/platform/courses/${courseId}`);
+    } catch (error) {
+      if (error instanceof PlatformError && error.status === 404) {
+        return NextResponse.json({ error: '课程不存在' }, { status: 404 });
+      }
+      throw error;
     }
 
-    if (!course) {
-      return NextResponse.json({ error: '课程不存在' }, { status: 404 });
-    }
-
-    const { data: targetProfile, error: targetProfileError } = await adminClient
-      .from('user_profiles')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (targetProfileError) {
-      return NextResponse.json({ error: targetProfileError.message }, { status: 500 });
-    }
-
-    if (!targetProfile) {
+    const before = await loadAccess(courseId);
+    if (!(before.profiles ?? []).some((profile) => profile.id === userId)) {
       return NextResponse.json(
         { error: '该用户还没有站内资料，请让用户先登录一次后再开通' },
         { status: 400 },
       );
     }
 
-    const now = new Date().toISOString();
-    const { data, error } = await adminClient
-      .from('course_enrollments')
-      .upsert(
-        {
-          course_id: courseId,
-          user_id: userId,
-          source: 'manual',
-          status: 'active',
-          granted_by: auth.user.id,
-          granted_at: now,
-          revoked_by: null,
-          revoked_at: null,
-          note,
-        },
-        { onConflict: 'course_id,user_id' },
-      )
-      .select()
-      .single();
+    // Access grant accepts { userId }. The platform API does not store an enrollment note.
+    await platformServer(`/api/platform/admin/courses/${courseId}/access`, {
+      method: 'POST',
+      body: { userId },
+    });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ enrollment: serializeEnrollment(data) });
+    const access = await loadAccess(courseId);
+    const enrollment = (access.enrollments ?? []).find((item) => item.user_id === userId) ?? null;
+    return NextResponse.json({ enrollment: serializeEnrollment(enrollment) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '服务器错误';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return platformFailure(error);
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const auth = await requireAdmin();
-    if ('error' in auth && auth.error) return auth.error;
+    const auth = await requireAdminRequest();
+    if ('response' in auth) return auth.response;
 
     const body = await request.json();
     const courseId = String(body.courseId ?? '').trim();
@@ -247,38 +199,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '无效的授权状态' }, { status: 400 });
     }
 
-    const now = new Date().toISOString();
-    const updates: Database['public']['Tables']['course_enrollments']['Update'] =
-      status === 'active'
-        ? {
-          status,
-          granted_by: auth.user.id,
-          granted_at: now,
-          revoked_by: null,
-          revoked_at: null,
-        }
-        : {
-          status,
-          revoked_by: auth.user.id,
-          revoked_at: now,
-        };
-
-    const adminClient = createAdminClient();
-    const { data, error } = await adminClient
-      .from('course_enrollments')
-      .update(updates)
-      .eq('course_id', courseId)
-      .eq('user_id', userId)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (status === 'active') {
+      await platformServer(`/api/platform/admin/courses/${courseId}/access`, {
+        method: 'POST',
+        body: { userId },
+      });
+    } else {
+      await platformServer(`/api/platform/admin/courses/${courseId}/access/${userId}`, {
+        method: 'DELETE',
+      });
     }
 
-    return NextResponse.json({ enrollment: serializeEnrollment(data) });
+    const access = await loadAccess(courseId);
+    const enrollment = (access.enrollments ?? []).find((item) => item.user_id === userId) ?? null;
+    return NextResponse.json({ enrollment: serializeEnrollment(enrollment) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '服务器错误';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return platformFailure(error);
   }
 }

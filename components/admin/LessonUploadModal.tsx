@@ -22,7 +22,7 @@ import {
 import { CloudUploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload';
 import type { ColumnsType } from 'antd/es/table';
-import { createClient } from '@/lib/supabase/client';
+import { browserUser } from '@/lib/auth/session';
 import Skeleton from '@/components/ui/Skeleton';
 import { uploadLessonVideo } from '@/lib/admin/uploadLessonVideo';
 import { uploadLessonCourseware } from '@/lib/uploadLessonCourseware';
@@ -83,7 +83,6 @@ export default function LessonUploadModal({
   onSuccess,
 }: LessonUploadModalProps) {
   const { message } = App.useApp();
-  const supabase = createClient();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [lessonMode, setLessonMode] = useState<LessonSourceMode>('upload');
@@ -106,7 +105,7 @@ export default function LessonUploadModal({
     async (page: number) => {
       setVideosLoading(true);
       try {
-        const result = await listVideos(supabase, page, VIDEO_PAGE_SIZE);
+        const result = await listVideos(page, VIDEO_PAGE_SIZE);
         setVideos(result.items);
         setVideoTotal(result.total);
         setVideoPage(result.page);
@@ -117,7 +116,7 @@ export default function LessonUploadModal({
         setVideosLoading(false);
       }
     },
-    [supabase, message],
+    [message],
   );
 
   const resolveInitialLessonMode = (): LessonSourceMode => {
@@ -194,16 +193,14 @@ export default function LessonUploadModal({
     let finalCoursewareName = values.coursewareName?.trim() || '';
 
     if (coursewareFile) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await browserUser();
 
       if (!user) {
         message.error('登录状态失效，请重新登录后再上传课件');
         return;
       }
 
-      const uploadResult = await uploadLessonCourseware(supabase, user.id, coursewareFile);
+      const uploadResult = await uploadLessonCourseware(coursewareFile);
       if ('error' in uploadResult) {
         message.error(uploadResult.error);
         return;
@@ -261,7 +258,6 @@ export default function LessonUploadModal({
 
       try {
         const videoId = await uploadLessonVideo({
-          supabase,
           videoFile,
           lessonTitle: values.title.trim(),
           lessonDescription: values.description?.trim() || '',
@@ -297,7 +293,7 @@ export default function LessonUploadModal({
     try {
       const selected =
         videos.find((video) => video.id === selectedVideoId) ??
-        (await getVideoDetail(supabase, selectedVideoId));
+        (await getVideoDetail(selectedVideoId));
 
       await saveLessonWithVideo({
         lessonId: mode === 'edit' ? lesson?.id : undefined,

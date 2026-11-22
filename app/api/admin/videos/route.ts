@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/server';
 import { requireAdminRequest } from '@/lib/admin/requireAdmin';
 import { videoApiUrl } from '@/lib/videoApi';
+import { platformServer, serverAccessToken } from '@/lib/platform/server';
 import type { Database } from '@/types/database.types';
 
 type VideoRow = Database['public']['Tables']['videos']['Row'];
@@ -35,44 +35,34 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const adminClient = createAdminClient();
-  const { data, error, count } = await adminClient
-    .from('videos')
-    .select(
-      'id, title, description, duration, status, created_at, updated_at',
-      { count: 'exact' },
-    )
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (!error) {
+  try {
+    const data = await platformServer<{ videos: VideoRow[] }>('/api/platform/admin/videos');
+    const videos = data.videos ?? [];
+    const slice = videos.slice(from, to + 1);
     return NextResponse.json({
-      items: (data ?? []).map((video) => serializeVideo(video as VideoRow)),
-      total: count ?? 0,
+      items: slice.map((video) => serializeVideo(video)),
+      total: videos.length,
       page,
       pageSize,
-      source: 'supabase-database',
+      source: 'platform-api',
     });
+  } catch (error) {
+    console.warn('平台视频列表查询失败，回退视频服务:', error);
   }
 
-  console.warn('Supabase 视频列表查询失败，回退视频服务:', error.message);
-  const {
-    data: { session },
-  } = await auth.supabase.auth.getSession();
+  const token = await serverAccessToken();
   const fallbackUrl = videoApiUrl(
     `/api/videos?page=${page}&pageSize=${pageSize}`,
   );
   const fallback = await fetch(fallbackUrl, {
-    headers: session?.access_token
-      ? { Authorization: `Bearer ${session.access_token}` }
-      : undefined,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     cache: 'no-store',
   });
   const body = await fallback.json().catch(() => ({}));
 
   if (!fallback.ok) {
     return NextResponse.json(
-      { error: (body as { error?: string }).error || error.message },
+      { error: (body as { error?: string }).error || '获取视频列表失败' },
       { status: fallback.status || 500 },
     );
   }

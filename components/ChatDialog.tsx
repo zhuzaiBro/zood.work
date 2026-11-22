@@ -1,8 +1,10 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import { getChatSessionId } from '@/lib/chatSession';
+import { subscribeSupportBroadcast } from '@/lib/support/browserChannel';
+import { mergeChatMessages, messageFromBroadcast } from '@/lib/support/chatRealtime';
 import { useUser } from '@/store/userStore';
 import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
@@ -34,31 +36,36 @@ export default function ChatDialog() {
     setSessionId(getChatSessionId(user?.id));
   }, [user?.id]);
 
+  useEffect(() => {
+    setMessages([]);
+    setError('');
+  }, [sessionId]);
+
   const scrollToBottom = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, []);
 
+  const reloadMessages = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const { messages: rows } = await platformBrowser<{ messages: ChatMessage[] }>(
+        `/api/platform/messages?sessionId=${encodeURIComponent(sessionId)}`,
+      );
+      setMessages((current) => mergeChatMessages(current, rows ?? []));
+      setError('');
+    } catch {
+      setError('消息加载失败，请稍后重试');
+    }
+  }, [sessionId]);
+
   const loadMessages = useCallback(async () => {
     if (!sessionId) return;
     setLoading(true);
-    setError('');
-
-    const supabase = createClient();
-    const { data, error: loadError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-
-    if (loadError) {
-      setError('消息加载失败，请稍后重试');
-    } else {
-      setMessages(data ?? []);
-    }
+    await reloadMessages();
     setLoading(false);
-  }, [sessionId]);
+  }, [reloadMessages, sessionId]);
 
   useEffect(() => {
     if (!open || !sessionId) return;
@@ -67,32 +74,73 @@ export default function ChatDialog() {
 
   useEffect(() => {
     if (!open || !sessionId) return;
+    let stopped = false;
+    let closeChannel: (() => Promise<void>) | null = null;
+    let refreshTimer = 0;
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`chat-${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const incoming = payload.new as ChatMessage;
-          setMessages((prev) => {
-            if (prev.some((item) => item.id === incoming.id)) return prev;
-            return [...prev, incoming];
-          });
+    const connect = async () => {
+      if (closeChannel) {
+        const previous = closeChannel;
+        closeChannel = null;
+        await previous();
+      }
+      if (stopped) return;
+      try {
+        const ticket = await platformBrowser<{ topic?: string; token?: string; expiresAt?: string }>(
+          '/api/platform/messages/realtime',
+          {
+            method: 'POST',
+            body: { sessionId },
+            headers: { 'X-Zood-Request': 'support-realtime' },
+          },
+        );
+        if (stopped || !ticket.topic?.startsWith('support.v1.') || ticket.topic.includes(sessionId) || !ticket.token) {
+          return;
         }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+        const opened = await subscribeSupportBroadcast({
+          topic: ticket.topic,
+          token: ticket.token,
+          onMessage: (payload) => {
+            if (stopped) return;
+            const message = messageFromBroadcast(payload, sessionId);
+            if (!message) return;
+            setMessages((current) => mergeChatMessages(current, [message]));
+          },
+          onStatus: (status) => {
+            if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              void reloadMessages();
+            }
+          },
+        });
+        if (stopped) {
+          await opened();
+          return;
+        }
+        closeChannel = opened;
+        const expires = ticket.expiresAt ? Date.parse(ticket.expiresAt) : Number.NaN;
+        if (Number.isFinite(expires)) {
+          const delay = Math.min(Math.max(expires - Date.now() - 60_000, 30_000), 9 * 60_000);
+          refreshTimer = window.setTimeout(() => {
+            void connect();
+          }, delay);
+        }
+      } catch (realtimeError) {
+        if (realtimeError instanceof PlatformError && realtimeError.status === 503) return;
+      }
     };
-  }, [open, sessionId]);
+
+    void connect();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reloadMessages();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearTimeout(refreshTimer);
+      void closeChannel?.();
+    };
+  }, [open, reloadMessages, sessionId]);
 
   useEffect(() => {
     if (open) scrollToBottom();
@@ -107,26 +155,18 @@ export default function ChatDialog() {
     setError('');
 
     try {
-      const response = await fetch('/api/chat/messages', {
+      await platformBrowser('/api/platform/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           sessionId,
           content,
           pageUrl: window.location.href,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setError(payload?.error || '发送失败，请稍后重试');
-      } else {
-        setInput('');
-      }
-    } catch {
-      setError('发送失败，请稍后重试');
+      setInput('');
+      await reloadMessages();
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : '发送失败，请稍后重试');
     } finally {
       setSending(false);
     }
