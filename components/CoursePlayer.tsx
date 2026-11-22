@@ -7,7 +7,12 @@ import Hls from "hls.js";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { browserAccessToken } from "@/lib/auth/session";
-import { platformBrowser } from "@/lib/platform/client";
+import { platformRequest } from "@/lib/platform/client";
+import {
+  initialLessonId,
+  planCourseLoad,
+  type CourseLoadState,
+} from "@/lib/learn/courseLoadPlan";
 import type { Database } from "@/types/database.types";
 import { useAuth } from "@/hooks/useAuth";
 import { videoApiUrl } from "@/lib/videoApi";
@@ -159,24 +164,26 @@ const mapChaptersAndLessons = (
       }),
   }));
 
-const fetchPublicCourseFromSupabase = async (
+const fetchCourseFromPlatform = async (
   targetCourseId: string,
-): Promise<{ course: CourseDetail; chapters: Chapter[] } | null> => {
-  return platformBrowser<{ course: CourseDetail; chapters: Chapter[] }>(
+  token: string | null,
+): Promise<{ course: CourseDetail; chapters: Chapter[] }> => {
+  return platformRequest<{ course: CourseDetail; chapters: Chapter[] }>(
     `/api/platform/courses/${targetCourseId}`,
+    token ? { token, cache: "no-store" } : {},
   );
 };
 
-const fetchFirstPublishedCourseFromSupabase = async (): Promise<{
-  course: CourseDetail;
-  chapters: Chapter[];
-} | null> => {
-  const { courses } = await platformBrowser<{ courses: Array<{ id: string }> }>(
+const fetchFirstPublishedCourseFromPlatform = async (
+  token: string | null,
+): Promise<{ course: CourseDetail; chapters: Chapter[] } | null> => {
+  const { courses } = await platformRequest<{ courses: Array<{ id: string }> }>(
     "/api/platform/courses?status=published",
+    token ? { token, cache: "no-store" } : {},
   );
   const firstCourse = courses?.[0];
   if (!firstCourse?.id) return null;
-  return fetchPublicCourseFromSupabase(firstCourse.id);
+  return fetchCourseFromPlatform(firstCourse.id, token);
 };
 
 export default function CoursePlayer({
@@ -222,6 +229,11 @@ export default function CoursePlayer({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const appliedCourseLoadRef = useRef<CourseLoadState | null>(null);
+  const courseRequestRef = useRef<{
+    key: string;
+    promise: Promise<{ course: CourseDetail; chapters?: Chapter[] } | null>;
+  } | null>(null);
   const pendingResumeTimeRef = useRef(0);
   const resumeAppliedLessonRef = useRef<string | null>(null);
   const lastProgressSaveAtRef = useRef(0);
@@ -657,12 +669,11 @@ export default function CoursePlayer({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // 公开课程内容优先直连 Supabase；付费权益/管理员预览再回到 Node API。
+  // 本地 session 足够直连一次课程接口。profile 未返回时也可以开始，
+  // 成功后不再请求同源 /api/courses。文档目录先按本地进度画出，远端进度随后补齐。
   useEffect(() => {
-    if (isAuthLoading) return;
-
-    let timeoutId: NodeJS.Timeout | null = null;
-    let isCancelled = false;
+    let active = true;
+    let timeoutId: number | null = null;
 
     const fetchCourseViaApi = async (targetCourseId: string) => {
       const response = await fetch(`/api/courses/${targetCourseId}`, {
@@ -709,96 +720,115 @@ export default function CoursePlayer({
       return fetchCourseViaApi(firstCourse.id);
     };
 
-    const fetchCourseData = async () => {
+    const loadCoursePayload = async (requestedId: string, token: string | null) => {
       try {
+        if (!requestedId) return await fetchFirstPublishedCourseFromPlatform(token);
+        return await fetchCourseFromPlatform(requestedId, token);
+      } catch (directError) {
+        console.warn("直连课程接口失败，回退到同源 API:", directError);
+        return requestedId
+          ? await fetchCourseViaApi(requestedId)
+          : await fetchFirstCourseViaApi();
+      }
+    };
+
+    const fetchCourseData = async () => {
+      const token = await browserAccessToken();
+      if (!active) return;
+
+      const requestedId = courseId ?? "";
+      const action = planCourseLoad({
+        courseId: requestedId,
+        hasSessionToken: Boolean(token),
+        authLoading: isAuthLoading,
+        loaded: appliedCourseLoadRef.current,
+      });
+      if (action.type !== "fetch") return;
+
+      const key = `${requestedId}:${action.mode}`;
+      if (courseRequestRef.current?.key !== key) {
+        const requestToken = action.mode === "auth" ? token : null;
+        const promise = loadCoursePayload(requestedId, requestToken).catch((error) => {
+          if (courseRequestRef.current?.key === key) courseRequestRef.current = null;
+          throw error;
+        });
+        courseRequestRef.current = { key, promise };
+      }
+      const request = courseRequestRef.current;
+      if (!request) return;
+
+      if (!appliedCourseLoadRef.current) {
         setIsLoading(true);
         setError(null);
+      }
 
-        // 添加超时保护
-        timeoutId = setTimeout(() => {
-          if (isCancelled) return;
-          console.error("获取课程数据超时");
-          setError("请求超时，请检查网络连接或稍后重试");
-          setIsLoading(false);
-        }, 10000); // 10秒超时
+      timeoutId = window.setTimeout(() => {
+        if (!active) return;
+        if (appliedCourseLoadRef.current?.courseId === requestedId) return;
+        console.error("获取课程数据超时");
+        setError("请求超时，请检查网络连接或稍后重试");
+        setIsLoading(false);
+      }, 10000);
 
-        let data: { course: CourseDetail; chapters?: Chapter[] } | null = null;
-        let loadedCourseId = courseId;
+      try {
+        const data = await request.promise;
+        if (!active || courseRequestRef.current?.key !== key) return;
 
-        try {
-          data = courseId
-            ? await fetchPublicCourseFromSupabase(courseId)
-            : await fetchFirstPublishedCourseFromSupabase();
-          loadedCourseId = data?.course.id ?? courseId;
-        } catch (supabaseError) {
-          console.warn("Supabase 公开课程读取失败，回退到 Node API:", supabaseError);
-        }
-
-        if (!data) {
-          data = courseId
-            ? await fetchCourseViaApi(courseId)
-            : await fetchFirstCourseViaApi();
-          loadedCourseId = data?.course.id ?? courseId;
-        }
-
-        if (!data) {
-          if (isCancelled) return;
+        if (!data?.course) {
           setCourse(null);
           setChapters([]);
           setIsLoading(false);
           return;
         }
 
-        const needsEntitlementOverlay =
-          isAuthenticated && Boolean(data.course && !data.course.isFree);
-
-        if (needsEntitlementOverlay) {
-          try {
-            data = await fetchCourseViaApi(data.course.id);
-            loadedCourseId = data.course.id;
-          } catch (overlayError) {
-            console.warn("读取课程权益失败，继续展示公开课程内容:", overlayError);
-          }
-        }
-
-        if (isCancelled) return;
-
+        const loadedCourseId = data.course.id;
+        appliedCourseLoadRef.current = {
+          courseId: requestedId,
+          mode: action.mode,
+          isFree: Boolean(data.course.isFree),
+        };
         const nextChapters = data.chapters || [];
         setCourse(data.course);
         setChapters(nextChapters);
+        setError(null);
 
-        // 默认展开第一个章节
         if (nextChapters.length > 0) {
-          await restoreInitialLesson(loadedCourseId, nextChapters);
+          const localProgress = getLocalProgress(undefined, loadedCourseId);
+          const lessons = flattenLessons(nextChapters);
+          const lessonId = initialLessonId(
+            lessons.map((lesson) => lesson.id),
+            localProgress?.lessonId,
+          );
+          const initial = lessons.find((lesson) => lesson.id === lessonId) ?? null;
+          if (initial) {
+            pendingResumeTimeRef.current = localProgress?.currentSeconds ?? 0;
+            resumeAppliedLessonRef.current = null;
+            expandChapterForLesson(nextChapters, initial.id);
+            setCurrentLesson(initial);
+          }
         }
 
-        // 清除超时
-        if (timeoutId) clearTimeout(timeoutId);
+        setIsLoading(false);
+        if (nextChapters.length > 0) {
+          void restoreInitialLesson(loadedCourseId, nextChapters);
+        }
       } catch (err: any) {
-        if (isCancelled) return;
+        if (!active) return;
         console.error("获取课程数据失败:", err);
-        const errorMessage = err.message || "加载课程失败";
-        setError(errorMessage);
-        // 失败时显示空状态
+        if (appliedCourseLoadRef.current?.courseId === requestedId) return;
+        setError(err.message || "加载课程失败");
         setChapters([]);
+        setIsLoading(false);
       } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
       }
     };
 
-    fetchCourseData();
+    void fetchCourseData();
 
-    // 清理函数
     return () => {
-      isCancelled = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      active = false;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, isAuthenticated, isAuthLoading]);
@@ -1345,7 +1375,7 @@ export default function CoursePlayer({
           };
         })();
 
-  if (isLoading || isAuthLoading) {
+  if (isLoading) {
     return <CoursePlayerLoadingSkeleton />;
   }
 
