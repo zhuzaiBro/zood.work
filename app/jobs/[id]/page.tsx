@@ -83,7 +83,6 @@ export default async function JobDetailPage({ params }: { params: Params }) {
     <main className="-mt-20 min-h-screen bg-[#050b18] text-white">
       <section className="relative overflow-hidden px-4 pb-12 pt-32 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(117,192,247,0.24),transparent_34%),radial-gradient(circle_at_90%_8%,rgba(45,212,191,0.16),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_52%,#061827_100%)]" />
-        <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(rgba(117,192,247,0.26)_1px,transparent_1px)] [background-size:22px_22px]" />
 
         <div className="relative mx-auto max-w-6xl">
           <Link

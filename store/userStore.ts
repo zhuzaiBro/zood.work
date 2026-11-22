@@ -6,6 +6,9 @@ import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { buildDefaultUserProfile } from '@/lib/user-profiles'
 
 interface UserStore extends UserState {
+  // Session check finished. Distinct from isLoading, which is released on a
+  // timer so the learn page can paint before profile returns.
+  authResolved: boolean
   // Actions
   setUser: (user: User | null) => void
   setProfile: (profile: UserProfile | null) => void
@@ -23,6 +26,7 @@ export const useUserStore = create<UserStore>()(
       profile: null,
       isLoading: true,
       isAuthenticated: false,
+      authResolved: false,
 
       // Actions
       setUser: (user) => {
@@ -60,6 +64,7 @@ export const useUserStore = create<UserStore>()(
           profile: null,
           isAuthenticated: false,
           isLoading: false,
+          authResolved: true,
         })
       },
 
@@ -71,7 +76,8 @@ export const useUserStore = create<UserStore>()(
           set({ isLoading: true })
         }
 
-        // 设置超时保护，防止无限加载
+        // 超时只放开 isLoading，学习页可以继续画。authResolved 仍要等本次
+        // 会话检查结束，顶栏才不会在等待期间先画出登录按钮。
         const timeoutId = setTimeout(() => {
           console.warn('User initialization timeout - setting isLoading to false')
           set({ isLoading: false })
@@ -155,7 +161,7 @@ export const useUserStore = create<UserStore>()(
           get().clearUser()
           clearTimeout(timeoutId)
         } finally {
-           set({ isLoading: false })
+           set({ isLoading: false, authResolved: true })
         }
       },
     }),
@@ -188,4 +194,5 @@ export const useUser = () => useUserStore((state) => state.user)
 export const useProfile = () => useUserStore((state) => state.profile)
 export const useIsAuthenticated = () => useUserStore((state) => state.isAuthenticated)
 export const useIsLoading = () => useUserStore((state) => state.isLoading)
+export const useAuthResolved = () => useUserStore((state) => state.authResolved)
 export const useIsAdmin = () => useUserStore((state) => Boolean(state.profile?.is_admin))

@@ -61,7 +61,6 @@ export default function JobAgentClient() {
     <main className="-mt-20 min-h-screen overflow-hidden bg-[#050b18] text-white">
       <section className="relative px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(117,192,247,0.25),transparent_32%),radial-gradient(circle_at_82%_18%,rgba(44,213,196,0.18),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_48%,#061827_100%)]" />
-        <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(117,192,247,0.28)_1px,transparent_1px)] [background-size:22px_22px]" />
 
         <div className="relative mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <div className="flex flex-col justify-center">

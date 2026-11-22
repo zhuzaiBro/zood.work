@@ -679,15 +679,6 @@ export default function TronHeroSection({
           `,
         }}
       />
-      <div
-        className="absolute inset-0 opacity-50"
-        style={{
-          backgroundImage: 'radial-gradient(rgba(144, 196, 255, 0.24) 1px, transparent 1px)',
-          backgroundSize: '14px 14px',
-          maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.08))',
-          WebkitMaskImage: 'linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.08))',
-        }}
-      />
       <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 pb-10 pt-28 lg:px-10 lg:pb-14 lg:pt-32">
         <div className="grid flex-1 items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(520px,0.95fr)]">
           <div className="relative z-10 max-w-2xl">

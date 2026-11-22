@@ -40,7 +40,7 @@ export default function UserAvatar() {
     return (
       <LazyLink
         href="/login"
-        className="rounded-full border border-sky-200/80 bg-white/88 px-5 py-2.5 text-sm font-semibold text-header-sky shadow-[0_12px_28px_rgba(148,163,184,0.14)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:bg-white hover:text-sky-800"
+        className="site-header-login rounded-full border border-sky-200/80 px-5 py-2.5 text-sm font-semibold text-header-sky shadow-[0_12px_28px_rgba(148,163,184,0.14)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:bg-white hover:text-sky-800"
       >
         登录
       </LazyLink>
