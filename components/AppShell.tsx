@@ -1,5 +1,7 @@
 'use client';
 
+import { Suspense } from 'react';
+import { PageLoadingSkeleton } from '@/components/ui/PageSkeleton';
 import { usePathname } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -12,9 +14,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const lightContentPage = isLightContentPage(pathname);
 
-  if (isAdminRoute) {
-    return <>{children}</>;
-  }
+  // The public reader can paint its cached HTML immediately, including without JavaScript.
+  const content = pathname.startsWith('/question/') ? children : (
+    <Suspense key={pathname} fallback={<PageLoadingSkeleton />}>{children}</Suspense>
+  );
+
+  if (isAdminRoute) return content;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -26,7 +31,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             : 'pt-20'
         }`}
       >
-        {children}
+        {content}
       </main>
       <Footer />
       <ChatDialog />

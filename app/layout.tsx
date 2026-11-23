@@ -11,6 +11,7 @@ const siteLogoLatin = Micro_5({
   subsets: ['latin'],
   weight: '400',
   variable: '--font-site-logo-latin',
+  preload: false,
   display: 'swap',
 })
 
@@ -112,8 +113,6 @@ export default function RootLayout({
           }}
         />
         <meta name="baidu-site-verification" content="codeva-No72IXIm4Y" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
       </head>
       <body className={`${inter.className} ${siteLogoLatin.variable}`}>

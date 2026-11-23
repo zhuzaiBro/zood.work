@@ -86,8 +86,8 @@ export default function Header() {
             <Image
               src="/brand/zood-mark.png"
               alt=""
-              width={690}
-              height={748}
+              width={37}
+              height={40}
               className="h-9 w-auto sm:h-10"
               priority
             />
