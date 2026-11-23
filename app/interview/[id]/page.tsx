@@ -25,10 +25,13 @@ export const dynamic = 'force-static';
 
 const getCollectionPageData = unstable_cache(
   async (id: string) => {
+    // Cache only through unstable_cache below. An inner force-cache fetch is
+    // untagged, so revalidateTag still replays the question list from before
+    // the last import.
     const data = await platformPublic<{
       collection: Collection | null;
       questions: Question[];
-    }>(`/api/platform/interview/collections/${id}`, { cache: 'force-cache' });
+    }>(`/api/platform/interview/collections/${id}`, { cache: 'no-store' });
 
     return {
       collection: data.collection,
@@ -38,7 +41,7 @@ const getCollectionPageData = unstable_cache(
       })),
     };
   },
-  ['interview-collection-page-v3'],
+  ['interview-collection-page-v4'],
   { revalidate: 300, tags: ['interview-collections'] },
 );
 
