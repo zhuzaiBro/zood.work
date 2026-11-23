@@ -17,6 +17,13 @@ import {
   siteHeaderWordmarkTone,
 } from "@/lib/layout";
 
+const navItems = [
+  { href: "/courses", label: "学习与实战", sections: ["/courses", "/learn"] },
+  { href: "/interview", label: "面试题库", sections: ["/interview", "/question", "/mock-interview"] },
+  { href: "/jobs", label: "岗位广场", sections: ["/jobs"] },
+  { href: "/resume-agent", label: "简历优化", sections: ["/resume-agent"] },
+];
+
 export default function Header() {
   const authResolved = useAuthResolved();
   const isAuthenticated = useIsAuthenticated();
@@ -56,10 +63,9 @@ export default function Header() {
     setIsMobileUserMenuOpen(false);
   };
 
-  const linkClass = "text-header-sky hover:text-sky-800 transition-colors font-medium";
-
-  const mobileLinkClass =
-    "block py-2 text-header-sky hover:text-sky-800 transition-colors text-lg font-medium";
+  const activeItem = navItems.find(({ sections }) =>
+    sections.some((section) => pathname === section || pathname.startsWith(section + "/")),
+  );
 
   return (
     <header
@@ -90,21 +96,22 @@ export default function Header() {
 
           {/* 桌面端菜单 */}
           <div className="hidden md:flex items-center gap-6">
-            {/* <Link href="/" className={linkClass}>
-              首页
-            </Link> */}
-            <LazyLink href="/courses" className={linkClass}>
-              学习与实战
-            </LazyLink>
-            <LazyLink href="/interview" className={linkClass}>
-              面试题库
-            </LazyLink>
-            <LazyLink href="/jobs" className={linkClass}>
-              岗位广场
-            </LazyLink>
-            <LazyLink href="/resume-agent" className={linkClass}>
-              简历优化
-            </LazyLink>
+            {navItems.map((item) => {
+              const active = item === activeItem;
+              const tone = active
+                ? surface === "light" ? "text-blue-700 after:bg-blue-600" : "text-white after:bg-sky-300"
+                : surface === "light" ? "text-slate-600 hover:text-blue-700" : "text-header-sky hover:text-white";
+              return (
+                <LazyLink
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? (pathname === item.href ? "page" : "location") : undefined}
+                  className={`relative py-1 transition-colors focus-visible:outline-offset-4 ${active ? "font-bold after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:rounded-full" : "font-medium"} ${tone}`}
+                >
+                  {item.label}
+                </LazyLink>
+              );
+            })}
 
             {/* 用户信息或登录按钮 */}
             {accountSlot === "pending" ? (
@@ -118,7 +125,8 @@ export default function Header() {
           <button
             className="md:hidden p-2 text-inherit focus:outline-none"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Toggle menu"
+            aria-label={isMobileMenuOpen ? "关闭导航" : "打开导航"}
+            aria-expanded={isMobileMenuOpen}
           >
             {isMobileMenuOpen ? (
               <svg
@@ -155,37 +163,20 @@ export default function Header() {
         {/* 移动端菜单下拉内容 */}
         {isMobileMenuOpen && (
           <div className="site-header-drawer md:hidden absolute top-full left-0 right-0 max-h-[min(24rem,calc(100vh-var(--site-header-height)-4.5rem))] overflow-y-auto backdrop-blur-xl px-4 py-6 flex flex-col gap-4 animate-in slide-in-from-top-5 fade-in duration-200">
-            <LazyLink
-              href="/courses"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              学习与实战
-            </LazyLink>
-            <LazyLink
-              href="/interview"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              面试题库
-            </LazyLink>
-            <LazyLink
-              href="/jobs"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              岗位广场
-            </LazyLink>
-            <LazyLink
-              href="/resume-agent"
-              className={mobileLinkClass}
-              onClick={closeMobileMenu}
-            >
-              简历优化
-            </LazyLink>
-            {/* <Link href="/categories" className={mobileLinkClass} onClick={closeMobileMenu}>
-              分类
-            </Link> */}
+            {navItems.map((item) => {
+              const active = item === activeItem;
+              return (
+                <LazyLink
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? (pathname === item.href ? "page" : "location") : undefined}
+                  onClick={closeMobileMenu}
+                  className={`block rounded-lg px-3 py-2 text-lg transition-colors ${active ? "bg-blue-50 font-bold text-blue-700" : "font-medium text-slate-600 hover:text-sky-800"}`}
+                >
+                  {item.label}
+                </LazyLink>
+              );
+            })}
 
             <div className="border-t border-slate-200/80 pt-4">
               {accountSlot === "pending" ? (

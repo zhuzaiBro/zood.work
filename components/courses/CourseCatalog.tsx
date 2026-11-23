@@ -63,28 +63,9 @@ export default function CourseCatalog({ courses }: CourseCatalogProps) {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f1f6fb_34%,#f7f9fc_100%)] pb-16">
       <section className="border-b border-slate-200/70 bg-white/65">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-            <div className="max-w-2xl">
-              <p className="text-sm font-semibold text-sky-600">ZOOD LEARNING</p>
-              <h1 className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">选择一条学习路线</h1>
-              <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
-                从基础入门到交易所项目实战，按自己的节奏持续学习。
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:flex">
-              <div className="min-w-28 border-l-2 border-sky-400 pl-3">
-                <p className="text-2xl font-black text-slate-950">{readyCount}</p>
-                <p className="text-xs text-slate-500">门课程可立即学习</p>
-              </div>
-              <div className="min-w-28 border-l-2 border-emerald-400 pl-3">
-                <p className="text-2xl font-black text-slate-950">{lessonCount}</p>
-                <p className="text-xs text-slate-500">节系统课时</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-7 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <h1 className="sr-only">学习与实战</h1>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-md">
               <svg aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m2.35-5.15a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
@@ -120,7 +101,9 @@ export default function CourseCatalog({ courses }: CourseCatalogProps) {
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-medium text-slate-500">找到 {visibleCourses.length} 门课程</p>
+          <p className="text-sm font-medium text-slate-500">
+            {query || filter !== 'all' ? `找到 ${visibleCourses.length} 门课程` : `${courses.length} 门课程 · ${readyCount} 门可立即学习 · ${lessonCount} 节课时`}
+          </p>
           {(query || filter !== 'all') && (
             <button
               type="button"

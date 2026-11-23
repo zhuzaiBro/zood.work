@@ -61,14 +61,13 @@ export default async function InterviewPage({
   return (
     <div className="min-h-[calc(100vh-var(--site-header-height))] bg-[#f5f8fc] pb-16 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-4 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_minmax(240px,360px)_auto] md:gap-x-3 md:pb-0 md:pt-8 lg:px-8">
-          <h1 className="col-start-1 row-start-1 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">面试题库</h1>
-          <div className="col-start-1 row-start-2 flex min-w-0 md:col-start-2 md:row-start-1">
+        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 sm:px-6 md:gap-x-3 md:gap-y-1 md:pb-0 lg:px-8 xl:grid-cols-[minmax(0,1fr)_minmax(180px,248px)_auto] xl:py-0">
+          <div className="col-span-full col-start-1 row-start-2 flex min-w-0 md:col-span-1 md:row-start-1 xl:col-start-2">
             <Suspense fallback={<div className="h-11 flex-1 rounded-lg border border-slate-200" />}>
               <InterviewQuestionSearch initialQuery={searchQuery} />
             </Suspense>
           </div>
-          <div className="col-start-2 row-start-1 justify-self-end md:col-start-3">
+          <div className="col-start-2 row-start-1 justify-self-end xl:col-start-3">
             <QuestionContributionForm />
           </div>
           <Suspense fallback={null}>
@@ -80,15 +79,16 @@ export default async function InterviewPage({
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
         {isSearching ? (
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <h1 className="sr-only">题目搜索结果</h1>
             <InterviewSearchResults key={searchQuery} query={searchQuery} />
           </div>
         ) : (
           <section aria-labelledby="collection-heading">
             <div className={singleRoleCollection ? 'sr-only' : 'mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3'}>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 id="collection-heading" className="text-xl font-black text-slate-950 sm:text-2xl">
+                <h1 id="collection-heading" className="text-xl font-black text-slate-950 sm:text-2xl">
                   {index.unknownJob ? '岗位题集' : `${index.activeName}题集`}
-                </h2>
+                </h1>
                 {!loadError && collections.length > 0 && (
                   <span className="text-sm tabular-nums text-slate-500">{collections.length} 个题集 · {totalQuestions} 道题</span>
                 )}

@@ -1,3 +1,5 @@
+import { commercePlatformFor } from '@/lib/interview/commercePlatforms';
+import CommercePracticeLabel from '@/components/interview/CommercePracticeLabel';
 import { notFound } from 'next/navigation';
 import { PlatformError } from '@/lib/platform/client';
 import Image from 'next/image';
@@ -41,6 +43,8 @@ export default async function CollectionPage({
       name: tagRel.interview_tags.name,
     })),
   }));
+  const platform = commercePlatformFor(collection.id);
+  const icon = platform?.icon ?? collection.icon;
   const firstQuestion = browserQuestions[0] ?? null;
 
   return (
@@ -59,17 +63,17 @@ export default async function CollectionPage({
 
           <div className="flex flex-col md:flex-row gap-6 items-start">
             <div className="w-24 h-24 flex-shrink-0 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center overflow-hidden border border-gray-100 shadow-inner">
-              {collection.icon ? (
-                collection.icon.startsWith('http') || collection.icon.startsWith('/') ? (
+              {icon ? (
+                icon.startsWith('http') || icon.startsWith('/') ? (
                   <Image
-                    src={collection.icon}
-                    alt={collection.title}
+                    src={icon}
+                    alt=""
                     width={96}
                     height={96}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
-                  <span className="text-4xl">{collection.icon}</span>
+                  <span className="text-4xl">{icon}</span>
                 )
               ) : (
                 <div className="w-full h-full bg-blue-100" />
@@ -79,6 +83,7 @@ export default async function CollectionPage({
             <div className="flex-grow space-y-4">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{collection.title}</h1>
+                {platform && <div className="mb-2 text-slate-600"><CommercePracticeLabel platform={platform} showIcon={false} /></div>}
                 <p className="text-gray-600 leading-relaxed text-lg">{collection.description}</p>
               </div>
               

@@ -1,21 +1,20 @@
 import 'server-only';
-import { cache } from 'react';
+import { platformRequest, PlatformError } from '@/lib/platform/http';
 import { platformServer } from '@/lib/platform/server';
 import type { Database } from '@/types/database.types';
 
 type Tables = Database['public']['Tables'];
 type CollectionTitle = Pick<Tables['interview_collections']['Row'], 'title'>;
-export type InterviewQuestion = Tables['interview_question']['Row'] & {
+type InterviewQuestion = Tables['interview_question']['Row'] & {
   interview_collections?: CollectionTitle | CollectionTitle[] | null;
   interview_question_tags?: { interview_tags: Tables['interview_tags']['Row'] }[];
 };
-type SidebarItem = Pick<InterviewQuestion, 'id' | 'title'>;
-export type QuestionNavItem = Pick<InterviewQuestion, 'id' | 'title' | 'sort' | 'created_at'>;
+type QuestionNavItem = Pick<InterviewQuestion, 'id' | 'title'>;
 
-type QuestionPageData = {
-  question: InterviewQuestion | null;
+export type QuestionPageData = {
+  question: InterviewQuestion;
   navigation?: {
-    questions?: SidebarItem[];
+    questions?: QuestionNavItem[];
     index?: number;
     count?: number;
     previous?: QuestionNavItem | null;
@@ -23,7 +22,15 @@ type QuestionPageData = {
   };
 };
 
-// The page and its layout share the caller's result for this render.
-export const getQuestionPageData = cache((id: string) =>
-  platformServer<QuestionPageData>(`/api/platform/interview/questions/${encodeURIComponent(id)}`),
-);
+export async function getQuestionPageData(id: string, viewer: 'public' | 'session') {
+  const path = `/api/platform/interview/questions/${encodeURIComponent(id)}`;
+  try {
+    const data = viewer === 'public'
+      ? await platformRequest<QuestionPageData>(path)
+      : await platformServer<QuestionPageData>(path, { cache: 'no-store' });
+    return data.question ? data : null;
+  } catch (error) {
+    if (error instanceof PlatformError && error.status === 404) return null;
+    throw error;
+  }
+}

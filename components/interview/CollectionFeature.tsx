@@ -1,3 +1,5 @@
+import { commercePlatformFor } from '@/lib/interview/commercePlatforms';
+import CommercePracticeLabel from '@/components/interview/CommercePracticeLabel';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import type { CountedCollection } from '@/lib/interview/directory';
@@ -46,6 +48,7 @@ async function QuestionPreview({ collectionId }: { collectionId: string }) {
 }
 
 export default function CollectionFeature({ collection }: { collection: CountedCollection }) {
+  const platform = commercePlatformFor(collection.id);
   const timestamp = Date.parse(collection.created_at);
 
   return (
@@ -71,6 +74,7 @@ export default function CollectionFeature({ collection }: { collection: CountedC
             </>
           )}
         </div>
+        {platform && <div className="mt-2 text-sky-100"><CommercePracticeLabel platform={platform} /></div>}
         <h3 className="mt-3 break-words text-[22px] font-black leading-snug tracking-tight sm:text-[28px]">{collection.title}</h3>
         {collection.description && <p className="mt-2 break-words text-sm leading-6 text-slate-200">{collection.description}</p>}
         <div className="mt-auto pt-5">

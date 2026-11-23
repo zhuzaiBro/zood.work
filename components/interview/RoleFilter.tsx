@@ -39,12 +39,12 @@ export default function RoleFilter({ activeSlug }: { activeSlug: string }) {
         value={selectedSlug}
         onChange={(event) => selectJob(event.currentTarget.value)}
         aria-label="岗位分类"
-        className="col-start-2 row-start-2 h-11 w-full max-w-40 rounded-lg border border-slate-200 bg-white px-2 text-base font-semibold text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 md:hidden"
+        className="col-start-1 row-start-1 h-11 w-full max-w-48 rounded-lg border border-slate-200 bg-white px-2 text-base font-semibold text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 md:hidden"
       >
         {!selectedSlug && <option value="" disabled>选择岗位</option>}
         {interviewJobs.map((job) => <option key={job.slug} value={job.slug}>{job.name}</option>)}
       </select>
-      <nav className="col-span-full -mb-px hidden flex-wrap items-center gap-x-4 md:flex lg:gap-x-7" aria-label="岗位分类">
+      <nav className="col-span-full row-start-2 -mb-px hidden flex-wrap items-center gap-x-4 md:flex lg:gap-x-6 xl:col-span-1 xl:col-start-1 xl:row-start-1" aria-label="岗位分类">
         {interviewJobs.map((job) => {
           const active = job.slug === selectedSlug
           const Icon = jobIcons[job.slug]
@@ -54,7 +54,7 @@ export default function RoleFilter({ activeSlug }: { activeSlug: string }) {
               type="button"
               onClick={() => selectJob(job.slug)}
               aria-pressed={active}
-              className={`flex min-h-12 items-center gap-2 border-b-2 px-1 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 ${
+              className={`flex min-h-12 items-center xl:min-h-16 gap-2 border-b-2 px-1 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 ${
                 active ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-950'
               }`}
             >

@@ -43,12 +43,13 @@ export async function updateSession(request: NextRequest) {
   const isPublicInterviewRoute =
     request.nextUrl.pathname === '/interview'
     || request.nextUrl.pathname.startsWith('/interview/')
+    || /^\/question\/[^/]+\/?$/.test(request.nextUrl.pathname)
   const isClientRenderedAdminRoute =
     request.nextUrl.pathname === '/admin'
     || request.nextUrl.pathname.startsWith('/admin/')
 
-  // These routes own their session checks in the browser and do not need an
-  // additional server-side Auth round trip before the static shell is served.
+  // The public question page sends gated answers to its session-aware reader.
+  // Public interview pages and the admin shell can render before session refresh.
   // Sensitive admin APIs still call requireAdminRequest independently.
   if (isPublicInterviewRoute || isClientRenderedAdminRoute) {
     return supabaseResponse

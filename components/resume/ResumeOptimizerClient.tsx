@@ -234,10 +234,7 @@ export default function ResumeOptimizerClient() {
       <section className="rounded-[2rem] border border-sky-300/15 bg-[#07101f]/82 p-5 shadow-[0_24px_80px_rgba(14,165,233,0.12)] backdrop-blur-xl sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#75c0f7]">
-              Input
-            </p>
-            <h2 className="mt-2 text-2xl font-black text-white">投喂你的简历</h2>
+            <h1 className="text-2xl font-black text-white">填写简历与目标岗位</h1>
             <p className="mt-2 text-sm leading-6 text-slate-400">
               粘贴简历文本和目标岗位，Agent 会从匹配度、叙事、关键词和项目 bullet 四个方向优化。
             </p>

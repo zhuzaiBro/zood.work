@@ -74,59 +74,45 @@ export default async function JobsPage({
 
   return (
     <main className="-mt-20 min-h-screen bg-[#050b18] text-white">
-      <section className="relative overflow-hidden px-4 pb-14 pt-32 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden px-4 pb-14 pt-[calc(var(--site-header-height)+1.5rem)] sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(117,192,247,0.28),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(45,212,191,0.18),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_48%,#061827_100%)]" />
 
         <div className="relative mx-auto max-w-7xl">
-          <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-300/10 px-4 py-2 text-sm font-semibold text-[#75c0f7]">
-                <span className="h-2 w-2 rounded-full bg-[#75c0f7] shadow-[0_0_18px_rgba(117,192,247,0.9)]" />
-                Web3 / AI Job Board
-              </div>
-              <h1 className="max-w-3xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
-                找到下一份能让你升级的技术岗位
-              </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                聚合多个精选渠道，统一清洗成适合社区浏览的 Web3、AI、CEX项目与交易所岗位库。
-                先筛选远程工作，再用简历 Agent、远程攻略和面试题库做定向准备。
-              </p>
-            </div>
-
-            <div className="rounded-[32px] border border-sky-200/15 bg-white/[0.06] p-5 shadow-[0_30px_120px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-              <form className="grid gap-3 md:grid-cols-[1fr_130px_auto]">
+          <h1 className="sr-only">岗位广场</h1>
+          <div className="rounded-2xl border border-sky-200/15 bg-white/[0.06] p-4 sm:p-5">
+            <form className="grid gap-3 md:grid-cols-[1fr_130px_auto]">
+              <input
+                name="q"
+                aria-label="搜索岗位"
+                defaultValue={keyword}
+                placeholder="搜索 Solidity、React、AI Agent、Remote..."
+                className="rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-[#75c0f7]/70"
+              />
+              <label className="flex items-center justify-center gap-2 rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm font-semibold text-slate-200">
                 <input
-                  name="q"
-                  defaultValue={keyword}
-                  placeholder="搜索 Solidity、React、AI Agent、Remote..."
-                  className="rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-[#75c0f7]/70"
+                  type="checkbox"
+                  name="remote"
+                  value="1"
+                  defaultChecked={remoteOnly}
+                  className="h-4 w-4 accent-[#75c0f7]"
                 />
-                <label className="flex items-center justify-center gap-2 rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm font-semibold text-slate-200">
-                  <input
-                    type="checkbox"
-                    name="remote"
-                    value="1"
-                    defaultChecked={remoteOnly}
-                    className="h-4 w-4 accent-[#75c0f7]"
-                  />
-                  远程
-                </label>
-                <button className="rounded-2xl bg-[#75c0f7] px-5 py-3 text-sm font-black text-[#041020] transition hover:bg-sky-200">
-                  搜索
-                </button>
-              </form>
+                远程
+              </label>
+              <button className="rounded-2xl bg-[#75c0f7] px-5 py-3 text-sm font-black text-[#041020] transition hover:bg-sky-200">
+                搜索
+              </button>
+            </form>
 
-              <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-300">
-                <span className="rounded-full bg-white/[0.08] px-3 py-1">
-                  已同步 {total} 个岗位
-                </span>
-                <Link
-                  href="/jobs/agent"
-                  className="rounded-full border border-[#75c0f7]/30 px-3 py-1 font-semibold text-[#75c0f7] transition hover:bg-[#75c0f7]/10"
-                >
-                  用岗位 Agent 对话检索
-                </Link>
-              </div>
+            <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+              <span className="rounded-full bg-white/[0.08] px-3 py-1">
+                已同步 {total} 个岗位
+              </span>
+              <Link
+                href="/jobs/agent"
+                className="rounded-full border border-[#75c0f7]/30 px-3 py-1 font-semibold text-[#75c0f7] transition hover:bg-[#75c0f7]/10"
+              >
+                用岗位 Agent 对话检索
+              </Link>
             </div>
           </div>
 
@@ -135,7 +121,7 @@ export default async function JobsPage({
               岗位加载失败：{error.message}
             </div>
           ) : rows.length > 0 ? (
-            <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {rows.map((job) => (
                 <JobCard key={job.id} job={job} />
               ))}
