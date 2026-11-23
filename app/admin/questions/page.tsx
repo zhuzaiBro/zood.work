@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import Loading from './loading';
 import Skeleton from '@/components/ui/Skeleton';
 import {
   Alert,
@@ -599,7 +599,7 @@ export default function QuestionsManagePage() {
     : [];
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton stats={0} />;
+    return <Loading />;
   }
 
   if (!hasPermission) {

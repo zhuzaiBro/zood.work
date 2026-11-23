@@ -117,7 +117,7 @@ export default function VideoManagePage() {
   };
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton stats={0} />;
+    return <AdminListSkeleton />;
   }
 
   if (!hasPermission) {

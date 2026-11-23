@@ -1,31 +1,15 @@
 import Link from 'next/link';
-import { Suspense } from 'react';
-import RecoveryFormLoading from '@/components/auth/RecoveryFormLoading';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { recoveryCookie, recoverySession } from '@/lib/auth/recovery';
+import { hasRecentPasswordRecovery } from '@/lib/auth/recovery';
 import ResetPasswordForm from './ResetPasswordForm';
 
 export const metadata = { title: '设置新密码', robots: { index: false, follow: false } };
 
-export default async function ResetPasswordPage() {
-  const marker = (await cookies()).get(recoveryCookie)?.value;
-  if (!marker) return <ResetPanel valid={false} />;
-  return (
-    <Suspense fallback={<RecoveryFormLoading fields={2} />}>
-      <VerifiedReset marker={marker} />
-    </Suspense>
-  );
-}
-
-async function VerifiedReset({ marker }: { marker: string }) {
-  const auth = (await createClient()).auth;
-  const { data: { session } } = await auth.getSession();
-  const valid = Boolean(session && marker === recoverySession(session) && (await auth.getUser()).data.user);
-  return <ResetPanel valid={valid} />;
-}
-
-function ResetPanel({ valid }: { valid: boolean }) {
+export default async function ResetPasswordPage({ searchParams }: {
+  searchParams: Promise<{ expired?: string }>
+}) {
+  const { expired } = await searchParams;
+  const valid = !expired && await hasRecentPasswordRecovery((await createClient()).auth);
   return (
     <div className="mx-auto w-full max-w-md px-4 py-8 sm:py-12">
       <section className="rounded-xl border border-slate-200 bg-white p-6 text-slate-900 shadow-sm sm:p-8">

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import Loading from './loading';
 import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import {
@@ -343,7 +343,7 @@ export default function AdminUsersPage() {
   ];
 
   if (loading && !data) {
-    return <AdminListSkeleton stats={5} />;
+    return <Loading />;
   }
 
   if (!hasPermission) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import Loading from './loading';
 import { browserUser } from '@/lib/auth/session';
 import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import {
@@ -453,7 +453,7 @@ export default function PurchaseRequestsPage() {
   ];
 
   if (loading && requests.length === 0 && membershipRequests.length === 0) {
-    return <AdminListSkeleton stats={0} />;
+    return <Loading />;
   }
 
   if (!hasPermission) {

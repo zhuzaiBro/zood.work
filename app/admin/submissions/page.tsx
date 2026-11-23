@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { browserUser } from '@/lib/auth/session';
 import { platformBrowser } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import Loading from './loading';
 import Skeleton from '@/components/ui/Skeleton';
 import {
   App,
@@ -321,7 +321,7 @@ export default function AdminSubmissionsPage() {
   ];
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton stats={4} />;
+    return <Loading />;
   }
 
   if (!hasPermission) {

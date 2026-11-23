@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { recoveryCookie, recoverySession } from '@/lib/auth/recovery'
 import { platformServer } from '@/lib/platform/server'
 import {
   INTERVIEW_REFERRAL_COLLECTION_COOKIE,
@@ -7,7 +6,6 @@ import {
   INTERVIEW_REFERRER_COOKIE,
 } from '@/lib/interview-referral-cookies'
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -31,16 +29,8 @@ export async function GET(request: NextRequest) {
       ? await supabase.auth.verifyOtp({ type: 'recovery', token_hash: tokenHash })
       : await supabase.auth.exchangeCodeForSession(code!)
     if (!error) {
-      const isRecoverySession = Boolean(tokenHash || ('redirectType' in data && data.redirectType === 'PASSWORD_RECOVERY'))
-      if (recovery || isRecoverySession) {
-        const marker = isRecoverySession && recoverySession(data.session)
-        const response = recoveryRedirect('/reset-password')
-        const jar = await cookies()
-        jar.set(recoveryCookie, marker || '', {
-          path: '/reset-password', httpOnly: true, secure: request.nextUrl.protocol === 'https:',
-          sameSite: 'lax', maxAge: marker ? 900 : 0,
-        })
-        return response
+      if (recovery || ('redirectType' in data && data.redirectType === 'PASSWORD_RECOVERY')) {
+        return recoveryRedirect('/reset-password')
       }
       const {
         data: { user },
@@ -70,11 +60,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (recovery) {
-    const response = recoveryRedirect('/reset-password')
-    const jar = await cookies()
-    jar.set(recoveryCookie, '', { path: '/reset-password', maxAge: 0 })
-    return response
-  }
+  if (recovery) return recoveryRedirect('/reset-password?expired=1')
   return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }

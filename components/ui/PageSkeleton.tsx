@@ -1,6 +1,6 @@
 import Skeleton from './Skeleton'
 
-export function AdminListSkeleton({ rows = 6, stats = 4, tableOnly = false }: { rows?: number; stats?: number; tableOnly?: boolean }) {
+export function AdminListSkeleton({ rows = 6, stats = 0, tableOnly = false }: { rows?: number; stats?: number; tableOnly?: boolean } = {}) {
   return (
     <div role="status" aria-label="正在加载管理页面" aria-busy="true" className="route-loading space-y-4">
       {!tableOnly && <div className="flex items-start justify-between gap-4">

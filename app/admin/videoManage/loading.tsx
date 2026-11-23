@@ -1,5 +1,1 @@
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton'
-
-export default function Loading() {
-  return <AdminListSkeleton stats={0} />
-}
+export { AdminListSkeleton as default } from '@/components/ui/PageSkeleton'
