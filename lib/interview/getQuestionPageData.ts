@@ -22,6 +22,10 @@ export type QuestionPageData = {
   };
 };
 
+export function hasPublicAnswer(question: Pick<InterviewQuestion, 'is_vip' | 'vip_level_required'>) {
+  return !question.is_vip && (question.vip_level_required ?? 0) <= 0;
+}
+
 export async function getQuestionPageData(id: string, viewer: 'public' | 'session') {
   const path = `/api/platform/interview/questions/${encodeURIComponent(id)}`;
   try {
