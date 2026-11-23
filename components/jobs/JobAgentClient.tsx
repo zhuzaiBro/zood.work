@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 
 type AgentMessage = {
   role: "user" | "agent";
@@ -12,7 +12,6 @@ type AgentMessage = {
 const examples = ["前端 远程", "Solidity 合约", "AI Agent 全栈", "产品经理 Web3"];
 
 export default function JobAgentClient() {
-  const [input, setInput] = useState("");
   const [messages, setMessages] = useState<AgentMessage[]>([
     {
       role: "agent",
@@ -22,12 +21,11 @@ export default function JobAgentClient() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const submit = async (event?: FormEvent<HTMLFormElement>, value?: string) => {
-    event?.preventDefault();
-    const message = (value || input).trim();
+  const submit = async (query: string, form?: HTMLFormElement) => {
+    const message = query.trim();
     if (!message || isLoading) return;
 
-    setInput("");
+    form?.reset();
     setIsLoading(true);
     setMessages((current) => [...current, { role: "user", content: message }]);
 
@@ -70,7 +68,7 @@ export default function JobAgentClient() {
                 <button
                   key={item}
                   type="button"
-                  onClick={() => submit(undefined, item)}
+                  onClick={() => void submit(item)}
                   className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-blue-300 hover:text-blue-700"
                 >
                   {item}
@@ -123,17 +121,23 @@ export default function JobAgentClient() {
                 )}
               </div>
 
-              <form onSubmit={submit} className="flex gap-3 border-t border-slate-200 p-4">
+              <form action="/jobs" method="get" className="flex gap-3 border-t border-slate-200 p-4"
+                onSubmit={event => {
+                  event.preventDefault();
+                  const form = event.currentTarget;
+                  void submit(String(new FormData(form).get("q") ?? ""), form);
+                }}>
                 <input
                   aria-label="输入岗位关键词"
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
+                  name="q"
+                  required
+                  maxLength={200}
                   placeholder="输入岗位或公司，例如 Solidity 远程"
                   className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <button
                   type="submit"
-                  disabled={isLoading || !input.trim()}
+                  disabled={isLoading}
                   className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   发送
