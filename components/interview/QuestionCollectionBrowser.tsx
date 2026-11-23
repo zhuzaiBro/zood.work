@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import QuestionDifficulty from './QuestionDifficulty';
 
 export type CollectionQuestionItem = {
   id: string;
@@ -14,13 +15,6 @@ export type CollectionQuestionItem = {
 type QuestionCollectionBrowserProps = {
   questions: CollectionQuestionItem[];
 };
-
-function difficultyClass(difficulty: string | null) {
-  if (difficulty === '简单') return 'bg-emerald-50 text-emerald-700 ring-emerald-100';
-  if (difficulty === '中等') return 'bg-amber-50 text-amber-700 ring-amber-100';
-  if (difficulty === '困难') return 'bg-rose-50 text-rose-700 ring-rose-100';
-  return 'bg-slate-100 text-slate-600 ring-slate-200';
-}
 
 export default function QuestionCollectionBrowser({ questions }: QuestionCollectionBrowserProps) {
   const [query, setQuery] = useState('');
@@ -83,7 +77,7 @@ export default function QuestionCollectionBrowser({ questions }: QuestionCollect
                 {question.tags.length > 0 && <p className="mt-1 truncate text-xs text-slate-400">{question.tags.map((tag) => tag.name).join(' · ')}</p>}
               </div>
               <div className="flex items-center justify-between gap-4 sm:justify-end">
-                <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ring-1 ${difficultyClass(question.difficulty)}`}>{question.difficulty || '未知'}</span>
+                <QuestionDifficulty difficulty={question.difficulty} />
                 <svg className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </div>
             </Link>

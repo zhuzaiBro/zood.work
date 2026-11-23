@@ -1,15 +1,28 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { CodeOutlined, HighlightOutlined, ShopOutlined, LinkOutlined, GlobalOutlined, ApartmentOutlined } from '@ant-design/icons'
 import { interviewJobs } from '@/lib/interview-jobs'
+
+const jobIcons = {
+  programmer: CodeOutlined,
+  design: HighlightOutlined,
+  'cross-border-ops': ShopOutlined,
+  'crypto-bd': LinkOutlined,
+  'cross-border-bd': GlobalOutlined,
+  'crypto-ops': ApartmentOutlined,
+}
 
 export default function RoleFilter({ activeSlug }: { activeSlug: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const selectedSlug = searchParams.get('q') ? '' : activeSlug
+
   const selectJob = (slug: string) => {
-    if (slug === activeSlug) return
+    if (slug === activeSlug && !searchParams.has('q')) return
     const params = new URLSearchParams(searchParams.toString())
+    params.delete('q')
     if (slug === 'programmer') {
       params.delete('role')
     } else {
@@ -17,29 +30,40 @@ export default function RoleFilter({ activeSlug }: { activeSlug: string }) {
       params.delete('tag')
     }
     const query = params.toString()
-    router.push(query ? `/interview?${query}` : '/interview')
+    router.push(query ? `/interview?${query}` : '/interview', { scroll: false })
   }
 
   return (
-    <div className="mb-4 flex flex-wrap gap-2" aria-label="岗位分类">
-      {interviewJobs.map((job) => {
-        const active = job.slug === activeSlug
-        return (
-          <button
-            key={job.slug}
-            type="button"
-            onClick={() => selectJob(job.slug)}
-            aria-pressed={active}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-              active
-                ? 'bg-sky-600 text-white'
-                : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:text-slate-900'
-            }`}
-          >
-            {job.name}
-          </button>
-        )
-      })}
-    </div>
+    <>
+      <select
+        value={selectedSlug}
+        onChange={(event) => selectJob(event.currentTarget.value)}
+        aria-label="岗位分类"
+        className="col-start-2 row-start-2 h-11 w-full max-w-40 rounded-lg border border-slate-200 bg-white px-2 text-base font-semibold text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 md:hidden"
+      >
+        {!selectedSlug && <option value="" disabled>选择岗位</option>}
+        {interviewJobs.map((job) => <option key={job.slug} value={job.slug}>{job.name}</option>)}
+      </select>
+      <nav className="col-span-full -mb-px hidden flex-wrap items-center gap-x-4 md:flex lg:gap-x-7" aria-label="岗位分类">
+        {interviewJobs.map((job) => {
+          const active = job.slug === selectedSlug
+          const Icon = jobIcons[job.slug]
+          return (
+            <button
+              key={job.slug}
+              type="button"
+              onClick={() => selectJob(job.slug)}
+              aria-pressed={active}
+              className={`flex min-h-12 items-center gap-2 border-b-2 px-1 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 ${
+                active ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-950'
+              }`}
+            >
+              <Icon aria-hidden="true" className="!hidden text-base lg:!inline-flex" />
+              {job.name}
+            </button>
+          )
+        })}
+      </nav>
+    </>
   )
 }

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { buildInterviewDirectory } from '../lib/interview/directory.ts'
 import { interviewIndexRequest, interviewJobs } from '../lib/interview-jobs.ts'
 
 const source = readFileSync(new URL('../lib/interview-jobs.ts', import.meta.url), 'utf8')
 const indexPage = readFileSync(new URL('../app/interview/page.tsx', import.meta.url), 'utf8')
+const collectionLoader = readFileSync(new URL('../lib/interview/getCollectionPageData.ts', import.meta.url), 'utf8')
 const detailPage = readFileSync(new URL('../app/interview/[id]/page.tsx', import.meta.url), 'utf8')
 
 test('interview jobs use the six requested names in order', () => {
@@ -37,18 +39,43 @@ test('an unknown role does not call the interview API', () => {
 
 test('the interview index renders collections for every fetched role', () => {
   assert.match(indexPage, /interviewIndexRequest\(params\.role, params\.tag\)/)
-  assert.match(indexPage, /if \(index\.path\)/)
-  assert.match(indexPage, /!index\.unknownJob && collections\.map/)
+  assert.match(indexPage, /if \(index\.path && !isSearching\)/)
+  assert.match(indexPage, /buildInterviewDirectory\(collections, questionCounts\)/)
   assert.match(indexPage, /暂无面试题集/)
   assert.match(indexPage, /还没有面试题/)
   assert.match(indexPage, /没有这个岗位/)
   assert.doesNotMatch(indexPage, /if \(technical\)/)
 })
 
-test('collection detail does not nest an untagged force-cache fetch', () => {
-  assert.doesNotMatch(detailPage, /cache:\s*'force-cache'/)
-  assert.match(detailPage, /cache:\s*'no-store'/)
-  assert.match(detailPage, /interview-collection-page-v4/)
-  assert.match(detailPage, /tags:\s*\['interview-collections'\]/)
-  assert.match(detailPage, /revalidate:\s*300/)
+test('feature the newest playable set once and keep the other playable sets in API order', () => {
+  const collections = [
+    { id: 'empty', created_at: '2026-10-04' },
+    { id: 'old', created_at: '2026-06-02' },
+    { id: 'new', created_at: '2026-10-02' },
+    { id: 'middle', created_at: '2026-07-02' },
+  ]
+  const directory = buildInterviewDirectory(collections, { old: 2, new: 3, middle: 1 })
+  assert.equal(directory.featured.id, 'new')
+  assert.deepEqual(directory.remaining.map((entry) => entry.id), ['old', 'middle', 'empty'])
+  assert.equal(directory.totalQuestions, 6)
+
+  const single = buildInterviewDirectory([collections[2]], [{ collection_id: 'new', question_count: '3' }])
+  assert.equal(single.featured.id, 'new')
+  assert.equal(single.totalQuestions, 3)
+  assert.deepEqual(single.remaining, [])
+
+  const empty = buildInterviewDirectory(collections, null)
+  assert.equal(empty.featured, undefined)
+  assert.deepEqual(empty.remaining.map((entry) => entry.id), collections.map((entry) => entry.id))
+})
+
+test('the collection detail and preview share the same invalidatable data', () => {
+  const preview = readFileSync(new URL('../components/interview/CollectionFeature.tsx', import.meta.url), 'utf8')
+  assert.match(detailPage, /await getCollectionPageData\(id\)/)
+  assert.match(preview, /await getCollectionPageData\(collectionId\)/)
+  assert.doesNotMatch(collectionLoader, /cache:\s*'force-cache'/)
+  assert.match(collectionLoader, /cache:\s*'no-store'/)
+  assert.match(collectionLoader, /interview-collection-page-v4/)
+  assert.match(collectionLoader, /tags:\s*\['interview-collections'\]/)
+  assert.match(collectionLoader, /revalidate:\s*300/)
 })
