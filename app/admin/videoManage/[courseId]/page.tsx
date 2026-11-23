@@ -11,7 +11,7 @@ import CourseSettingsModal, {
 } from '@/components/admin/CourseSettingsModal';
 import CourseAccessModal from '@/components/admin/CourseAccessModal';
 import LessonChapterTable from '@/components/admin/LessonChapterTable';
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import CourseLessonsLoading from './loading';
 import {
   App,
   Breadcrumb,
@@ -375,7 +375,7 @@ export default function CourseDetailPage() {
   };
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton />;
+    return <CourseLessonsLoading />;
   }
 
   if (!hasPermission) {

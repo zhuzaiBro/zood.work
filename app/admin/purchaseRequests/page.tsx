@@ -453,7 +453,7 @@ export default function PurchaseRequestsPage() {
   ];
 
   if (loading && requests.length === 0 && membershipRequests.length === 0) {
-    return <AdminListSkeleton />;
+    return <AdminListSkeleton stats={0} />;
   }
 
   if (!hasPermission) {

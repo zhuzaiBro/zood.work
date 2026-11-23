@@ -321,7 +321,7 @@ export default function AdminSubmissionsPage() {
   ];
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton />;
+    return <AdminListSkeleton stats={4} />;
   }
 
   if (!hasPermission) {

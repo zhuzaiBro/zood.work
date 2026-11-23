@@ -1,4 +1,6 @@
 import Link from "next/link";
+import CompanyLogo from "@/components/jobs/CompanyLogo";
+import { jobDate, jobSalary, jobTags, type JobListing } from "@/lib/jobs/display";
 import { platformPublic, PlatformError } from "@/lib/platform/client";
 import type { Metadata } from "next";
 
@@ -16,22 +18,6 @@ export const revalidate = 60;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-type JobListing = {
-  id: string;
-  title: string | null;
-  company_name: string | null;
-  company_logo: string | null;
-  location: string | null;
-  office_mode_name: string | null;
-  work_type_name: string | null;
-  min_salary: number | null;
-  max_salary: number | null;
-  source_created_at: string | null;
-  last_synced_at: string;
-  description: string | null;
-  tags: unknown;
-};
-
 const PAGE_SIZE = 24;
 
 export default async function JobsPage({
@@ -40,9 +26,9 @@ export default async function JobsPage({
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
-  const keyword = valueOf(params.q);
+  const keyword = valueOf(params.q).trim();
   const remoteOnly = valueOf(params.remote) === "1";
-  const page = Math.max(1, Number(valueOf(params.page) || "1") || 1);
+  const page = Math.min(400, Math.max(1, parseInt(valueOf(params.page), 10) || 1));
 
   const search = new URLSearchParams();
   if (keyword) search.set("q", keyword);
@@ -72,159 +58,89 @@ export default async function JobsPage({
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
+  const filtered = Boolean(keyword || remoteOnly);
+
   return (
-    <main className="-mt-20 min-h-screen bg-[#050b18] text-white">
-      <section className="relative overflow-hidden px-4 pb-14 pt-[calc(var(--site-header-height)+1.5rem)] sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(117,192,247,0.28),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(45,212,191,0.18),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_48%,#061827_100%)]" />
-
-        <div className="relative mx-auto max-w-7xl">
-          <h1 className="sr-only">岗位广场</h1>
-          <div className="rounded-2xl border border-sky-200/15 bg-white/[0.06] p-4 sm:p-5">
-            <form className="grid gap-3 md:grid-cols-[1fr_130px_auto]">
-              <input
-                name="q"
-                aria-label="搜索岗位"
-                defaultValue={keyword}
-                placeholder="搜索 Solidity、React、AI Agent、Remote..."
-                className="rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-[#75c0f7]/70"
-              />
-              <label className="flex items-center justify-center gap-2 rounded-2xl border border-sky-200/15 bg-[#071225]/90 px-4 py-3 text-sm font-semibold text-slate-200">
-                <input
-                  type="checkbox"
-                  name="remote"
-                  value="1"
-                  defaultChecked={remoteOnly}
-                  className="h-4 w-4 accent-[#75c0f7]"
-                />
-                远程
-              </label>
-              <button className="rounded-2xl bg-[#75c0f7] px-5 py-3 text-sm font-black text-[#041020] transition hover:bg-sky-200">
-                搜索
-              </button>
-            </form>
-
-            <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-300">
-              <span className="rounded-full bg-white/[0.08] px-3 py-1">
-                已同步 {total} 个岗位
-              </span>
-              <Link
-                href="/jobs/agent"
-                className="rounded-full border border-[#75c0f7]/30 px-3 py-1 font-semibold text-[#75c0f7] transition hover:bg-[#75c0f7]/10"
-              >
-                用岗位 Agent 对话检索
-              </Link>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="mt-10 rounded-3xl border border-red-400/20 bg-red-500/10 p-8 text-red-100">
-              岗位加载失败：{error.message}
-            </div>
-          ) : rows.length > 0 ? (
-            <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {rows.map((job) => (
-                <JobCard key={job.id} job={job} />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-12 rounded-[32px] border border-sky-200/15 bg-white/[0.06] p-12 text-center text-slate-300">
-              暂时没有匹配岗位，换一个关键词试试。
-            </div>
-          )}
-
-          {pageCount > 1 && (
-            <div className="mt-10 flex items-center justify-center gap-3">
-              <PageLink disabled={page <= 1} page={page - 1} params={params}>
-                上一页
-              </PageLink>
-              <span className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300">
-                {page} / {pageCount}
-              </span>
-              <PageLink disabled={page >= pageCount} page={page + 1} params={params}>
-                下一页
-              </PageLink>
-            </div>
-          )}
+    <div className="min-h-[calc(100vh-var(--site-header-height))] bg-[#f5f8fc] pb-14 text-slate-900">
+      <h1 className="sr-only">岗位广场</h1>
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-4 py-4 sm:px-6 lg:flex-nowrap lg:px-8">
+          <form action="/jobs" role="search" className="grid w-full grid-cols-[1fr_auto] items-center gap-2 sm:flex lg:max-w-3xl">
+            <label className="col-span-2 flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-slate-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+              <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg>
+              <input name="q" type="search" aria-label="搜索岗位或公司" defaultValue={keyword} placeholder="搜岗位、公司或关键词"
+                className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500" />
+            </label>
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 whitespace-nowrap px-1 text-sm font-medium text-slate-700 sm:px-3">
+              <input name="remote" type="checkbox" value="1" defaultChecked={remoteOnly} className="h-4 w-4 accent-blue-600" />
+              只看远程
+            </label>
+            <button className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-blue-600">搜索</button>
+          </form>
+          <Link href="/jobs/agent" className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-blue-700 hover:underline">
+            <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16v12H10l-5 4v-4H4z" strokeLinejoin="round" /></svg> 岗位助手
+          </Link>
         </div>
+      </div>
+
+      <section className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8" aria-labelledby="job-results">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 id="job-results" className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{filtered ? "筛选结果" : "最新岗位"}</h2>
+            {!error && <span className="text-sm tabular-nums text-slate-600">{total} 个岗位</span>}
+          </div>
+          {filtered && <Link href="/jobs" className="text-sm text-blue-700 hover:underline">清除筛选</Link>}
+        </div>
+        {error ? (
+          <p role="alert" className="rounded-xl border border-red-200 bg-white p-6 text-red-700">岗位加载失败，请稍后刷新。</p>
+        ) : rows.length ? (
+          <ul className="grid gap-3 lg:grid-cols-2 lg:gap-4">
+            {rows.map(job => <li className="min-w-0" key={job.id}><JobCard job={job} /></li>)}
+          </ul>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
+            {filtered ? "没有找到匹配的岗位，试试公司名或更短的关键词。" : "当前还没有可展示的岗位。"}
+            {(filtered || page > 1) && <Link href="/jobs" className="mt-3 block font-semibold text-blue-700">查看最新岗位</Link>}
+          </div>
+        )}
+        {!error && pageCount > 1 && (
+          <nav aria-label="岗位分页" className="mt-7 flex items-center justify-center gap-3">
+            <PageLink disabled={page <= 1} page={page - 1} params={params}>上一页</PageLink>
+            <span className="text-sm tabular-nums text-slate-600">{page} / {pageCount}</span>
+            <PageLink disabled={page >= pageCount} page={page + 1} params={params}>下一页</PageLink>
+          </nav>
+        )}
       </section>
-    </main>
+    </div>
   );
 }
 
 function JobCard({ job }: { job: JobListing }) {
-  const tags = normalizeTags(job.tags).slice(0, 4);
-  const salary = formatSalary(job.min_salary, job.max_salary);
-
+  const date = jobDate(job.source_created_at);
+  const tags = jobTags(job.tags).slice(0, 3);
+  const details = [job.work_type_name, job.location].filter(value => value && value !== job.office_mode_name);
   return (
-    <Link
-      href={`/jobs/${job.id}`}
-      className="group flex min-h-[310px] flex-col rounded-[28px] border border-sky-200/12 bg-[#081225]/88 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[#75c0f7]/45 hover:bg-[#0b172c]"
-    >
-      <div className="flex items-start gap-4">
+    <Link href={`/jobs/${job.id}`} className="group flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 text-slate-900 transition hover:border-blue-300 hover:shadow-sm focus-visible:outline-blue-600 sm:p-5">
+      <div className="flex items-start gap-3">
         <CompanyLogo logo={job.company_logo} company={job.company_name} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {job.office_mode_name && (
-              <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-bold text-emerald-200">
-                {job.office_mode_name}
-              </span>
-            )}
-          </div>
-          <h2 className="mt-3 line-clamp-2 text-xl font-black leading-snug text-white transition group-hover:text-[#75c0f7]">
-            {job.title || "未命名岗位"}
-          </h2>
-          <p className="mt-2 truncate text-sm font-semibold text-slate-300">
-            {job.company_name || "Unknown Company"}
-          </p>
+          <h3 className="break-words text-lg font-bold leading-snug text-slate-950 group-hover:text-blue-700">{job.title || "未命名岗位"}</h3>
+          {job.company_name && <p className="mt-1 truncate text-sm text-slate-600">{job.company_name}</p>}
         </div>
+        {job.office_mode_name && <span className="shrink-0 rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800">{job.office_mode_name}</span>}
       </div>
-
-      <p className="mt-5 line-clamp-3 flex-1 text-sm leading-7 text-slate-400">
-        {job.description || "暂无岗位描述，点击查看岗位详情。"}
-      </p>
-
-      <div className="mt-5 space-y-3 text-sm text-slate-300">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-slate-500">地点</span>
-          <span className="truncate font-semibold">{job.location || "未标注"}</span>
+      {job.description && <p className="mt-3 line-clamp-2 break-words text-sm leading-6 text-slate-600">{job.description}</p>}
+      {tags.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{tags.map(tag =>
+        <span key={tag} className="max-w-full truncate rounded bg-slate-100 px-2 py-0.5 text-xs leading-5 text-slate-600">{tag}</span>
+      )}</div>}
+      <div className="mt-auto pt-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
+          <span className={job.min_salary || job.max_salary ? "text-sm font-semibold text-blue-800" : "text-sm text-slate-600"}>{jobSalary(job)}</span>
+          {date && <time dateTime={job.source_created_at!} className="text-xs tabular-nums text-slate-500">{date} 发布</time>}
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-slate-500">薪资</span>
-          <span className="font-semibold text-[#9ee7ff]">{salary}</span>
-        </div>
+        {details.length > 0 && <p className="mt-1.5 flex items-baseline gap-1.5 text-xs leading-5 text-slate-600"><svg aria-hidden="true" className="h-3.5 w-3.5 shrink-0 self-center" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2" /></svg><span className="break-words">{details.join(" · ")}</span></p>}
       </div>
-
-      {tags.length > 0 && (
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-white/10 px-2.5 py-1 text-xs font-semibold text-slate-300"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
     </Link>
-  );
-}
-
-function CompanyLogo({ logo, company }: { logo: string | null; company: string | null }) {
-  if (logo) {
-    return (
-      <img
-        src={logo}
-        alt={company || "Company"}
-        className="h-14 w-14 rounded-2xl border border-white/10 bg-white object-contain p-2"
-      />
-    );
-  }
-
-  return (
-    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#75c0f7]/25 bg-[#75c0f7]/10 text-xl font-black text-[#75c0f7]">
-      {(company || "J").slice(0, 1).toUpperCase()}
-    </div>
   );
 }
 
@@ -242,7 +158,7 @@ function PageLink({
   const href = buildPageHref(params, page);
   if (disabled) {
     return (
-      <span className="cursor-not-allowed rounded-full border border-white/10 px-4 py-2 text-sm text-slate-600">
+      <span className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-400">
         {children}
       </span>
     );
@@ -250,7 +166,7 @@ function PageLink({
   return (
     <Link
       href={href}
-      className="rounded-full border border-[#75c0f7]/30 px-4 py-2 text-sm font-bold text-[#75c0f7] transition hover:bg-[#75c0f7]/10"
+      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
     >
       {children}
     </Link>
@@ -280,33 +196,4 @@ function valueOf(value: string | string[] | undefined) {
     return value[0] ?? "";
   }
   return value ?? "";
-}
-
-function normalizeTags(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object" && "tagName" in item) {
-        return String((item as { tagName?: unknown }).tagName ?? "");
-      }
-      return "";
-    })
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function formatSalary(min: number | null, max: number | null) {
-  const format = (value: number) =>
-    new Intl.NumberFormat("en-US", {
-      notation: value >= 10000 ? "compact" : "standard",
-      maximumFractionDigits: 1,
-    }).format(value);
-
-  if (min && max) return `$${format(min)} - $${format(max)}`;
-  if (min) return `$${format(min)}+`;
-  if (max) return `最高 $${format(max)}`;
-  return "未公开";
 }

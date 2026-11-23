@@ -1,5 +1,6 @@
 'use client'
 
+import ProfileLoading from './loading'
 import { useEffect, useState } from 'react'
 import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { useRouter } from 'next/navigation'
@@ -433,7 +434,7 @@ export default function ProfilePage() {
 
   // 如果还在检查登录状态或未登录，不渲染
   if (!user) {
-    return null
+    return <ProfileLoading />
   }
 
   return (

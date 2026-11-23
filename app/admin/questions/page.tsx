@@ -599,7 +599,7 @@ export default function QuestionsManagePage() {
     : [];
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton />;
+    return <AdminListSkeleton stats={0} />;
   }
 
   if (!hasPermission) {

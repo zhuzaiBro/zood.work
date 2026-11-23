@@ -18,7 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { videoApiUrl } from "@/lib/videoApi";
 import CodeBlock from "@/components/CodeBlock";
 import LessonDocumentViewer from "@/components/LessonDocumentViewer";
-import { CoursePlayerLoadingSkeleton } from "@/components/ui/PageSkeleton";
+import CoursePlayerLoading from "@/app/learn/loading";
 import { extractLessonCodeExamples } from "@/lib/lessonCodeExamples";
 import {
   hasLessonDocument,
@@ -1376,7 +1376,7 @@ export default function CoursePlayer({
         })();
 
   if (isLoading) {
-    return <CoursePlayerLoadingSkeleton />;
+    return <CoursePlayerLoading />;
   }
 
   if (error) {

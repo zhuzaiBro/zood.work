@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { platformBrowser } from '@/lib/platform/client';
 import { getChatSessionId } from '@/lib/chatSession';
+import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
 import { useUser } from '@/store/userStore';
 import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
@@ -28,9 +29,14 @@ export default function ChatDialog() {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [topic, setTopic] = useState<string | null>(null);
+  const requestVersion = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    requestVersion.current++;
+    setMessages([]);
+    setTopic(null);
     setSessionId(getChatSessionId(user?.id));
   }, [user?.id]);
 
@@ -43,9 +49,12 @@ export default function ChatDialog() {
   const reloadMessages = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const { messages: rows } = await platformBrowser<{ messages: ChatMessage[] }>(
-        `/api/platform/messages?sessionId=${encodeURIComponent(sessionId)}`,
+      const version = ++requestVersion.current;
+      const { messages: rows, topic } = await platformBrowser<{ messages: ChatMessage[]; topic?: string }>(
+        `/api/platform/messages?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" },
       );
+      if (version !== requestVersion.current) return;
+      setTopic(topic || null);
       setMessages(rows ?? []);
       setError('');
     } catch {
@@ -65,22 +74,7 @@ export default function ChatDialog() {
     loadMessages();
   }, [open, sessionId, loadMessages]);
 
-  useEffect(() => {
-    if (!open || !sessionId) return;
-    let timer = 0;
-    let stopped = false;
-    const tick = () => {
-      if (stopped) return;
-      void reloadMessages();
-      const hidden = document.visibilityState === 'hidden';
-      timer = window.setTimeout(tick, hidden ? 20000 : 4000);
-    };
-    timer = window.setTimeout(tick, 4000);
-    return () => {
-      stopped = true;
-      window.clearTimeout(timer);
-    };
-  }, [open, reloadMessages, sessionId]);
+  useSupportUpdates(open && !!sessionId, topic, reloadMessages);
 
   useEffect(() => {
     if (open) scrollToBottom();

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
@@ -15,6 +16,7 @@ export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { initialize } = useUserStore()
+  const passwordUpdated = searchParams.get('reset') === 'success'
   const redirectTarget = searchParams.get('redirect') || '/'
   const safeRedirectTarget =
     redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')
@@ -89,7 +91,7 @@ export default function LoginForm() {
 
   return (
     <div className="space-y-6">
-      {/* 邮箱登录表单 */}
+      {passwordUpdated && <p role="status" className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">密码已更新，请用新密码登录。</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="email" className="block text-sm font-medium mb-2">
@@ -98,6 +100,7 @@ export default function LoginForm() {
           <input
             id="email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
@@ -107,12 +110,14 @@ export default function LoginForm() {
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-2">
-            密码
-          </label>
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <label htmlFor="password" className="text-sm font-medium">密码</label>
+            {!isSignUp && <Link href="/forgot-password" className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">忘记密码？</Link>}
+          </div>
           <input
             id="password"
             type="password"
+            autoComplete={isSignUp ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"

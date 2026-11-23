@@ -4,23 +4,6 @@ import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-type TronHeroSectionProps = {
-  publishedCount: number
-  categoryCount: number
-}
-
-function formatCount(value: number) {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`
-  }
-
-  return String(value)
-}
-
 function createPointTexture() {
   const canvas = document.createElement('canvas')
   canvas.width = 128
@@ -129,10 +112,7 @@ function worldLandStrength(lon: number, lat: number) {
   return Math.max(...continents, islands)
 }
 
-export default function TronHeroSection({
-  publishedCount,
-  categoryCount,
-}: TronHeroSectionProps) {
+export default function TronHeroSection() {
   const canvasHostRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -659,13 +639,6 @@ export default function TronHeroSection({
     }
   }, [])
 
-  const stats = [
-    { label: '学习笔记', value: formatCount(publishedCount) },
-    { label: '知识专题', value: formatCount(categoryCount) },
-    { label: '主线方向', value: 'AI应用 · 出海实战' },
-    { label: '社区实践', value: '作品与求职' },
-  ]
-
   return (
     <section className="relative overflow-hidden border-b border-[#101d38] bg-[#02050b]">
       <div
@@ -679,34 +652,27 @@ export default function TronHeroSection({
           `,
         }}
       />
-      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 pb-10 pt-28 lg:px-10 lg:pb-14 lg:pt-32">
-        <div className="grid flex-1 items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(520px,0.95fr)]">
+      <div className="relative mx-auto flex max-w-7xl flex-col px-5 pb-4 pt-24 sm:px-8 lg:pb-8 lg:pt-24">
+        <div className="grid flex-1 items-center gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <div className="relative z-10 max-w-2xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#20345c] bg-[#07101f]/80 px-4 py-2 text-sm font-medium text-[#cbe5ff] shadow-[0_10px_30px_rgba(54,100,255,0.12)] backdrop-blur">
-              <span className="h-2 w-2 rounded-full bg-[#8ee7ff]" />
-              AI出海社区
-            </div>
-
-            <h1 className="max-w-[12ch] text-4xl font-black leading-[0.96] tracking-normal text-[#f5f8ff] sm:text-6xl sm:leading-[0.92] lg:text-7xl">
-              AI出海社区
+            <h1 className="text-4xl font-bold leading-[1.22] tracking-tight text-[#f5f8ff] sm:text-5xl lg:text-6xl">
+              从你会的事开始，<br />试一份出海工作
             </h1>
-
-            <p className="mt-6 max-w-xl text-base leading-8 text-[#9fb2d1] sm:text-lg">
-              分享 AI 工具与产品实践、跨境业务经验和海外求职方法，从作品积累到面试准备，一起探索面向全球的机会。
+            <p className="mt-5 max-w-xl text-base leading-8 text-[#c7d5e7] sm:text-lg">
+              不确定下一份工作做什么？挑一个你感兴趣的小任务，用 AI 帮你整理资料、写初稿，再亲手做出一份能给招聘方看的作品。
             </p>
-
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
-                href="/courses"
+                href="#career-directions"
                 className="inline-flex items-center rounded-full bg-[linear-gradient(135deg,#5f82ff,#8fe7ff)] px-7 py-3 text-sm font-semibold text-[#04101f] shadow-[0_20px_45px_rgba(86,145,255,0.28)] transition-transform duration-200 hover:-translate-y-0.5"
               >
-                探索实战内容
+                选一个方向试试
               </Link>
               <Link
-                href="/posts/create"
+                href="/jobs"
                 className="inline-flex items-center rounded-full border border-[#223966] bg-[#081224]/82 px-7 py-3 text-sm font-semibold text-[#e5efff] shadow-[0_12px_30px_rgba(5,10,22,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
               >
-                分享出海经验
+                看看企业在招什么
               </Link>
             </div>
           </div>
@@ -715,21 +681,12 @@ export default function TronHeroSection({
             <div className="absolute h-[74%] w-[74%] rounded-full bg-[radial-gradient(circle,rgba(132,203,255,0.16),rgba(63,108,255,0.08),transparent_68%)] blur-3xl" />
             <div
               ref={canvasHostRef}
-              className="relative h-[300px] w-full max-w-full sm:h-[380px] sm:max-w-[560px] lg:h-[500px]"
+              className="relative h-[120px] w-full max-w-full sm:h-[190px] lg:h-[350px]"
             />
           </div>
         </div>
 
-        <div className="relative z-10 mt-4 grid gap-6 border-t border-[#162646] pt-8 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <div key={stat.label}>
-              <p className="text-sm text-[#7f95ba]">{stat.label}</p>
-              <p className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#edf4ff]">
-                {stat.value}
-              </p>
-            </div>
-          ))}
-        </div>
+
       </div>
     </section>
   )

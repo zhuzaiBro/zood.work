@@ -21,16 +21,15 @@ test('the static homepage pathname /index uses the same hero chrome as /', () =>
 
 test('a scrolled immersive page keeps a dark bar and a white wordmark', () => {
   assert.equal(siteHeaderSurface('/', false), 'dark')
-  assert.equal(siteHeaderSurface('/jobs/42', false), 'dark')
   assert.equal(siteHeaderWordmarkTone('/'), 'on-dark')
-  assert.equal(siteHeaderWordmarkTone('/jobs'), 'on-dark')
   // `/learn` is a prefix of this path, so the existing light-page rule still wins.
   assert.equal(siteHeaderSurface('/learning-test', true), 'light')
 })
 
 test('light content pages keep a light bar and a dark wordmark', () => {
-  for (const path of ['/learn', '/courses', '/posts/hello', '/profile', '/resume-agent']) {
+  for (const path of ['/learn', '/courses', '/posts/hello', '/profile', '/resume-agent', '/jobs', '/jobs/42', '/jobs/agent']) {
     assert.equal(siteHeaderSurface(path, true), 'light', path)
+    assert.equal(siteHeaderSurface(path, false), 'light', path)
     assert.equal(siteHeaderWordmarkTone(path), 'on-light', path)
   }
   assert.equal(siteHeaderSurface('/interview', true), 'light')

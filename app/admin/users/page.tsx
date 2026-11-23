@@ -343,7 +343,7 @@ export default function AdminUsersPage() {
   ];
 
   if (loading && !data) {
-    return <AdminListSkeleton />;
+    return <AdminListSkeleton stats={5} />;
   }
 
   if (!hasPermission) {

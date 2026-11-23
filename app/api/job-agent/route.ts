@@ -1,46 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { platformPublic } from '@/lib/platform/client';
+import type { JobListing } from '@/lib/jobs/display';
 
 export async function POST(request: NextRequest) {
-  const endpoint =
-    process.env.JOB_SYNC_AGENT_URL ||
-    `${process.env.JOB_SYNC_BASE_URL || "http://localhost:8080"}/agent/jobs`;
-  const token = process.env.JOB_SYNC_AGENT_TOKEN || process.env.AGENT_AUTH_TOKEN;
-
-  let payload: unknown;
+  const payload = await request.json().catch(() => null);
+  const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
+  if (!message || message.length > 200) return NextResponse.json({ error: '请输入 1 到 200 字的岗位关键词。' }, { status: 400 });
+  const limit = Math.min(10, Math.max(1, Number(payload.limit) || 5));
+  const remote = /远程|\bremote\b/i.test(message);
+  const keyword = message.replace(/远程|\bremote\b/gi, '').trim();
+  const params = new URLSearchParams();
+  if (remote) params.set('remote', '1');
+  if (keyword) params.set('q', keyword);
   try {
-    payload = await request.json();
-  } catch {
-    return NextResponse.json({ error: "请求内容不是有效 JSON" }, { status: 400 });
-  }
-
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      cache: "no-store",
+    const result = await platformPublic<{ jobs: JobListing[]; count: number }>(`/api/platform/jobs?${params}`);
+    const jobs = result.jobs.slice(0, limit).map(job => ({ id: job.id, title: job.title, company: job.company_name }));
+    return NextResponse.json({
+      intent: 'search_jobs', jobs,
+      reply: jobs.length ? `找到 ${result.count} 个相关岗位。` : '没有找到匹配的岗位。可以试试更短的岗位名或公司名。',
     });
-    const text = await response.text();
-    let data: unknown = {};
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch {
-      data = { error: text || "岗位助手返回了非 JSON 响应" };
-    }
-
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    console.error("Job agent proxy error:", error);
-    return NextResponse.json(
-      { error: "岗位助手暂时不可用，请确认 job-sync worker 已启动" },
-      { status: 502 }
-    );
+  } catch {
+    return NextResponse.json({ error: '岗位暂时无法加载，请稍后重试。' }, { status: 502 });
   }
 }

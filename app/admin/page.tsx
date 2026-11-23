@@ -1,15 +1,5 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { AdminListSkeleton } from '@/components/ui/PageSkeleton';
+import { redirect } from 'next/navigation'
 
 export default function AdminPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace('/admin/questions');
-  }, [router]);
-
-  return <AdminListSkeleton />;
+  redirect('/admin/questions')
 }

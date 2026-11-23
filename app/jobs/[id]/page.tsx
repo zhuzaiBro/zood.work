@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { platformPublic, PlatformError } from "@/lib/platform/client";
+import CompanyLogo from "@/components/jobs/CompanyLogo";
+import { jobDate, jobTags, jobSalary, type JobListing } from "@/lib/jobs/display";
 import JobContactPanel from "@/components/jobs/JobContactPanel";
 import type { Metadata } from "next";
 
@@ -8,24 +10,12 @@ export const revalidate = 60;
 
 type Params = Promise<{ id: string }>;
 
-type JobDetail = {
-  id: string;
-  title: string | null;
-  company_name: string | null;
-  company_logo: string | null;
-  company_website: string | null;
-  location: string | null;
-  office_mode_name: string | null;
-  work_type_name: string | null;
-  min_salary: number | null;
-  max_salary: number | null;
-  source_created_at: string | null;
-  last_synced_at: string;
-  description: string | null;
+type JobDetail = JobListing & {
   requirements: string | null;
   benefits: string | null;
   extra_content: string | null;
-  tags: unknown;
+  company_website?: string | null;
+  has_contact?: boolean;
 };
 
 async function loadJob(id: string) {
@@ -70,8 +60,9 @@ export default async function JobDetailPage({ params }: { params: Params }) {
     notFound();
   }
 
-  const detail = job as JobDetail;
-  const tags = normalizeTags(detail.tags);
+  const detail = job;
+  const website = companyWebsite(detail.company_website);
+  const tags = jobTags(detail.tags);
   const sections = [
     { title: "岗位描述", content: detail.description },
     { title: "岗位要求", content: detail.requirements },
@@ -80,40 +71,37 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   ].filter((section) => section.content && section.content.trim());
 
   return (
-    <main className="-mt-20 min-h-screen bg-[#050b18] text-white">
-      <section className="relative overflow-hidden px-4 pb-12 pt-32 sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(117,192,247,0.24),transparent_34%),radial-gradient(circle_at_90%_8%,rgba(45,212,191,0.16),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_52%,#061827_100%)]" />
-
-        <div className="relative mx-auto max-w-6xl">
+    <div className="min-h-[calc(100vh-var(--site-header-height))] bg-[#f5f8fc] pb-12 text-slate-900">
+      <div className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 lg:px-8">
           <Link
             href="/jobs"
-            className="inline-flex items-center rounded-full border border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm font-bold text-[#75c0f7] transition hover:bg-sky-300/15"
+            className="inline-flex items-center rounded-md py-1 text-sm font-semibold text-blue-700 hover:underline"
           >
             ← 返回岗位广场
           </Link>
 
-          <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
-            <article className="rounded-[34px] border border-sky-200/15 bg-[#081225]/88 p-6 shadow-[0_30px_120px_rgba(0,0,0,0.35)] backdrop-blur-2xl sm:p-8">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          <div className="mt-4 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+            <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 sm:p-8">
+              <div className="flex items-start gap-4">
                 <CompanyLogo logo={detail.company_logo} company={detail.company_name} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap gap-2">
                     {detail.work_type_name && (
-                      <span className="rounded-full bg-white/[0.08] px-3 py-1 text-xs font-bold text-slate-200">
+                      <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                         {detail.work_type_name}
                       </span>
                     )}
                     {detail.office_mode_name && (
-                      <span className="rounded-full bg-emerald-300/10 px-3 py-1 text-xs font-bold text-emerald-200">
+                      <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800">
                         {detail.office_mode_name}
                       </span>
                     )}
                   </div>
-                  <h1 className="mt-4 text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl">
+                  <h1 className="mt-2 break-words text-2xl font-bold leading-tight text-slate-950 sm:text-3xl">
                     {detail.title || "未命名岗位"}
                   </h1>
-                  <p className="mt-4 text-lg font-semibold text-slate-300">
-                    {detail.company_name || "Unknown Company"}
+                  <p className="mt-1.5 text-base text-slate-600">
+                    {detail.company_name || "公司未注明"}
                   </p>
                 </div>
               </div>
@@ -122,11 +110,11 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                 <InfoCard label="地点" value={detail.location || "未标注"} />
                 <InfoCard
                   label="薪资"
-                  value={formatSalary(detail.min_salary, detail.max_salary)}
+                  value={jobSalary(detail)}
                 />
                 <InfoCard
-                  label="同步时间"
-                  value={formatDate(detail.last_synced_at)}
+                  label={detail.source_created_at ? "发布时间" : "同步时间"}
+                  value={jobDate(detail.source_created_at || detail.last_synced_at) || "未注明"}
                 />
               </div>
 
@@ -135,7 +123,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300"
+                      className="rounded bg-slate-100 px-2.5 py-1 text-xs text-slate-600"
                     >
                       {tag}
                     </span>
@@ -147,39 +135,38 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                 {sections.length > 0 ? (
                   sections.map((section) => (
                     <section key={section.title}>
-                      <h2 className="text-2xl font-black text-white">
+                      <h2 className="text-lg font-bold text-slate-950">
                         {section.title}
                       </h2>
-                      <div className="mt-4 whitespace-pre-wrap text-base leading-8 text-slate-300">
+                      <div className="mt-3 whitespace-pre-line break-words text-[15px] leading-8 text-slate-700">
                         {section.content}
                       </div>
                     </section>
                   ))
                 ) : (
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-slate-300">
-                    暂无岗位详情，可以通过右侧联系方式面板解锁投递入口。
+                  <div className="rounded-lg bg-slate-50 p-5 text-slate-600">
+                    招聘方暂未提供详细说明。
                   </div>
                 )}
               </div>
             </article>
 
-            <aside className="space-y-5">
-              <div className="sticky top-28 rounded-[30px] border border-sky-200/15 bg-white/[0.06] p-5 shadow-[0_30px_100px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-                <h2 className="text-lg font-black text-white">准备投递</h2>
-                <p className="mt-3 text-sm leading-7 text-slate-400">
-                  看完岗位后，可以先用简历优化 Agent 对齐 JD，再去面试题库补短板。
-                </p>
+            <aside className="lg:sticky lg:top-[calc(var(--site-header-height)+1rem)]">
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <h2 className="text-lg font-bold text-slate-950">准备投递</h2>
                 <div className="mt-5 grid gap-3">
-                  <JobContactPanel jobId={detail.id} />
+                  {website && <a href={website} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-blue-700">访问公司官网 ↗</a>}
+                  {detail.has_contact !== false && <JobContactPanel jobId={detail.id} />}
+                  {!website && detail.has_contact === false && <p className="text-sm text-slate-600">招聘方暂未公开投递方式。</p>}
                   <Link
                     href="/resume-agent"
-                    className="inline-flex justify-center rounded-2xl border border-[#75c0f7]/30 px-5 py-3 text-sm font-bold text-[#75c0f7] transition hover:bg-[#75c0f7]/10"
+                    className="inline-flex justify-center rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
                   >
                     简历优化 Agent
                   </Link>
                   <Link
                     href="/interview"
-                    className="inline-flex justify-center rounded-2xl border border-white/10 px-5 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/[0.06]"
+                    className="inline-flex justify-center rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     刷面试题库
                   </Link>
@@ -187,76 +174,30 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               </div>
             </aside>
           </div>
-        </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-4">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+    <div className="min-w-0 rounded-lg bg-slate-50 p-3">
+      <p className="text-xs text-slate-500">
         {label}
       </p>
-      <p className="mt-2 text-base font-black text-slate-100">{value}</p>
+      <p className="mt-1.5 break-words text-sm font-semibold text-slate-800">{value}</p>
     </div>
   );
 }
 
-function CompanyLogo({ logo, company }: { logo: string | null; company: string | null }) {
-  if (logo) {
-    return (
-      <img
-        src={logo}
-        alt={company || "Company"}
-        className="h-20 w-20 rounded-3xl border border-white/10 bg-white object-contain p-3"
-      />
-    );
+function companyWebsite(value?: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return null;
+    if (/(^|\.)dejob\.(ai|top)$/i.test(url.hostname)) return null;
+    return url.href;
+  } catch {
+    return null;
   }
-
-  return (
-    <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-[#75c0f7]/25 bg-[#75c0f7]/10 text-3xl font-black text-[#75c0f7]">
-      {(company || "J").slice(0, 1).toUpperCase()}
-    </div>
-  );
-}
-
-function normalizeTags(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object" && "tagName" in item) {
-        return String((item as { tagName?: unknown }).tagName ?? "");
-      }
-      return "";
-    })
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function formatSalary(min: number | null, max: number | null) {
-  const format = (value: number) =>
-    new Intl.NumberFormat("en-US", {
-      notation: value >= 10000 ? "compact" : "standard",
-      maximumFractionDigits: 1,
-    }).format(value);
-
-  if (min && max) return `$${format(min)} - $${format(max)}`;
-  if (min) return `$${format(min)}+`;
-  if (max) return `最高 $${format(max)}`;
-  return "未公开";
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "刚刚";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "刚刚";
-  return parsed.toLocaleDateString("zh-CN", {
-    month: "short",
-    day: "numeric",
-  });
 }

@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 type AgentMessage = {
   role: "user" | "agent";
   content: string;
+  jobs?: { id: string; title: string; company?: string }[];
 };
 
 const examples = ["前端 远程", "Solidity 合约", "AI Agent 全栈", "产品经理 Web3"];
@@ -41,6 +42,7 @@ export default function JobAgentClient() {
         ...current,
         {
           role: "agent",
+          jobs: data.jobs,
           content:
             data.reply ||
             data.error ||
@@ -50,7 +52,7 @@ export default function JobAgentClient() {
     } catch {
       setMessages((current) => [
         ...current,
-        { role: "agent", content: "岗位助手连接失败，请确认后端服务已启动。" },
+        { role: "agent", content: "岗位助手暂时无法连接，请稍后再试。" },
       ]);
     } finally {
       setIsLoading(false);
@@ -58,29 +60,18 @@ export default function JobAgentClient() {
   };
 
   return (
-    <main className="-mt-20 min-h-screen overflow-hidden bg-[#050b18] text-white">
-      <section className="relative px-4 pb-20 pt-32 sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(117,192,247,0.25),transparent_32%),radial-gradient(circle_at_82%_18%,rgba(44,213,196,0.18),transparent_28%),linear-gradient(135deg,#08152d_0%,#050b18_48%,#061827_100%)]" />
-
-        <div className="relative mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="flex flex-col justify-center">
-            <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-sky-300/25 bg-sky-300/10 px-4 py-2 text-sm font-semibold text-[#75c0f7]">
-              <span className="h-2 w-2 rounded-full bg-[#75c0f7] shadow-[0_0_18px_rgba(117,192,247,0.9)]" />
-              Web3 / AI Job Agent
-            </div>
-            <h1 className="max-w-xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
-              用 Agent 快速找到更适合你的岗位
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
-              后端通过 MCP 工具检索同步岗位，前端用对话方式承接。你可以输入技术栈、远程工作偏好、CEX项目或交易所方向，助手会返回更适合你的岗位线索。
-            </p>
+    <div className="min-h-[calc(100vh-var(--site-header-height))] bg-[#f5f8fc] text-slate-900">
+      <div className="mx-auto grid max-w-6xl items-start gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[0.65fr_1.35fr] lg:px-8 lg:py-10">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-950">岗位助手</h1>
+            <p className="mt-3 text-sm leading-7 text-slate-600">输入岗位、公司或远程偏好，查询岗位广场里的招聘信息。</p>
             <div className="mt-8 flex flex-wrap gap-3">
               {examples.map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => submit(undefined, item)}
-                  className="rounded-full border border-sky-300/20 bg-white/5 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:border-[#75c0f7]/70 hover:bg-[#75c0f7]/15"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-blue-300 hover:text-blue-700"
                 >
                   {item}
                 </button>
@@ -89,32 +80,23 @@ export default function JobAgentClient() {
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
                 href="/jobs"
-                className="inline-flex w-fit text-sm font-semibold text-[#75c0f7] hover:text-sky-200"
+                className="inline-flex w-fit text-sm font-semibold text-blue-700 hover:underline"
               >
                 返回岗位广场 →
               </Link>
               <Link
                 href="/courses"
-                className="inline-flex w-fit text-sm font-semibold text-slate-300 hover:text-sky-200"
+                className="inline-flex w-fit text-sm font-semibold text-slate-600 hover:text-blue-700"
               >
                 去学习 Web3 / AI 课程 →
               </Link>
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-sky-200/15 bg-[#081225]/86 p-4 shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-[#75c0f7]">岗位助手</p>
-                <p className="text-xs text-slate-400">Agent → MCP → job_listings</p>
-              </div>
-              <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-                Online
-              </span>
-            </div>
-
-            <div className="flex h-[520px] flex-col">
-              <div className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-1 sm:p-2">
+            <h2 className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">对话记录</h2>
+            <div className="flex h-[min(520px,70vh)] flex-col">
+              <div aria-live="polite" className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
                 {messages.map((message, index) => (
                   <div
                     key={`${message.role}-${index}`}
@@ -123,34 +105,36 @@ export default function JobAgentClient() {
                     }`}
                   >
                     <div
-                      className={`max-w-[86%] whitespace-pre-wrap rounded-3xl px-5 py-4 text-sm leading-7 ${
+                      className={`max-w-[86%] whitespace-pre-wrap rounded-xl px-5 py-4 text-sm leading-7 ${
                         message.role === "user"
-                          ? "bg-[#75c0f7] text-[#041020]"
-                          : "border border-white/10 bg-white/[0.06] text-slate-100"
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-100 text-slate-800"
                       }`}
                     >
                       {message.content}
+                      {message.jobs?.map(job => <Link key={job.id} href={`/jobs/${job.id}`} className="mt-2 block font-medium text-blue-700 hover:underline">{job.title}{job.company ? ` · ${job.company}` : ""}</Link>)}
                     </div>
                   </div>
                 ))}
                 {isLoading && (
-                  <div className="w-fit rounded-3xl border border-white/10 bg-white/[0.06] px-5 py-4 text-sm text-slate-300">
-                    正在调用岗位 Agent...
+                  <div className="w-fit rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
+                    正在查询岗位…
                   </div>
                 )}
               </div>
 
-              <form onSubmit={submit} className="flex gap-3 border-t border-white/10 p-4">
+              <form onSubmit={submit} className="flex gap-3 border-t border-slate-200 p-4">
                 <input
+                  aria-label="输入岗位关键词"
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
-                  placeholder="输入岗位关键词，例如：Solidity 远程"
-                  className="min-w-0 flex-1 rounded-2xl border border-sky-200/15 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-[#75c0f7]/70"
+                  placeholder="输入岗位或公司，例如 Solidity 远程"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-blue-500"
                 />
                 <button
                   type="submit"
                   disabled={isLoading || !input.trim()}
-                  className="rounded-2xl bg-[#75c0f7] px-5 py-3 text-sm font-bold text-[#041020] transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   发送
                 </button>
@@ -158,7 +142,6 @@ export default function JobAgentClient() {
             </div>
           </div>
         </div>
-      </section>
-    </main>
+    </div>
   );
 }

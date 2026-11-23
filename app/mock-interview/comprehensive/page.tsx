@@ -85,8 +85,8 @@ export default function ComprehensiveInterviewPage() {
         </div>
 
         {/* Stepper */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
+        <div className="overflow-x-auto bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="flex w-max min-w-full items-center justify-between gap-2 sm:w-auto sm:min-w-0 sm:gap-0 max-w-4xl mx-auto">
             {steps.map((step, index) => (
               <div key={step.number} className="flex items-center flex-1 last:flex-none">
                 <div className="flex items-center gap-3 relative">

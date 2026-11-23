@@ -33,7 +33,7 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
           ? `/api/jobs/${jobId}/contact?mode=status`
           : `/api/jobs/${jobId}/contact`;
       const response = await fetch(url, {
-        method: "GET",
+        method: mode === "status" ? "GET" : "POST",
         headers: { Accept: "application/json" },
       });
       const payload = (await response.json()) as ContactResponse;
@@ -58,12 +58,12 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
     contacts?.telegram;
 
   return (
-    <div className="rounded-[26px] border border-[#75c0f7]/18 bg-[#071225]/86 p-4">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-black text-white">岗位联系方式</h3>
-          <p className="mt-2 text-xs leading-6 text-slate-400">
-            普通用户每月可免费查看 3 个岗位联系方式；会员可无限查看。
+          <h3 className="text-base font-semibold text-slate-900">岗位联系方式</h3>
+          <p className="mt-2 text-xs leading-6 text-slate-600">
+            普通用户每月可免费查看 3 个岗位的联系方式，会员不限次数。
           </p>
         </div>
       </div>
@@ -76,19 +76,19 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
           <ContactRow label="Telegram" value={contacts.telegram} />
 
           {!hasContact && (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
               这个岗位暂时没有同步到明确联系方式。
             </div>
           )}
 
           {data.message && (
-            <p className="text-xs leading-6 text-slate-400">{data.message}</p>
+            <p className="text-xs leading-6 text-slate-600">{data.message}</p>
           )}
         </div>
       ) : (
         <div className="mt-4 space-y-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4">
-            <div className="space-y-2 text-sm text-slate-300">
+          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+            <div className="space-y-2 text-sm text-slate-700">
               <SkeletonLine label="邮箱 / 手机" />
               <SkeletonLine label="微信 / Telegram" />
             </div>
@@ -97,17 +97,17 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
             type="button"
             onClick={() => loadContacts()}
             disabled={isLoading}
-            className="w-full rounded-2xl bg-[#75c0f7] px-5 py-3 text-sm font-black text-[#041020] transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? "正在确认..." : "查看联系方式"}
           </button>
           {data?.error && (
-            <div className="rounded-2xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
               <p>{data.error}</p>
               {data.code === "MONTHLY_LIMIT_REACHED" && (
                 <Link
                   href="/profile"
-                  className="mt-2 inline-flex font-bold text-[#75c0f7] hover:text-sky-200"
+                  className="mt-2 inline-flex font-bold text-blue-700 hover:underline"
                 >
                   去开通会员 →
                 </Link>
@@ -115,7 +115,7 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
               {data.code === "AUTH_REQUIRED" && (
                 <Link
                   href="/login"
-                  className="mt-2 inline-flex font-bold text-[#75c0f7] hover:text-sky-200"
+                  className="mt-2 inline-flex font-bold text-blue-700 hover:underline"
                 >
                   去登录 →
                 </Link>
@@ -136,11 +136,11 @@ export default function JobContactPanel({ jobId }: { jobId: string }) {
 function ContactRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 break-all text-sm font-bold text-slate-100">{value}</p>
+      <p className="mt-1 break-all text-sm font-bold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -149,7 +149,7 @@ function SkeletonLine({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <span>{label}</span>
-      <span className="rounded-full bg-slate-500/20 px-3 py-1 text-xs text-slate-500">
+      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
         解锁后可见
       </span>
     </div>

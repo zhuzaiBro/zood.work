@@ -117,7 +117,7 @@ export default function VideoManagePage() {
   };
 
   if (isCheckingAuth) {
-    return <AdminListSkeleton />;
+    return <AdminListSkeleton stats={0} />;
   }
 
   if (!hasPermission) {
@@ -156,7 +156,7 @@ export default function VideoManagePage() {
 
       <Card>
         {loading && courses.length === 0 ? (
-          <AdminListSkeleton rows={4} />
+          <AdminListSkeleton rows={4} tableOnly />
         ) : courses.length === 0 ? (
           <Empty description="暂无课程">
             <Button type="primary" onClick={() => setCreateModalOpen(true)}>

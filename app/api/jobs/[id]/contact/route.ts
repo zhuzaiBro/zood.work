@@ -9,3 +9,8 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
   const query = mode ? `?mode=${encodeURIComponent(mode)}` : '';
   return proxyPlatform(request, `/api/platform/jobs/${id}/contact${query}`);
 }
+
+export async function POST(request: NextRequest, { params }: { params: Params }) {
+  const { id } = await params;
+  return proxyPlatform(request, `/api/platform/jobs/${id}/contact`);
+}

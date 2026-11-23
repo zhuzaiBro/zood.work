@@ -9,6 +9,8 @@ export function isLightContentPage(pathname: string | null | undefined) {
   const path = normalizeSitePathname(pathname)
   return (
     path.startsWith('/posts') ||
+    path === '/jobs' || path.startsWith('/jobs/') ||
+    path === '/forgot-password' || path === '/reset-password' ||
     path.startsWith('/interview') ||
     path.startsWith('/learn') ||
     path.startsWith('/courses') ||
@@ -25,8 +27,7 @@ export function isDarkImmersivePage(pathname: string | null | undefined) {
   return (
     path === '/' ||
     path === '/interview' ||
-    path === '/learning-test' ||
-    path.startsWith('/jobs')
+    path === '/learning-test'
   )
 }
 

@@ -7,7 +7,7 @@ import { browserUser } from '@/lib/auth/session'
 import { platformBrowser, PlatformError } from '@/lib/platform/client'
 import { uploadPostBanner } from '@/lib/uploadPostBanner'
 import { deriveAutoSlug, slugWasEdited } from '@/lib/post-slug'
-import Skeleton from '@/components/ui/Skeleton'
+import EditorLoading from './loading'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
@@ -327,35 +327,7 @@ export default function CreatePostPage() {
     .trim()
     .replace(/\s+/g, '').length
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f7fc_34%,#f6f8fb_100%)] px-4 py-24">
-        <div className="mx-auto max-w-7xl space-y-5">
-          <div className="flex items-center justify-between gap-4">
-            <Skeleton className="h-9 w-24 rounded-full" />
-            <div className="flex gap-3">
-              <Skeleton className="h-9 w-20 rounded-full" />
-              <Skeleton className="h-9 w-24 rounded-full" />
-            </div>
-          </div>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-black/5">
-              <Skeleton className="h-10 w-2/3" />
-              <Skeleton className="mt-5 h-4 w-full" />
-              <Skeleton className="mt-3 h-4 w-11/12" />
-              <Skeleton className="mt-8 h-80 w-full rounded-2xl" />
-            </div>
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-              <Skeleton className="h-5 w-24" />
-              <Skeleton className="mt-5 h-32 w-full rounded-2xl" />
-              <Skeleton className="mt-4 h-10 w-full rounded-xl" />
-              <Skeleton className="mt-3 h-10 w-full rounded-xl" />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (authLoading) return <EditorLoading />
 
   if (!isAuthenticated) {
     return (

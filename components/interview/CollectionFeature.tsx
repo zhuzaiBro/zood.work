@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { CountedCollection } from '@/lib/interview/directory';
 import { getCollectionPageData, type Question } from '@/lib/interview/getCollectionPageData';
 import QuestionDifficulty from './QuestionDifficulty';
+import QuestionPreviewLoading from './QuestionPreviewLoading';
 
 const dateFormat = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Shanghai',
@@ -88,7 +89,7 @@ export default function CollectionFeature({ collection }: { collection: CountedC
       </Link>
       <section aria-labelledby="preview-heading" className="flex min-w-0 flex-col px-5 pb-1 pt-4 sm:px-7 sm:pb-3 sm:pt-6">
         <h3 id="preview-heading" className="border-b border-slate-200 pb-3 text-sm font-bold text-slate-600">题目预览</h3>
-        <Suspense fallback={<p className="py-6 text-sm text-slate-500" role="status">正在加载题目…</p>}>
+        <Suspense fallback={<QuestionPreviewLoading count={collection.questionCount} />}>
           <QuestionPreview collectionId={collection.id} />
         </Suspense>
       </section>

@@ -1,3 +1,4 @@
+import InterviewTypeHeading from "./InterviewTypeHeading";
 import Link from 'next/link';
 
 const INTERVIEW_TYPES = [
@@ -35,20 +36,7 @@ export default function MockInterviewPage() {
   return (
     <div className="min-h-screen mt-[-5rem] bg-gray-50 pt-40 pb-12 bg-gradient-to-b from-blue-50 to-gray-50">
       <div className="container mx-auto px-4 max-w-5xl">
-        <div className="mb-8">
-          <Link href="/interview" className="inline-flex items-center text-gray-500 hover:text-gray-900 transition-colors">
-            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            返回首页
-          </Link>
-        </div>
-
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">选择面试类型</h1>
-          <p className="text-gray-500 text-lg">请选择适合您的面试类型，开始定制化的面试体验</p>
-        </div>
+        <InterviewTypeHeading />
 
         {/* Cards Grid */}
         <div className="grid md:grid-cols-2 gap-6">

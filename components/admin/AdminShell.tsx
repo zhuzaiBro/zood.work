@@ -5,6 +5,7 @@ import {
   InboxOutlined,
   FileTextOutlined,
   HomeOutlined,
+  CustomerServiceOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
   VideoCameraOutlined,
@@ -16,6 +17,11 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 const menuItems = [
+  {
+    key: '/admin/support',
+    icon: <CustomerServiceOutlined />,
+    label: <Link href="/admin/support">客服收件箱</Link>,
+  },
   {
     key: '/admin/questions',
     icon: <FileTextOutlined />,
