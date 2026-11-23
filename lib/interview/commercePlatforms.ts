@@ -20,6 +20,9 @@ const collectionPlatforms: Record<string, keyof typeof platforms | undefined> = 
   '9d04b118-bc58-55dc-a603-32081db45206': 'tiktok',     // 达人合作
   '64475a4b-17d2-56e2-b14c-0d6a38848ab1': 'alibaba',    // 海外买手采购
   '48e02e96-5d8d-59c9-85d7-1a5ec2eefcb9': 'alibaba',    // 外贸报价
+  'd60881e0-752a-56b5-8d3a-425c56e5b18a': 'aliexpress', // 商家运营初面
+  '0b83a2d4-d17e-5226-a0b7-82ffc1608958': 'tiktok',     // 内容电商试卖
+  '274bb6b5-c198-5126-9555-1679d873a3bb': 'alibaba',    // 企业采购与销售复盘
 };
 
 export function commercePlatformFor(collectionId: string | null) {
