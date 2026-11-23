@@ -1,8 +1,9 @@
-import { platformPublic, PlatformError } from '@/lib/platform/client';
-import { Database } from '@/types/database.types';
+import { PlatformError } from '@/lib/platform/http';
+import { getQuestionPageData, type InterviewQuestion } from '@/lib/interview/getQuestionPageData';
 import QuestionSidebar from '@/components/question/QuestionSidebar';
 
-type Question = Database['public']['Tables']['interview_question']['Row'];
+// Keep the server render close to video-api.zood.work.
+export const preferredRegion = 'hkg1';
 
 export default async function QuestionLayout({
   children,
@@ -13,17 +14,11 @@ export default async function QuestionLayout({
 }) {
   const { id } = await params;
 
-  type SidebarQuestion = Pick<Question, 'id' | 'title' | 'collection_id'> & {
-    interview_collections?: { title?: string | null } | { title?: string | null }[] | null;
-  };
-  let question: SidebarQuestion | null = null;
-  let collectionQuestions: Pick<Question, 'id' | 'title'>[] = [];
+  let question: InterviewQuestion | null = null;
+  let collectionQuestions: Pick<InterviewQuestion, 'id' | 'title'>[] = [];
 
   try {
-    const result = await platformPublic<{
-      question: SidebarQuestion | null;
-      navigation?: { questions?: Pick<Question, 'id' | 'title'>[] };
-    }>(`/api/platform/interview/questions/${encodeURIComponent(id)}`);
+    const result = await getQuestionPageData(id);
     question = result.question ?? null;
     collectionQuestions = result.navigation?.questions ?? [];
   } catch (error) {

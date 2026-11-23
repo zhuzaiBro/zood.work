@@ -9,36 +9,15 @@ interface TocItem {
 }
 
 interface QuestionTocProps {
-  content: string
+  toc: TocItem[]
 }
 
 const TOC_STICKY_TOP = 'calc(var(--site-header-height) + 1.5rem)'
 const TOC_MAX_HEIGHT = 'calc(100vh - var(--site-header-height) - 3rem)'
 const SCROLL_OFFSET_PX = 96
 
-export default function QuestionToc({ content }: QuestionTocProps) {
-  const [toc, setToc] = useState<TocItem[]>([])
+export default function QuestionToc({ toc }: QuestionTocProps) {
   const [activeId, setActiveId] = useState<string>('')
-
-  useEffect(() => {
-    const headingRegex = /^(#{1,6})\s+(.+)$/gm
-    const headings: TocItem[] = []
-    let match
-
-    while ((match = headingRegex.exec(content)) !== null) {
-      const level = match[1].length
-      const text = match[2].trim()
-      const id = text
-        .toLowerCase()
-        .replace(/[^\w\u4e00-\u9fa5\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .substring(0, 50)
-
-      headings.push({ id, text, level })
-    }
-
-    setToc(headings)
-  }, [content])
 
   useEffect(() => {
     if (toc.length === 0) return

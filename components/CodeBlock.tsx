@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import SyntaxHighlighter from 'react-syntax-highlighter/dist/esm/prism-async'
+import oneLight from 'react-syntax-highlighter/dist/esm/styles/prism/one-light'
 import { isRunnableLanguage } from '@/lib/codePlayground'
 
 interface CodeBlockProps {

@@ -1,7 +1,22 @@
 interface HeadingProps {
-  level: number
+  level: 1 | 2 | 3 | 4 | 5 | 6
   children?: React.ReactNode
   [key: string]: any
+}
+
+function headingId(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\u4e00-\u9fa5\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 50)
+}
+
+export function getMarkdownHeadings(content: string) {
+  return Array.from(content.matchAll(/^(#{1,6})\s+(.+)$/gm), ([, marks, label]) => {
+    const text = label.trim()
+    return { id: headingId(text), text, level: marks.length }
+  })
 }
 
 export default function MarkdownHeading({ level, children, ...props }: HeadingProps) {
@@ -12,14 +27,9 @@ export default function MarkdownHeading({ level, children, ...props }: HeadingPr
     ? children.map(child => typeof child === 'string' ? child : '').join('')
     : ''
 
-  // 生成唯一的 id
-  const id = text
-    .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fa5\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .substring(0, 50)
+  const id = headingId(text)
 
-  const Tag = `h${level}` as keyof JSX.IntrinsicElements
+  const Tag = `h${level}` as const
 
   return (
     <Tag

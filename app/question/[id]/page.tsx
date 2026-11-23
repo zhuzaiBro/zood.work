@@ -2,24 +2,16 @@ import { serverUser } from '@/lib/auth/server';
 import { platformServer, PlatformError } from '@/lib/platform/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { Database } from '@/types/database.types';
+import { getQuestionPageData, type InterviewQuestion, type QuestionNavItem } from '@/lib/interview/getQuestionPageData';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import CodeBlock from '@/components/CodeBlock';
 import QuestionToc from '@/components/question/QuestionToc';
-import MarkdownHeading from '@/components/MarkdownHeading';
+import MarkdownHeading, { getMarkdownHeadings } from '@/components/MarkdownHeading';
 import QuestionFavoriteButton from '@/components/interview/QuestionFavoriteButton';
 import ReferralShareButton from '@/components/interview/ReferralShareButton';
 import { getEffectiveVipLevel } from '@/lib/membership';
 import QuestionAnswerPanel from '@/components/question/QuestionAnswerPanel';
-
-type Question = Database['public']['Tables']['interview_question']['Row'] & {
-  interview_question_tags: {
-    interview_tags: Database['public']['Tables']['interview_tags']['Row'];
-  }[];
-};
-
-type QuestionNavItem = Pick<Question, 'id' | 'title' | 'sort' | 'created_at'>;
 
 export default async function QuestionPage({
   params,
@@ -28,22 +20,14 @@ export default async function QuestionPage({
 }) {
   const { id } = await params;
 
-  let questionData: Question | null = null;
+  let question: InterviewQuestion | null = null;
   let previousQuestion: QuestionNavItem | null = null;
   let nextQuestion: QuestionNavItem | null = null;
   let currentQuestionIndex = -1;
   let collectionQuestionCount = 0;
   try {
-    const result = await platformServer<{
-      question: Question | null;
-      navigation?: {
-        index?: number;
-        count?: number;
-        previous?: QuestionNavItem | null;
-        next?: QuestionNavItem | null;
-      };
-    }>(`/api/platform/interview/questions/${encodeURIComponent(id)}`);
-    questionData = result.question ?? null;
+    const result = await getQuestionPageData(id);
+    question = result.question ?? null;
     previousQuestion = result.navigation?.previous ?? null;
     nextQuestion = result.navigation?.next ?? null;
     currentQuestionIndex = result.navigation?.index ?? -1;
@@ -55,11 +39,9 @@ export default async function QuestionPage({
     console.error('Load interview question failed:', error);
   }
 
-  if (!questionData) {
+  if (!question) {
     notFound();
   }
-
-  const question = questionData as Question;
 
   // 2. Check VIP Access
   let hasAccess = true;
@@ -309,7 +291,7 @@ export default async function QuestionPage({
       {/* Right Sidebar: TOC */}
       <aside className="hidden w-56 flex-shrink-0 xl:block 2xl:w-64">
         {question.content && hasAccess && (
-          <QuestionToc content={question.content} />
+          <QuestionToc toc={getMarkdownHeadings(question.content)} />
         )}
       </aside>
     </>
