@@ -3,7 +3,7 @@ import { platformPublic } from '@/lib/platform/client';
 import TagFilter from '@/components/interview/TagFilter';
 import RoleFilter from '@/components/interview/RoleFilter';
 import CollectionCard from '@/components/interview/CollectionCard';
-import { interviewJob, interviewJobs } from '@/lib/interview-jobs';
+import { interviewIndexRequest } from '@/lib/interview-jobs';
 import InterviewQuestionSearch from '@/components/interview/InterviewQuestionSearch';
 import QuestionContributionForm from '@/components/interview/QuestionContributionForm';
 import { Database } from '@/types/database.types';
@@ -53,11 +53,7 @@ export default async function InterviewPage({
   searchParams: Promise<{ tag?: string; q?: string; role?: string }>;
 }) {
   const params = await searchParams;
-  const currentTagSlug = params.tag;
-  const requestedJob = interviewJob(params.role);
-  const unknownJob = Boolean(params.role) && !requestedJob;
-  const activeJob = requestedJob ?? interviewJobs[0];
-  const technical = activeJob.slug === 'programmer' && !unknownJob;
+  const index = interviewIndexRequest(params.role, params.tag);
   const searchQuery = params.q?.trim() ?? '';
   const isSearching = searchQuery.length > 0;
 
@@ -66,15 +62,12 @@ export default async function InterviewPage({
   let questionCounts: unknown = null;
   let loadError = '';
 
-  if (technical) try {
-    const query = new URLSearchParams();
-    if (currentTagSlug) query.set('tag', currentTagSlug);
-    const suffix = query.toString() ? `?${query.toString()}` : '';
+  if (index.path) try {
     const result = await platformPublic<{
       tags: Tag[] | null;
       collections: Collection[] | null;
       questionCounts: unknown;
-    }>(`/api/platform/interview${suffix}`);
+    }>(index.path);
     tags = result.tags ?? [];
     collections = result.collections ?? [];
     questionCounts = result.questionCounts;
@@ -100,9 +93,9 @@ export default async function InterviewPage({
           </Suspense>
 
           <Suspense fallback={null}>
-            <RoleFilter activeSlug={unknownJob ? '' : activeJob.slug} />
+            <RoleFilter activeSlug={index.activeSlug} />
           </Suspense>
-          {technical && (
+          {index.technical && (
             <Suspense fallback={null}>
               <TagFilter tags={tags || []} />
             </Suspense>
@@ -115,27 +108,27 @@ export default async function InterviewPage({
           <>
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-medium text-slate-500">
-                {unknownJob ? '岗位' : technical ? '程序员 · 按技术方向练习' : activeJob.name}
+                {index.unknownJob ? '岗位' : index.technical ? '程序员 · 按技术方向练习' : index.activeName}
               </p>
-              <span className="text-xs text-slate-400">共 {technical ? collections.length : 0} 个题集</span>
+              <span className="text-xs text-slate-400">共 {index.unknownJob ? 0 : collections.length} 个题集</span>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {technical && collections.map((collection) => (
+              {!index.unknownJob && collections.map((collection) => (
                 <CollectionCard key={collection.id} collection={collection} questionCount={readQuestionCount(questionCounts, collection.id)} />
               ))}
-              {technical && loadError && (
+              {!index.unknownJob && loadError && (
                 <div className="col-span-full py-12 text-center text-rose-600">
                   {loadError}
                 </div>
               )}
-              {technical && !loadError && collections.length === 0 && (
+              {index.technical && !loadError && collections.length === 0 && (
                 <div className="col-span-full py-12 text-center text-gray-500">
                   暂无面试题集
                 </div>
               )}
-              {!technical && (
+              {!index.technical && (index.unknownJob || (!loadError && collections.length === 0)) && (
                 <div className="col-span-full rounded-lg border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-slate-500">
-                  {unknownJob ? '没有这个岗位' : `「${activeJob.name}」还没有面试题`}
+                  {index.unknownJob ? '没有这个岗位' : `「${index.activeName}」还没有面试题`}
                 </div>
               )}
             </div>
