@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { getChatSessionId } from '@/lib/chatSession';
 import { useSupportSound } from '@/lib/support/useSupportSound';
 import { useVisibleMessageReads } from '@/lib/support/useVisibleMessageReads';
+import { useCustomerTyping } from '@/lib/support/useSupportTyping';
 import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
 import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
@@ -55,6 +56,7 @@ function Conversation({ sessionId, open, setOpen, sound }: {
   const dialog = useRef<HTMLElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
   const play = sound.play;
+  const staff = useCustomerTyping(sessionId, open);
 
   const reload = useCallback(async () => {
     if (!sessionId) return;
@@ -92,7 +94,7 @@ function Conversation({ sessionId, open, setOpen, sound }: {
     return () => { version.current++; };
   }, [reload]);
   useVisibleMessageReads(scroll, open && sessionId ? '/api/platform/messages/read?sessionId=' + encodeURIComponent(sessionId) : null, messages, reload);
-  useSupportUpdates(!!sessionId && (open || messages.length > 0), topic, reload, true);
+  useSupportUpdates(!!sessionId && (open || messages.length > 0), topic, reload, true, staff.refresh);
 
   useEffect(() => {
     visible.current = open;
@@ -138,7 +140,10 @@ function Conversation({ sessionId, open, setOpen, sound }: {
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-sky-50">
             <Image src="/brand/zood-mark.png" alt="" width={28} height={30} className="h-7 w-auto" />
           </span>
-          <h2 id="support-title" className="mr-auto text-[17px] font-bold tracking-tight">在线客服</h2>
+          <div className="mr-auto min-w-0">
+            <h2 id="support-title" className="text-[17px] font-bold leading-6 tracking-tight">在线客服</h2>
+            <div role="status" className="text-xs leading-4 text-blue-700">{staff.typing ? '客服正在输入…' : ''}</div>
+          </div>
           <div className="flex gap-0.5">
             <button type="button" className={iconButton} onClick={sound.toggle} aria-pressed={!sound.muted}
               aria-label="回复提示音" title={sound.muted ? '开启回复提示音' : '关闭回复提示音'}>

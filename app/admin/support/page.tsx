@@ -5,6 +5,7 @@ import InboxLoading from './loading';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import { useVisibleMessageReads } from '@/lib/support/useVisibleMessageReads';
+import { useStaffTyping } from '@/lib/support/useSupportTyping';
 import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
 
 type Thread = { id: string; content: string; sender: string; at: string; member: boolean; customer_name?: string };
@@ -54,6 +55,7 @@ export default function SupportInbox() {
       else setOlder(current => messagesLoadedBefore.current ? current : r.more);
     } catch (e) { if (seq === historySeq.current) setError(errorText(e)); }
   }, []);
+  const signalTyping = useStaffTyping(selected);
   const historyPanel = useRef<HTMLDivElement>(null);
   const refreshHistory = useCallback(() => { void loadHistory(selection.current); }, [loadHistory]);
   useVisibleMessageReads(historyPanel, selected && !denied ? base + '/threads/' + selected + '/read' : null, messages, refreshHistory);
@@ -69,8 +71,13 @@ export default function SupportInbox() {
   async function reply(event: FormEvent) {
     event.preventDefault(); const content = draft.trim(), id = selected;
     if (!content || busy || !id) return;
+    signalTyping(false);
     setBusy(true);
-    try { await platformBrowser(base + '/threads/' + id, { method: 'POST', body: { content } }); if (selection.current === id) setDraft(''); await Promise.all([loadThreads(), loadHistory(selection.current)]); }
+    try {
+      await platformBrowser(base + '/threads/' + id, { method: 'POST', body: { content } });
+      if (selection.current === id) setDraft(value => value.trim() === content ? '' : value);
+      await Promise.all([loadThreads(), loadHistory(selection.current)]);
+    }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
   const current = threads.find(t => t.id === selected);
@@ -110,7 +117,9 @@ export default function SupportInbox() {
                 </div>)}
               </div>
               <form onSubmit={reply}><label className="text-sm font-medium" htmlFor="support-reply">回复客户</label>
-                <textarea id="support-reply" value={draft} onChange={e => setDraft(e.target.value)} maxLength={2000} rows={2} className="my-2 block w-full rounded-md border border-slate-300 p-2" />
+                <textarea id="support-reply" value={draft}
+                  onChange={e => { setDraft(e.target.value); signalTyping(Boolean(e.target.value.trim())); }}
+                  onBlur={() => signalTyping(false)} maxLength={2000} rows={2} className="my-2 block w-full rounded-md border border-slate-300 p-2" />
                 <button disabled={busy || !draft.trim()} className={primary}>发送回复</button>
               </form>
             </>}
