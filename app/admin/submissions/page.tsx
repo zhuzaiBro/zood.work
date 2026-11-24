@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { browserUser } from '@/lib/auth/session';
-import { platformBrowser } from '@/lib/platform/client';
+import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import type { Database } from '@/types/database.types';
 import Loading from './loading';
-import Skeleton from '@/components/ui/Skeleton';
 import {
   App,
   Avatar,
@@ -33,7 +31,6 @@ import {
   SearchOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { INTERVIEW_SUBMISSION_ATTACHMENTS_BUCKET } from '@/lib/uploadInterviewSubmissionAttachment';
 
 type Submission = Database['public']['Tables']['interview_question_submissions']['Row'];
 
@@ -53,7 +50,7 @@ interface SubmissionRow extends Submission {
 const { Title, Text, Paragraph } = Typography;
 
 function formatDateTime(value: string | null) {
-  if (!value) return '-';
+  if (!value || !Number.isFinite(Date.parse(value))) return '-';
 
   return new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
@@ -87,70 +84,55 @@ export default function AdminSubmissionsPage() {
   const router = useRouter();
   const { message } = App.useApp();
 
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [hasPermission, setHasPermission] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
+  const [error, setError] = useState('');
+  const request = useRef(0);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionRow | null>(null);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
 
-  const checkAuth = async () => {
-    setIsCheckingAuth(true);
-
-    const user = await browserUser();
-
-    if (!user) {
-      router.push('/login?redirect=/admin/submissions');
-      return;
-    }
-
-    try {
-      const { profile } = await platformBrowser<{ profile: { is_admin?: boolean | null } | null }>(
-        '/api/platform/me/profile',
-      );
-      if (!profile?.is_admin) {
-        setHasPermission(false);
-        setIsCheckingAuth(false);
-        return;
-      }
-    } catch {
-      setHasPermission(false);
-      setIsCheckingAuth(false);
-      return;
-    }
-
-    setHasPermission(true);
-    setIsCheckingAuth(false);
-    await loadSubmissions();
-  };
-
-  const loadSubmissions = async () => {
+  const loadSubmissions = useCallback(async () => {
+    const seq = ++request.current;
     setLoading(true);
-
+    setError('');
     try {
       const { submissions: rows } = await platformBrowser<{ submissions: SubmissionRow[] | null }>(
-        '/api/platform/admin/interview/submissions',
+        '/api/platform/admin/interview/submissions', { cache: 'no-store' },
       );
-      setSubmissions(
-        (rows ?? []).map((row) => ({
-          ...row,
-          tags: row.tags ?? [],
-          user_profiles: Array.isArray(row.user_profiles) ? row.user_profiles[0] ?? null : row.user_profiles ?? null,
-        })),
-      );
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载投稿列表失败');
+      if (seq !== request.current) return;
+      setSubmissions((rows ?? []).map(row => ({
+        ...row,
+        tags: Array.isArray(row.tags) ? row.tags.filter(tag => typeof tag === 'string') : [],
+        user_profiles: Array.isArray(row.user_profiles) ? row.user_profiles[0] ?? null : row.user_profiles,
+      })));
+      setDenied(false);
+    } catch (e) {
+      if (seq !== request.current) return;
+      if (e instanceof PlatformError && e.status === 401) {
+        setSubmissions([]);
+        setSelectedSubmission(null);
+        router.replace('/login?redirect=/admin/submissions');
+        return;
+      }
+      if (e instanceof PlatformError && e.status === 403) {
+        setSubmissions([]);
+        setSelectedSubmission(null);
+        setDenied(true);
+      } else {
+        setError(e instanceof Error ? e.message : '加载投稿列表失败');
+      }
     } finally {
-      setLoading(false);
+      if (seq === request.current) setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
-    checkAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void loadSubmissions();
+    return () => { request.current++; };
+  }, [loadSubmissions]);
 
   const filteredSubmissions = useMemo(() => {
     const search = keyword.trim().toLowerCase();
@@ -170,7 +152,7 @@ export default function AdminSubmissionsPage() {
         item.user_profiles?.username ?? '',
         item.user_profiles?.display_name ?? '',
         ...(item.tags ?? []),
-      ].some((field) => field.toLowerCase().includes(search));
+      ].some(field => typeof field === 'string' && field.toLowerCase().includes(search));
     });
   }, [keyword, statusFilter, submissions]);
 
@@ -320,11 +302,11 @@ export default function AdminSubmissionsPage() {
     },
   ];
 
-  if (isCheckingAuth) {
+  if (loading && !submissions.length) {
     return <Loading />;
   }
 
-  if (!hasPermission) {
+  if (denied) {
     return (
       <Result
         status="403"
@@ -358,6 +340,9 @@ export default function AdminSubmissionsPage() {
         </Card>
       </Space>
 
+      {error && <div role="alert" className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        投稿加载失败。{error} <Button size="small" onClick={loadSubmissions}>重试</Button>
+      </div>}
       <Card>
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -387,13 +372,7 @@ export default function AdminSubmissionsPage() {
             </Button>
           </Space>
 
-          {loading && submissions.length === 0 ? (
-            <div className="space-y-3">
-              {[0, 1, 2, 3, 4].map((item) => (
-                <Skeleton key={item} className="h-12 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : (
+          {(!error || submissions.length > 0) && (
             <Table
               rowKey="id"
               loading={false}

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-export function useSupportUpdates(active: boolean, topic: string | null, reload: () => void) {
+export function useSupportUpdates(active: boolean, topic: string | null, reload: () => void, background = false) {
   const callback = useRef(reload);
   useEffect(() => { callback.current = reload; }, [reload]);
   useEffect(() => {
@@ -11,7 +11,7 @@ export function useSupportUpdates(active: boolean, topic: string | null, reload:
     let connected = false, stopped = false;
     let pending: number | undefined;
     const refresh = () => {
-      if (stopped || document.hidden || pending !== undefined) return;
+      if (stopped || (!background && document.hidden) || pending !== undefined) return;
       pending = window.setTimeout(() => { pending = undefined; if (!stopped) callback.current(); }, 120);
     };
     const client = createClient();
@@ -30,5 +30,5 @@ export function useSupportUpdates(active: boolean, topic: string | null, reload:
       window.removeEventListener('online', refresh);
       if (channel) void client.removeChannel(channel);
     };
-  }, [active, topic]);
+  }, [active, topic, background]);
 }

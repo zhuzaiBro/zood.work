@@ -10,7 +10,7 @@ const allow = new Set([
   'lib/platform/client.ts',
 ])
 
-const queryPattern = /\.from\(\s*['"`]|createAdminClient\(|\.rpc\(\s*['"`]/
+const queryPattern = /(?<!\bBuffer)\.from\(\s*['"`]|createAdminClient\(|\.rpc\(\s*['"`]/
 const failures = []
 
 function walk(dir) {

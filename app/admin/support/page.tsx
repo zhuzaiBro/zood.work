@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { platformBrowser, PlatformError } from '@/lib/platform/client';
 import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
 
-type Thread = { id: string; content: string; sender: string; at: string; member: boolean };
-type Message = { id: string; content: string; sender_type: string; created_at: string };
+type Thread = { id: string; content: string; sender: string; at: string; member: boolean; customer_name?: string };
+type Message = { id: string; content: string; sender_type: string; created_at: string; customer_name?: string };
 type Bot = { configured: boolean; username: string; bindings: number; realtime: boolean };
 type History = { messages: Message[]; more: boolean };
 const base = '/api/platform/admin/support';
@@ -15,6 +15,7 @@ const button = 'rounded-md border border-slate-300 bg-white px-3 py-2 text-sm fo
 const primary = 'rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50';
 const time = (v: string) => new Date(v).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Shanghai' });
 const errorText = (e: unknown) => e instanceof PlatformError ? e.message : '连接失败，请稍后重试。';
+const customerName = (thread: Thread) => thread.customer_name || (thread.member ? '已登录用户' : '网站访客') + ' · ' + thread.id.slice(0, 8);
 
 export default function SupportInbox() {
   const [page, setPage] = useState(1), [more, setMore] = useState(false);
@@ -69,6 +70,8 @@ export default function SupportInbox() {
     try { await platformBrowser(base + '/threads/' + id, { method: 'POST', body: { content } }); if (selection.current === id) setDraft(''); await Promise.all([loadThreads(), loadHistory(selection.current)]); }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
+  const current = threads.find(t => t.id === selected);
+  const title = current ? customerName(current) : messages.find(m => m.customer_name)?.customer_name;
   if (loading && !threads.length && !error) return <InboxLoading />;
   return (
     <div className="mx-auto max-w-7xl space-y-4 text-slate-900">
@@ -82,7 +85,7 @@ export default function SupportInbox() {
             <div className="max-h-64 overflow-y-auto lg:max-h-[65vh]">
               {threads.map(t => <button key={t.id} type="button" aria-pressed={selected === t.id} onClick={() => setSelected(t.id)}
                 className={`block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${selected === t.id ? 'bg-blue-50' : ''}`}>
-                <span className="flex items-baseline justify-between gap-2"><strong className="text-sm">{t.member ? '注册用户' : '访客'} · {t.id.slice(0,8)}</strong><time className="text-xs text-slate-500">{time(t.at)}</time></span>
+                <span className="flex items-baseline justify-between gap-2"><strong className="truncate text-sm">{customerName(t)}</strong><time className="shrink-0 text-xs text-slate-500">{time(t.at)}</time></span>
                 <span className="mt-1 block truncate text-sm text-slate-600">{t.sender === 'admin' ? '客服 · ' : ''}{t.content}</span>
               </button>)}
               {!threads.length && <p className="p-4 text-sm text-slate-500">{loading ? '正在加载会话…' : '还没有客服消息。'}</p>}
@@ -93,16 +96,16 @@ export default function SupportInbox() {
             </nav>}
           </section>
           <section className="min-w-0 p-4">
-            <h2 className="font-bold">{selected ? '会话记录 · ' + selected.slice(0,8) : '会话记录'}</h2>
+            <h2 className="break-words font-bold">{title ? '与 ' + title + ' 的会话' : '会话记录'}</h2>
             {selected && <>
               <div className="my-4 max-h-[55vh] min-h-36 space-y-3 overflow-y-auto" aria-live="polite">
                 {older && <button className={button} onClick={() => { messagesLoadedBefore.current = true; void loadHistory(selected, messages[0]?.id); }}>查看更早消息</button>}
                 {messages.map(m => <div key={m.id} className={`w-fit max-w-[90%] rounded-lg p-3 ${m.sender_type === 'user' ? 'bg-slate-100' : 'ml-auto bg-blue-50'}`}>
-                  <small className="text-slate-600">{m.sender_type === 'user' ? '访客' : '客服'} · {time(m.created_at)}</small>
+                  <small className="text-slate-600">{m.sender_type === 'user' ? m.customer_name || title || '客户' : '客服'} · {time(m.created_at)}</small>
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm">{m.content}</p>
                 </div>)}
               </div>
-              <form onSubmit={reply}><label className="text-sm font-medium" htmlFor="support-reply">回复访客</label>
+              <form onSubmit={reply}><label className="text-sm font-medium" htmlFor="support-reply">回复客户</label>
                 <textarea id="support-reply" value={draft} onChange={e => setDraft(e.target.value)} maxLength={2000} rows={2} className="my-2 block w-full rounded-md border border-slate-300 p-2" />
                 <button disabled={busy || !draft.trim()} className={primary}>发送回复</button>
               </form>

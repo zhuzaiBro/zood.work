@@ -1,271 +1,196 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { useCallback, useEffect, useRef, useState, Fragment, type FormEvent } from 'react';
+import { CloseOutlined, CustomerServiceOutlined, DownOutlined, MutedOutlined, SendOutlined, SoundOutlined } from '@ant-design/icons';
 import { platformBrowser } from '@/lib/platform/client';
+import { createClient } from '@/lib/supabase/client';
 import { getChatSessionId } from '@/lib/chatSession';
+import { useSupportSound } from '@/lib/support/useSupportSound';
 import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
-import { useUser } from '@/store/userStore';
 import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
 
-type ChatMessage = Database['public']['Tables']['messages']['Row'];
-
-const WELCOME_MESSAGE =
-  '你好，我是 Zood 客服。有任何课程、会员或面试题相关问题，直接在这里留言，我会尽快回复。';
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+type Message = Database['public']['Tables']['messages']['Row'];
+const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+const day = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+const iconButton = 'inline-flex size-10 items-center justify-center rounded-xl text-base text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600';
 
 export default function ChatDialog() {
-  const user = useUser();
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const sound = useSupportSound(open || !!sessionId);
+
+  useEffect(() => {
+    const { data: { subscription } } = createClient().auth.onAuthStateChange((_, session) => {
+      setSessionId(getChatSessionId(session?.user.id, false));
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (open && sessionId === '') setSessionId(getChatSessionId(null));
+  }, [open, sessionId]);
+
+  return <Conversation key={sessionId} sessionId={sessionId} open={open} setOpen={setOpen} sound={sound} />;
+}
+
+function Conversation({ sessionId, open, setOpen, sound }: {
+  sessionId: string | null; open: boolean; setOpen: (open: boolean) => void; sound: ReturnType<typeof useSupportSound>;
+}) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [draft, setDraft] = useState('');
+  const [ready, setReady] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [topic, setTopic] = useState<string | null>(null);
-  const requestVersion = useRef(0);
-  const listRef = useRef<HTMLDivElement>(null);
+  const [unread, setUnread] = useState(0);
+  const lastCursor = useRef<Message | null | undefined>(undefined);
+  const version = useRef(0);
+  const visible = useRef(open);
+  const follow = useRef(true);
+  const scroll = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLElement>(null);
+  const launcher = useRef<HTMLButtonElement>(null);
+  const play = sound.play;
 
-  useEffect(() => {
-    requestVersion.current++;
-    setMessages([]);
-    setTopic(null);
-    setSessionId(getChatSessionId(user?.id));
-  }, [user?.id]);
-
-  const scrollToBottom = useCallback(() => {
-    const el = listRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, []);
-
-  const reloadMessages = useCallback(async () => {
+  const reload = useCallback(async () => {
     if (!sessionId) return;
+    const request = ++version.current;
     try {
-      const version = ++requestVersion.current;
-      const { messages: rows, topic } = await platformBrowser<{ messages: ChatMessage[]; topic?: string }>(
-        `/api/platform/messages?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" },
-      );
-      if (version !== requestVersion.current) return;
-      setTopic(topic || null);
-      setMessages(rows ?? []);
+      const data = await platformBrowser<{ messages: Message[]; topic?: string }>(
+        '/api/platform/messages?sessionId=' + encodeURIComponent(sessionId), { cache: 'no-store' });
+      if (request !== version.current) return;
+      const rows = data.messages;
+      const previous = lastCursor.current;
+      if (previous !== undefined) {
+        const index = previous ? rows.findIndex(m => m.id === previous.id) : -1;
+        const added = index >= 0 ? rows.slice(index + 1) : rows.filter(m => !previous || Date.parse(m.created_at) > Date.parse(previous.created_at));
+        const replies = added.filter(m => m.sender_type === 'admin');
+        if (replies.length) {
+          play(sessionId, replies[replies.length - 1].id);
+          if (!visible.current || document.hidden) setUnread(n => n + replies.length);
+        }
+      }
+      lastCursor.current = rows[rows.length - 1] ?? previous ?? null;
+      setMessages(rows);
+      setTopic(data.topic || null);
       setError('');
     } catch {
-      setError('消息加载失败，请稍后重试');
+      if (request === version.current) setError('消息加载失败，请重试。');
+    } finally {
+      if (request === version.current) setReady(true);
     }
-  }, [sessionId]);
-
-  const loadMessages = useCallback(async () => {
-    if (!sessionId) return;
-    setLoading(true);
-    await reloadMessages();
-    setLoading(false);
-  }, [reloadMessages, sessionId]);
+  }, [sessionId, play]);
 
   useEffect(() => {
-    if (!open || !sessionId) return;
-    loadMessages();
-  }, [open, sessionId, loadMessages]);
-
-  useSupportUpdates(open && !!sessionId, topic, reloadMessages);
+    void reload();
+    return () => { version.current++; };
+  }, [reload]);
+  useSupportUpdates(!!sessionId && (open || messages.length > 0), topic, reload, true);
 
   useEffect(() => {
-    if (open) scrollToBottom();
-  }, [messages, open, scrollToBottom]);
+    visible.current = open;
+    if (!open) return;
+    follow.current = true;
+    dialog.current?.focus({ preventScroll: true });
+    const markRead = () => { if (!document.hidden) setUnread(0); };
+    markRead();
+    document.addEventListener('visibilitychange', markRead);
+    return () => document.removeEventListener('visibilitychange', markRead);
+  }, [open]);
+  useEffect(() => {
+    if (open && follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
+  }, [messages, open]);
 
-  const handleSend = async (event: FormEvent) => {
+  function close() {
+    setOpen(false);
+    launcher.current?.focus({ preventScroll: true });
+  }
+  async function send(event: FormEvent) {
     event.preventDefault();
-    const content = input.trim();
-    if (!content || !sessionId || sending) return;
-
+    const content = draft.trim();
+    if (!sessionId || !content || sending) return;
     setSending(true);
     setError('');
-
     try {
-      await platformBrowser('/api/platform/messages', {
-        method: 'POST',
-        body: {
-          sessionId,
-          content,
-          pageUrl: window.location.href,
-        },
-      });
-      setInput('');
-      await reloadMessages();
-    } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : '发送失败，请稍后重试');
-    } finally {
-      setSending(false);
-    }
-  };
+      await platformBrowser('/api/platform/messages', { method: 'POST', body: { sessionId, content, pageUrl: window.location.href } });
+      follow.current = true;
+      setDraft(value => value.trim() === content ? '' : value);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '消息发送失败，请重试。');
+    } finally { setSending(false); }
+  }
 
+  const today = day.format(new Date());
   return (
-    <div className="fixed bottom-6 right-4 z-40 sm:right-6">
-      {open && (
-        <div className="mb-3 flex h-[min(520px,calc(100vh-6rem))] w-[min(360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-sky-300/20 bg-[#07101f]/95 shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-md">
-          <div className="flex items-center justify-between border-b border-sky-300/10 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-white">在线客服</p>
-              <p className="text-xs text-[#8da2c4]">通常会在几小时内回复</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-[#8da2c4] transition hover:bg-white/5 hover:text-white"
-              aria-label="关闭聊天"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+    <div className="pointer-events-none fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] flex flex-col items-end gap-3 sm:left-auto sm:right-6 sm:bottom-6">
+      {open && <section ref={dialog} id="support-conversation" role="dialog" aria-labelledby="support-title" tabIndex={-1}
+        onKeyDown={e => { if (e.key === 'Escape' && !e.nativeEvent.isComposing) close(); }}
+        className="pointer-events-auto flex h-[min(540px,calc(100dvh-6.5rem-env(safe-area-inset-bottom)))] w-full flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-900 shadow-[0_14px_55px_-12px_rgba(15,35,65,.23),0_2px_8px_rgba(15,35,65,.06)] outline-none sm:w-[374px]">
+        <header className="flex shrink-0 items-center gap-3 border-b border-slate-200/80 bg-white px-4 py-3.5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-sky-50">
+            <Image src="/brand/zood-mark.png" alt="" width={28} height={30} className="h-7 w-auto" />
+          </span>
+          <h2 id="support-title" className="mr-auto text-[17px] font-bold tracking-tight">在线客服</h2>
+          <div className="flex gap-0.5">
+            <button type="button" className={iconButton} onClick={sound.toggle} aria-pressed={!sound.muted}
+              aria-label="回复提示音" title={sound.muted ? '开启回复提示音' : '关闭回复提示音'}>
+              {sound.muted ? <MutedOutlined /> : <SoundOutlined />}
             </button>
+            <button type="button" className={iconButton} aria-label="关闭聊天" onClick={close}><CloseOutlined /></button>
           </div>
-
-          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white/10 px-3 py-2 text-sm leading-6 text-[#e8eef9]">
-                {WELCOME_MESSAGE}
-              </div>
-            </div>
-
-            {loading && (
-              <div className="space-y-3" aria-label="消息加载中">
-                <div className="flex justify-start">
-                  <Skeleton className="h-16 w-[78%] rounded-2xl bg-white/10" />
+        </header>
+        <div ref={scroll} onScroll={e => { const el = e.currentTarget; follow.current = el.scrollHeight - el.clientHeight - el.scrollTop < 48; }}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#f5f8fc] px-4 py-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
+          <div role="log" aria-label="聊天记录" aria-live="polite" className="flex flex-col gap-3">
+            {!ready && <div role="status" aria-label="消息加载中" className="space-y-3">
+              <Skeleton className="h-11 w-3/4 rounded-2xl" /><Skeleton className="ml-auto h-10 w-2/5 rounded-2xl" />
+            </div>}
+            {ready && !error && !messages.length && <div className="max-w-[88%] self-start">
+              <p className="mb-1.5 ml-1 text-xs text-slate-500">AI出海客服</p>
+              <p className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3.5 py-2.5 text-sm leading-relaxed">你好！课程、面试准备或会员使用上遇到了什么问题？</p>
+            </div>}
+            {messages.map((message, i) => {
+              const mine = message.sender_type === 'user';
+              const date = new Date(message.created_at);
+              const dateLabel = day.format(date);
+              const newDay = i === 0 || dateLabel !== day.format(new Date(messages[i - 1].created_at));
+              return <Fragment key={message.id}>
+                {newDay && <div className="flex items-center justify-center gap-2.5 py-1 text-[11px] text-slate-500">
+                  <span className="h-px w-6 bg-slate-200" />{dateLabel === today ? '今天' : dateLabel}<span className="h-px w-6 bg-slate-200" />
+                </div>}
+                <div className={'flex max-w-[86%] flex-col gap-1 ' + (mine ? 'items-end self-end' : 'items-start self-start')}>
+                  <p className={'min-w-0 max-w-full whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[14px] leading-[1.6] [overflow-wrap:anywhere] ' +
+                    (mine ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900')}>{message.content}</p>
+                  <time dateTime={message.created_at} className="mx-1 text-[11px] tabular-nums text-slate-500">{mine ? '' : '客服 · '}{time.format(date)}</time>
                 </div>
-                <div className="flex justify-end">
-                  <Skeleton className="h-12 w-[62%] rounded-2xl bg-sky-200/20" />
-                </div>
-              </div>
-            )}
-
-            {messages.map((message) => {
-              const isUser = message.sender_type === 'user';
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
-                      isUser
-                        ? 'rounded-br-md bg-[linear-gradient(135deg,#5f82ff,#8fe7ff)] text-[#04101f]'
-                        : 'rounded-bl-md bg-white/10 text-[#e8eef9]'
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                    <p
-                      className={`mt-1 text-[10px] ${
-                        isUser ? 'text-[#04101f]/60' : 'text-[#8da2c4]'
-                      }`}
-                    >
-                      {formatTime(message.created_at)}
-                    </p>
-                  </div>
-                </div>
-              );
+              </Fragment>;
             })}
           </div>
-
-          {error && (
-            <p className="px-4 pb-1 text-center text-xs text-red-300">{error}</p>
-          )}
-
-          <form
-            onSubmit={handleSend}
-            className="border-t border-sky-300/10 p-3"
-          >
-            <div className="flex items-end gap-2">
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                rows={2}
-                maxLength={2000}
-                placeholder="输入消息，Enter 发送"
-                className="max-h-28 flex-1 resize-none rounded-xl border border-sky-300/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-[#60708f] outline-none focus:border-sky-300/40"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || sending}
-                className="shrink-0 rounded-xl bg-[linear-gradient(135deg,#5f82ff,#8fe7ff)] px-4 py-2 text-sm font-semibold text-[#04101f] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                发送
-              </button>
-            </div>
-          </form>
         </div>
-      )}
-
-      <div className="chat-trigger-shell ml-auto">
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          className="chat-trigger-btn group"
-          aria-label={open ? '关闭聊天' : '打开在线客服'}
-        >
-          <span
-            aria-hidden
-            className="chat-trigger-gradient absolute inset-0 bg-[linear-gradient(135deg,#2563eb_0%,#6366f1_48%,#a855f7_100%)]"
-          />
-          <span
-            aria-hidden
-            className="chat-trigger-blob-a absolute -left-[12%] -top-[8%] h-[72%] w-[72%] rounded-full bg-[#1d4ed8]/75 blur-[1px]"
-          />
-          <span
-            aria-hidden
-            className="chat-trigger-blob-b absolute -bottom-[6%] -right-[8%] h-[68%] w-[68%] rounded-full bg-[#c084fc]/55 blur-[2px]"
-          />
-          <span
-            aria-hidden
-            className="chat-trigger-blob-c absolute left-[18%] top-[12%] h-[42%] w-[42%] rounded-full bg-[#93c5fd]/45 blur-[3px]"
-          />
-          <span
-            aria-hidden
-            className="chat-trigger-wave-a absolute -left-[10%] bottom-[-20%] h-[70%] w-[120%] rounded-[45%] bg-[#60a5fa]/50 blur-[4px]"
-          />
-          <span
-            aria-hidden
-            className="chat-trigger-wave-b absolute -right-[8%] bottom-[-25%] h-[65%] w-[110%] rounded-[40%] bg-[#a78bfa]/45 blur-[5px]"
-          />
-          <span
-            aria-hidden
-            className="chat-trigger-highlight absolute inset-0 bg-[radial-gradient(circle_at_30%_24%,rgba(255,255,255,0.58)_0%,rgba(255,255,255,0.14)_30%,transparent_58%)]"
-          />
-          <span
-            aria-hidden
-            className="absolute inset-0 bg-[radial-gradient(circle_at_74%_86%,rgba(79,70,229,0.32)_0%,transparent_52%)]"
-          />
-          <span aria-hidden className="absolute inset-0 bg-white/12" />
-          <span className="relative z-10 text-white drop-shadow-[0_1px_2px_rgba(37,99,235,0.35)]">
-            {open ? (
-              <svg className="h-[1.35rem] w-[1.35rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-              </svg>
-            ) : (
-              <svg className="h-[1.35rem] w-[1.35rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-            )}
-          </span>
-        </button>
-      </div>
+        <form onSubmit={send} className="shrink-0 border-t border-slate-200 bg-white p-3">
+          {error && <p role="alert" className="mb-2 px-1 text-xs text-red-700">{error} <button type="button" onClick={() => void reload()} className="underline">重新加载</button></p>}
+          <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+            <textarea aria-label="客服消息" placeholder="输入消息…" rows={1} maxLength={2000} value={draft}
+              onChange={e => setDraft(e.target.value)} onKeyDown={e => {
+                if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+                e.preventDefault(); e.currentTarget.form?.requestSubmit();
+              }}
+              className="max-h-24 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base leading-6 text-slate-900 outline-none [field-sizing:content] placeholder:text-slate-500 sm:text-sm" />
+            <button type="submit" disabled={!sessionId || !draft.trim() || sending} aria-label="发送消息" title="Enter 发送，Shift + Enter 换行"
+              className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-[17px] text-white transition hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500"><SendOutlined /></button>
+          </div>
+        </form>
+      </section>}
+      <button ref={launcher} type="button" disabled={sessionId === null} onClick={() => { if (open) close(); else setOpen(true); }}
+        aria-label={open ? '收起客服' : '打开在线客服' + (unread ? '，有 ' + unread + ' 条新回复' : '')}
+        aria-expanded={open} aria-controls={open ? 'support-conversation' : undefined}
+        className="pointer-events-auto relative grid size-[52px] place-items-center rounded-full border border-blue-700/10 bg-blue-600 text-[23px] text-white shadow-[0_5px_18px_rgba(37,99,235,.27)] transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+        {open ? <DownOutlined className="text-lg" /> : <CustomerServiceOutlined />}
+        {!open && unread > 0 && <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full border-2 border-white bg-red-600 px-1 text-[10px] font-bold tabular-nums text-white">{unread > 9 ? '9+' : unread}</span>}
+      </button>
     </div>
   );
 }
