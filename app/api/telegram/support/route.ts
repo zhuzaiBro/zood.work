@@ -20,11 +20,16 @@ function parameters(method: Method, payload: Record<string, unknown>) {
     const url = platformBaseUrl() + '/api/platform/telegram/webhook'
     const secret = payload.secret_token
     if (payload.url !== url || typeof secret !== 'string' || !/^[a-f0-9]{64}$/.test(secret)) return null
-    return { url, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: false }
+    return { url, secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: false }
   }
   const { chat_id, text } = payload
   if (typeof chat_id !== 'number' || !Number.isSafeInteger(chat_id) || chat_id <= 0 ||
       typeof text !== 'string' || !text || [...text].length > 4096) return null
+  if (payload.reply_markup) {
+    // This relay supports exactly one action on customer notifications.
+    const markup = { inline_keyboard: [[{ text: '标为已读', callback_data: 'support_read' }]] }
+    return { chat_id, text, reply_markup: markup }
+  }
   return { chat_id, text }
 }
 

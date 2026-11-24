@@ -4,10 +4,11 @@ import Link from 'next/link';
 import InboxLoading from './loading';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { platformBrowser, PlatformError } from '@/lib/platform/client';
+import { useVisibleMessageReads } from '@/lib/support/useVisibleMessageReads';
 import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
 
 type Thread = { id: string; content: string; sender: string; at: string; member: boolean; customer_name?: string };
-type Message = { id: string; content: string; sender_type: string; created_at: string; customer_name?: string };
+type Message = { id: string; content: string; sender_type: string; created_at: string; customer_name?: string; read?: boolean };
 type Bot = { configured: boolean; username: string; bindings: number; realtime: boolean };
 type History = { messages: Message[]; more: boolean };
 const base = '/api/platform/admin/support';
@@ -33,7 +34,6 @@ export default function SupportInbox() {
       const r = await platformBrowser<{ threads: Thread[]; more: boolean; topic: string }>(base + '/threads?page=' + page, { cache: 'no-store' });
       if (listSeq.current !== seq) return;
       setThreads(r.threads); setMore(r.more); setTopic(r.topic); setError('');
-      setSelected(previous => previous || r.threads[0]?.id || '');
     } catch (e) {
       if (seq !== listSeq.current) return;
       if (e instanceof PlatformError && (e.status === 401 || e.status === 403)) setDenied(true);
@@ -54,6 +54,9 @@ export default function SupportInbox() {
       else setOlder(current => messagesLoadedBefore.current ? current : r.more);
     } catch (e) { if (seq === historySeq.current) setError(errorText(e)); }
   }, []);
+  const historyPanel = useRef<HTMLDivElement>(null);
+  const refreshHistory = useCallback(() => { void loadHistory(selection.current); }, [loadHistory]);
+  useVisibleMessageReads(historyPanel, selected && !denied ? base + '/threads/' + selected + '/read' : null, messages, refreshHistory);
   const messagesLoadedBefore = useRef(false);
   useEffect(() => { void loadThreads(); }, [loadThreads]);
   useEffect(() => { void refreshBot().catch(e => setError(errorText(e))); }, [refreshBot]);
@@ -97,10 +100,11 @@ export default function SupportInbox() {
           </section>
           <section className="min-w-0 p-4">
             <h2 className="break-words font-bold">{title ? '与 ' + title + ' 的会话' : '会话记录'}</h2>
+            {!selected && <p className="mt-3 text-sm text-slate-500">选择一个会话查看消息。</p>}
             {selected && <>
-              <div className="my-4 max-h-[55vh] min-h-36 space-y-3 overflow-y-auto" aria-live="polite">
+              <div ref={historyPanel} className="my-4 max-h-[55vh] min-h-36 space-y-3 overflow-y-auto" aria-live="polite">
                 {older && <button className={button} onClick={() => { messagesLoadedBefore.current = true; void loadHistory(selected, messages[0]?.id); }}>查看更早消息</button>}
-                {messages.map(m => <div key={m.id} className={`w-fit max-w-[90%] rounded-lg p-3 ${m.sender_type === 'user' ? 'bg-slate-100' : 'ml-auto bg-blue-50'}`}>
+                {messages.map(m => <div key={m.id} data-unread-id={m.sender_type === 'user' && m.read === false ? m.id : undefined} className={`w-fit max-w-[90%] rounded-lg p-3 ${m.sender_type === 'user' ? 'bg-slate-100' : 'ml-auto bg-blue-50'}`}>
                   <small className="text-slate-600">{m.sender_type === 'user' ? m.customer_name || title || '客户' : '客服'} · {time(m.created_at)}</small>
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm">{m.content}</p>
                 </div>)}

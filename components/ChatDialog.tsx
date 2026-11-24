@@ -7,11 +7,12 @@ import { platformBrowser } from '@/lib/platform/client';
 import { createClient } from '@/lib/supabase/client';
 import { getChatSessionId } from '@/lib/chatSession';
 import { useSupportSound } from '@/lib/support/useSupportSound';
+import { useVisibleMessageReads } from '@/lib/support/useVisibleMessageReads';
 import { useSupportUpdates } from '@/lib/support/useSupportUpdates';
 import Skeleton from '@/components/ui/Skeleton';
 import type { Database } from '@/types/database.types';
 
-type Message = Database['public']['Tables']['messages']['Row'];
+type Message = Database['public']['Tables']['messages']['Row'] & { read?: boolean };
 const time = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 const day = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
 const iconButton = 'inline-flex size-10 items-center justify-center rounded-xl text-base text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600';
@@ -45,6 +46,7 @@ function Conversation({ sessionId, open, setOpen, sound }: {
   const [error, setError] = useState('');
   const [topic, setTopic] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
+  const serverReceipts = useRef(false);
   const lastCursor = useRef<Message | null | undefined>(undefined);
   const version = useRef(0);
   const visible = useRef(open);
@@ -58,10 +60,12 @@ function Conversation({ sessionId, open, setOpen, sound }: {
     if (!sessionId) return;
     const request = ++version.current;
     try {
-      const data = await platformBrowser<{ messages: Message[]; topic?: string }>(
+      const data = await platformBrowser<{ messages: Message[]; topic?: string; unreadReplies?: number }>(
         '/api/platform/messages?sessionId=' + encodeURIComponent(sessionId), { cache: 'no-store' });
       if (request !== version.current) return;
       const rows = data.messages;
+      serverReceipts.current = typeof data.unreadReplies === 'number';
+      if (typeof data.unreadReplies === 'number') setUnread(data.unreadReplies);
       const previous = lastCursor.current;
       if (previous !== undefined) {
         const index = previous ? rows.findIndex(m => m.id === previous.id) : -1;
@@ -69,7 +73,7 @@ function Conversation({ sessionId, open, setOpen, sound }: {
         const replies = added.filter(m => m.sender_type === 'admin');
         if (replies.length) {
           play(sessionId, replies[replies.length - 1].id);
-          if (!visible.current || document.hidden) setUnread(n => n + replies.length);
+          if (!serverReceipts.current && (!visible.current || document.hidden)) setUnread(n => n + replies.length);
         }
       }
       lastCursor.current = rows[rows.length - 1] ?? previous ?? null;
@@ -87,6 +91,7 @@ function Conversation({ sessionId, open, setOpen, sound }: {
     void reload();
     return () => { version.current++; };
   }, [reload]);
+  useVisibleMessageReads(scroll, open && sessionId ? '/api/platform/messages/read?sessionId=' + encodeURIComponent(sessionId) : null, messages, reload);
   useSupportUpdates(!!sessionId && (open || messages.length > 0), topic, reload, true);
 
   useEffect(() => {
@@ -94,7 +99,7 @@ function Conversation({ sessionId, open, setOpen, sound }: {
     if (!open) return;
     follow.current = true;
     dialog.current?.focus({ preventScroll: true });
-    const markRead = () => { if (!document.hidden) setUnread(0); };
+    const markRead = () => { if (!document.hidden && !serverReceipts.current) setUnread(0); };
     markRead();
     document.addEventListener('visibilitychange', markRead);
     return () => document.removeEventListener('visibilitychange', markRead);
@@ -161,10 +166,21 @@ function Conversation({ sessionId, open, setOpen, sound }: {
                 {newDay && <div className="flex items-center justify-center gap-2.5 py-1 text-[11px] text-slate-500">
                   <span className="h-px w-6 bg-slate-200" />{dateLabel === today ? '今天' : dateLabel}<span className="h-px w-6 bg-slate-200" />
                 </div>}
-                <div className={'flex max-w-[86%] flex-col gap-1 ' + (mine ? 'items-end self-end' : 'items-start self-start')}>
-                  <p className={'min-w-0 max-w-full whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[14px] leading-[1.6] [overflow-wrap:anywhere] ' +
-                    (mine ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900')}>{message.content}</p>
-                  <time dateTime={message.created_at} className="mx-1 text-[11px] tabular-nums text-slate-500">{mine ? '' : '客服 · '}{time.format(date)}</time>
+                <div data-unread-id={!mine && message.read === false ? message.id : undefined}
+                  className={'flex max-w-[86%] flex-col gap-1 ' + (mine ? 'items-end self-end' : 'items-start self-start')}>
+                  <div className={'max-w-full rounded-2xl px-3.5 py-2 text-[14px] leading-[1.6] ' +
+                    (mine ? 'flex flex-wrap items-end justify-end gap-x-2 rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900')}>
+                    <span className="min-w-0 flex-auto whitespace-pre-wrap [overflow-wrap:anywhere]">{message.content}</span>
+                    {mine && <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 self-end pb-px text-[11px] leading-4 tabular-nums text-blue-100">
+                      <time dateTime={message.created_at}>{time.format(date)}</time>
+                      <span role="img" aria-label={message.read ? '已读' : '已发送'} title={message.read ? '客服已读' : '已发送'}>
+                        <svg aria-hidden="true" width={message.read ? 19 : 14} height="14" viewBox={message.read ? '0 0 20 14' : '0 0 14 14'} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m1.5 7.1 3.1 3.1 7.2-8" />{message.read && <path d="m8.7 9.2 1 1 7.2-8" />}
+                        </svg>
+                      </span>
+                    </span>}
+                  </div>
+                  {!mine && <time dateTime={message.created_at} className="mx-1 text-[11px] tabular-nums text-slate-500">客服 · {time.format(date)}</time>}
                 </div>
               </Fragment>;
             })}
